@@ -65,13 +65,16 @@ func _ready() -> void:
 # --- layout ------------------------------------------------------------------------------------
 
 func _build_layout() -> void:
-	var root := HBoxContainer.new()
+	# split trascinabili: [sinistra | [centro | destra]], centro = [preview / mappa]
+	var root := HSplitContainer.new()
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	root.add_theme_constant_override("separation", 0)
 	add_child(root)
+	var rest := HSplitContainer.new()
+	rest.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 	# colonna sinistra: tab Luci / Catalogo
 	var left := _column(root, 300)
+	root.add_child(rest)
 	var tabs := TabContainer.new()
 	tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	left.add_child(tabs)
@@ -95,14 +98,19 @@ func _build_layout() -> void:
 	var center := VBoxContainer.new()
 	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	center.add_theme_constant_override("separation", 0)
-	root.add_child(center)
+	rest.add_child(center)
+	var vsplit := VSplitContainer.new()
+	vsplit.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	center.add_child(vsplit)
 	preview = Preview3D.new()
 	preview.setup(tex_rd)
-	center.add_child(preview)
+	preview.custom_minimum_size.y = 200
+	vsplit.add_child(preview)
 	map_view = MapView.new()
-	map_view.custom_minimum_size.y = 300
+	map_view.custom_minimum_size.y = 220
+	map_view.size_flags_vertical = Control.SIZE_SHRINK_END
 	map_view.set_texture(tex_rd)
-	center.add_child(map_view)
+	vsplit.add_child(map_view)
 	status = Label.new()
 	status.add_theme_font_size_override("font_size", 12)
 	status.modulate = Color(1, 1, 1, 0.7)
@@ -111,7 +119,7 @@ func _build_layout() -> void:
 	center.add_child(status)
 
 	# colonna destra
-	var right := _column(root, 300, true)
+	var right := _column(rest, 300, true)
 	bg_panel = BackgroundPanel.new()
 	right.add_child(bg_panel)
 	right.add_child(HSeparator.new())
@@ -200,7 +208,8 @@ func _pick_model() -> void:
 
 func _column(parent: Container, width: float, scroll := false) -> VBoxContainer:
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size.x = width
+	panel.custom_minimum_size.x = width * 0.8
+	panel.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	parent.add_child(panel)
 	var margin := MarginContainer.new()
 	for side in ["left", "right", "top", "bottom"]:
@@ -258,7 +267,12 @@ func _on_map_move(i: int, az: float, el: float, commit: bool) -> void:
 
 func _on_paint(dir: Vector3, commit: bool) -> void:
 	if _selected < 0:
-		return
+		# nessuna luce selezionata: il LightPaint ne crea una nuova
+		var nl := RigLight.new()
+		nl.name = "Paint %d" % (rig.lights.size() + 1)
+		nl.intensity = 4.0
+		nl.softness = 1.0
+		light_list.add_and_select(nl)
 	var l: RigLight = rig.lights[_selected]
 	l.azimuth = rad_to_deg(atan2(-dir.x, dir.z))
 	l.elevation = rad_to_deg(asin(clampf(dir.y, -1.0, 1.0)))
@@ -285,6 +299,8 @@ func _process(_delta: float) -> void:
 	if _dirty:
 		baker.bake(rig)
 		_dirty = false
+		if _selected >= 0 and rig.lights[_selected].photometric:
+			props.sync_values()
 	if _live_dirty and Time.get_ticks_msec() >= _live_deadline:
 		_live_dirty = false
 		_live_export()

@@ -7,11 +7,11 @@ area: progetto
 
 # HDRI Studio — Piano
 
-> [!success] Stato: v0.8 — 15 settembre 2026 — luci Texture e catalogo
-> Fase 2 verificata sul PC. Fase 3: LightPaint da C4D (da provare, [[#5.3 Fase 3 — stato e test in C4D]]),
-> modello GLB nel preview, **luci Texture** (HDRI lights proiettate sul rettangolo della luce) e
-> **catalogo** di una cartella locale con miniature e sidecar JSON. Progetto in `hdri_studio/`,
-> repository privato: https://github.com/lignazio/hdri-studio. Ambiente rilevato sulla macchina: macOS 15.7 su M1 Pro,
+> [!success] Stato: v0.9 — 15 settembre 2026 — Fase 3 quasi completa
+> Fatto: LightPaint da C4D (normali interpolate; da provare, [[#5.3 Fase 3 — stato e test in C4D]]),
+> modello GLB nel preview, luci Texture, catalogo per sottocartelle, **modalità fotometrica** (K misurato
+> sul GPU, validato contro Cycles), fusione Normale, riordino, pannelli ridimensionabili.
+> Progetto in `hdri_studio/`, repository privato: https://github.com/lignazio/hdri-studio. Ambiente rilevato sulla macchina: macOS 15.7 su M1 Pro,
 > Godot 4.7.1, Blender 5.1.1, Cinema 4D 2025/2026, Houdini 20.0 e 21.0.
 
 ## 1. Cosa stiamo costruendo
@@ -354,9 +354,19 @@ Sul Mac: smoke test con un client Python che simula il plugin → hello, `hdri_u
       preferenze, miniature generate in un thread (esposizione automatica) e cache PNG in
       `user://thumbs/`, filtro per nome, click → luce nel rig. Il rig salva solo il percorso del file;
       sidecar `nome.json` opzionale con i default (dimensione, intensità, Kelvin…).
-- [ ] Normali interpolate (phong) nel picking, se il salto di faccia in faccia disturba.
-- [ ] LightPaint che crea una luce nuova se nessuna è selezionata.
+- [x] Normali interpolate (Phong, baricentriche nel triangolo colpito) nel picking C4D; fallback alla
+      normale di faccia se l'oggetto non ha Phong.
+- [x] LightPaint che crea una luce nuova se nessuna è selezionata.
+- [x] Catalogo per sottocartelle: intestazioni per gruppo e menu a tendina di filtro.
+- [x] **Modalità fotometrica**: E al centro → `L = E / K`, con K = ∫ w·cosθ dω misurato sul GPU nel
+      frame locale della luce (griglia 256², coordinate angolari, jacobiano esatto), cache sui
+      parametri di forma. Validato: rect 30°×20° → K = 0.1769 sr, lo stesso valore ricavato da Cycles
+      in Fase 0.
+- [x] Fusione **Normale** (copre in ordine di elenco) e riordino ▲▼ delle luci.
+- [x] Colonne e preview/mappa ridimensionabili (split container).
+- [x] ID dei plugin C4D portati a valori alti dopo la collisione di 1065932 con `C4d_objects`.
 - [ ] Catalogo: anteprima al passaggio del mouse, tag/preferiti, drag & drop sulla mappa.
+- [ ] ACEScg in export.
 
 ### 5.3 Fase 3 — stato e test in C4D
 
@@ -434,6 +444,9 @@ Nessuna domanda bloccante. Prossimo passo: Fase 0.
 - 15/09/2026 — Assi in **Octane**: da dentro la sfera si vede esattamente il preview; le etichette
   degli assi differiscono solo su X perché C4D è left-handed (rosso = +X interno finisce su −X di C4D,
   Y e Z allineati). Conversione coordinate C4D → interne per LightPaint (Fase 3): `(x, y, z) → (−x, y, z)`.
+- 15/09/2026 — Fotometrico: K si misura sul GPU con lo stesso shader del bake (modalità `measure` nel
+  frame locale della luce) invece di replicare i profili su CPU: una sola verità per le forme, precisione
+  indipendente dalla dimensione della luce, costo ~ms solo quando cambia la forma.
 - 15/09/2026 — Catalogo: solo riferimenti ai file originali (percorso nel rig), niente copie né
   database; i metadati opzionali stanno in un sidecar JSON accanto all'immagine, così la collezione
   resta leggibile e modificabile a mano.

@@ -6,7 +6,8 @@
 ## Installazione
 
 1. Cinema 4D → **Edit → Preferences → Plugins** → *Add Folder…* → scegli questa cartella (`plugins/c4d`,
-   quella che contiene `hdri_studio_link/`).
+   quella che contiene `hdri_studio_link/`). Meglio puntare alla cartella del repository che copiarla in
+   `AppData\...\plugins`: così ogni `git pull` aggiorna il plugin (serve comunque riavviare C4D).
 2. Riavvia Cinema 4D. Nella console (Extensions → Console) compare `[hdri-studio] plugin caricato`.
 3. Nel menu **Extensions** compare anche "HDRI Studio: ricarica texture", per ricaricare a mano.
 

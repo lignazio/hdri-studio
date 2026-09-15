@@ -25,6 +25,8 @@ var _ring_rows: Array = []
 var _gradient_rows: Array = []
 var _texture_row: HBoxContainer
 var _texture_label: Label
+var _photometric: CheckBox
+var _k_label: Label
 
 
 func _init() -> void:
@@ -97,7 +99,19 @@ func _init() -> void:
 	_scrim_rows.append(_row("scrim_source_size", "Sorgente Ø", 0.0, 3.0, 0.01))
 
 	_section("Intensità e colore")
+	_photometric = CheckBox.new()
+	_photometric.text = "Fotometrico (illuminamento al centro)"
+	_photometric.tooltip_text = "La luce è definita dall'illuminamento E che produce al centro della sfera su una superficie che la guarda.\nLa radianza è E / K, con K l'angolo solido proiettato della forma (immagine compresa).\nDue luci con lo stesso E espongono allo stesso modo qualunque sia la loro dimensione."
+	_photometric.toggled.connect(func(v: bool) -> void:
+		_set_prop("photometric", v, true)
+		_update_visibility())
+	_box.add_child(_photometric)
 	_row("intensity", "Intensità", 0.01, 1000.0, 0.01, true)
+	_row("illuminance", "Illuminamento", 0.01, 100000.0, 0.01, true)
+	_k_label = Label.new()
+	_k_label.modulate = Color(1, 1, 1, 0.6)
+	_k_label.add_theme_font_size_override("font_size", 12)
+	_box.add_child(_k_label)
 	_row("ev", "EV", -10.0, 10.0, 0.1)
 	_row("kelvin", "Kelvin", 1000.0, 25000.0, 10.0)
 	var tint_row := HBoxContainer.new()
@@ -112,7 +126,7 @@ func _init() -> void:
 	_tint.color_changed.connect(func(c: Color) -> void: _set_prop("tint", c, false))
 	_tint.popup_closed.connect(func() -> void: changed.emit(true))
 	tint_row.add_child(_tint)
-	_blend = _option("Fusione", ["Somma", "Massimo", "Moltiplica"], func(i: int) -> void: _set_prop("blend", i, true))
+	_blend = _option("Fusione", ["Somma", "Massimo", "Moltiplica", "Normale"], func(i: int) -> void: _set_prop("blend", i, true))
 
 	set_light(null)
 
@@ -195,6 +209,8 @@ func set_light(l: RigLight) -> void:
 	_falloff.selected = l.falloff
 	_blend.selected = l.blend
 	_tint.color = l.tint
+	_photometric.button_pressed = l.photometric
+	_k_label.text = "K = %.4f sr · radianza risultante %.3f" % [l.measured_k, l.radiance()] if l.photometric else ""
 	_texture_label.text = l.texture_path.get_file() if l.texture_path != "" else "—"
 	_texture_label.tooltip_text = l.texture_path
 	_syncing = false
@@ -217,4 +233,7 @@ func _update_visibility() -> void:
 	for r in _gradient_rows:
 		r.visible = light.shape == RigLight.Shape.GRADIENT
 	_texture_row.visible = light.shape == RigLight.Shape.TEXTURE
+	_rows["intensity"].visible = not light.photometric
+	_rows["illuminance"].visible = light.photometric
+	_k_label.visible = light.photometric
 	_rows["softness"].visible = light.shape != RigLight.Shape.GRADIENT

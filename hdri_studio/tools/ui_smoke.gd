@@ -160,6 +160,81 @@ func _run(main: Node) -> void:
 	main.catalog.light_requested.emit(tex_path, main.catalog._defaults({"path": tex_path, "name": "furnace", "sidecar": {}}))
 	ok = ok and _check(main.rig.lights.size() == n_before + 1, "click sul catalogo aggiunge una luce")
 
+	# catalogo per sottocartelle: out/softbox/ contiene una copia
+	ok = ok and _check(main.catalog._sections.size() >= 2, "catalogo: %d sezioni (sottocartelle)" % main.catalog._sections.size())
+	var idx := -1
+	for i in main.catalog._subfolder.item_count:
+		if main.catalog._subfolder.get_item_text(i) == "softbox":
+			idx = i
+	ok = ok and _check(idx > 0, "menu sottocartelle contiene 'softbox'")
+	main.catalog._subfolder.selected = idx
+	main.catalog._apply_filter()
+	var vis := 0
+	for path in main.catalog._buttons:
+		if main.catalog._buttons[path].visible:
+			vis += 1
+	ok = ok and _check(vis == 1, "filtro per sottocartella: %d visibile" % vis)
+	main.catalog._subfolder.selected = 0
+	main.catalog._apply_filter()
+
+	# fotometrico: rect 30x20 duro → K ≈ 0.1769 sr (dal test Blender di Fase 0), E = 1 → L = 1/K
+	var pht := RigLight.new()
+	pht.name = "photo"
+	pht.shape = RigLight.Shape.RECT
+	pht.width = 30.0
+	pht.height = 20.0
+	pht.softness = 0.0
+	pht.photometric = true
+	pht.illuminance = 1.0
+	for l in main.rig.lights:
+		l.enabled = false
+	main.rig.background = LightRig.Background.BLACK
+	main.light_list.add_and_select(pht)
+	await process_frame
+	await process_frame
+	ok = ok and _check(absf(pht.measured_k - 0.1769) < 0.002, "K misurato = %.4f sr (atteso 0.1769)" % pht.measured_k)
+	var pimg: Image = main.baker.get_image()
+	var pc := pimg.get_pixel(pimg.get_width() / 2, pimg.get_height() / 2)
+	ok = ok and _check(absf(pc.r - 1.0 / pht.measured_k) < 0.01, "radianza al centro = %.3f = 1/K" % pc.r)
+	# K non dipende dalla posizione, sì dalla dimensione
+	pht.azimuth = 60.0
+	pht.elevation = -20.0
+	main._dirty = true
+	await process_frame
+	ok = ok and _check(absf(pht.measured_k - 0.1769) < 0.002, "K invariante alla posizione")
+	pht.width = 60.0
+	main._dirty = true
+	await process_frame
+	ok = ok and _check(pht.measured_k > 0.3, "K cresce con la larghezza (%.4f)" % pht.measured_k)
+
+	# fusione Normale: luce a 0.2 sopra sfondo 1.0 → 0.2 al centro
+	pht.photometric = false
+	pht.intensity = 0.2
+	pht.azimuth = 0.0
+	pht.elevation = 0.0
+	pht.blend = RigLight.Blend.NORMAL
+	main.rig.background = LightRig.Background.UNIFORM
+	main.rig.bg_horizon = Color(1, 1, 1)
+	main._dirty = true
+	await process_frame
+	var nimg: Image = main.baker.get_image()
+	var nc := nimg.get_pixel(nimg.get_width() / 2, nimg.get_height() / 2)
+	ok = ok and _check(absf(nc.r - 0.2) < 0.01, "fusione Normale copre lo sfondo: %.3f" % nc.r)
+
+	# riordino
+	var last: int = main.rig.lights.size() - 1
+	main.light_list.select(last)
+	main.light_list._move(-1)
+	ok = ok and _check(main.rig.lights[last - 1] == pht and main._selected == last - 1, "sposta su")
+	main.light_list._move(1)
+	ok = ok and _check(main.rig.lights[last] == pht, "sposta giù")
+
+	# LightPaint senza selezione crea una luce
+	main._select(-1)
+	var n0: int = main.rig.lights.size()
+	main.preview.paint.emit(Vector3(0, 0, 1), true)
+	ok = ok and _check(main.rig.lights.size() == n0 + 1 and main._selected == n0, "LightPaint senza selezione crea una luce")
+
 	print("[smoke] %s" % ("TUTTO OK" if ok else "FALLITO"))
 	quit(0 if ok else 1)
 

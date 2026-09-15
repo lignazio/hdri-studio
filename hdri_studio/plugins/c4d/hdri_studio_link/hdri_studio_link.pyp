@@ -23,9 +23,12 @@ import c4d
 sys.path.insert(0, os.path.dirname(__file__))
 import link_core  # noqa: E402
 
-PLUGIN_ID_LINK = 1065931
-PLUGIN_ID_RELOAD = 1065932
-PLUGIN_ID_PAINT = 1065933
+# ID unici del plugin: valori alti fuori dagli intervalli usati dai moduli di Cinema 4D
+# (1065932 collideva con C4d_objects). Per una distribuzione pubblica andrebbero richiesti su
+# https://developers.maxon.net/forum/pid
+PLUGIN_ID_LINK = 1099780031
+PLUGIN_ID_RELOAD = 1099780032
+PLUGIN_ID_PAINT = 1099780033
 EXTS = (".exr", ".hdr")
 TIMER_MS = 200
 MTIME_SCAN_S = 1.0
@@ -155,6 +158,44 @@ def _collect(op, out):
         child = child.GetNext()
 
 
+def _smooth_normal(poly, hit, phong_cache):
+    """Normale interpolata (Phong) nel punto colpito; None se l'oggetto non ha normali Phong."""
+    key = id(poly)
+    if key not in phong_cache:
+        try:
+            phong_cache[key] = poly.CreatePhongNormals()
+        except Exception:
+            phong_cache[key] = None
+    normals = phong_cache[key]
+    if not normals:
+        return None
+    fid = hit["face_id"]
+    cp = poly.GetPolygon(fid)
+    pts = poly.GetAllPoints()
+    idx = [cp.a, cp.b, cp.c, cp.d]
+    base = fid * 4
+    if hit.get("tri_face_id", 0) == 0 or cp.c == cp.d:
+        tri = (0, 1, 2)
+    else:
+        tri = (0, 2, 3)
+    p0, p1, p2 = (pts[idx[k]] for k in tri)
+    n0, n1, n2 = (normals[base + k] for k in tri)
+    # coordinate baricentriche del punto colpito nel triangolo
+    v0, v1, v2 = p1 - p0, p2 - p0, hit["hitpos"] - p0
+    d00, d01, d11 = v0.Dot(v0), v0.Dot(v1), v1.Dot(v1)
+    d20, d21 = v2.Dot(v0), v2.Dot(v1)
+    denom = d00 * d11 - d01 * d01
+    if abs(denom) < 1e-12:
+        return None
+    v = (d11 * d20 - d01 * d21) / denom
+    w = (d00 * d21 - d01 * d20) / denom
+    u = 1.0 - v - w
+    n = n0 * u + n1 * v + n2 * w
+    if n.GetLength() < 1e-9:
+        return None
+    return n.GetNormalized()
+
+
 def pick(doc, bd, mx, my):
     """Ray dal pixel (mx, my) della vista bd → (punto, normale, direzione) in coordinate mondo, o None."""
     ray_p = bd.SW(c4d.Vector(mx, my, 0.0))
@@ -163,6 +204,7 @@ def pick(doc, bd, mx, my):
     polys = []
     _polygon_objects(doc.GetFirstObject(), polys)
     best = None
+    phong_cache = {}
     rc = c4d.utils.GeRayCollider()
     for poly in polys:
         if poly.GetPolygonCount() == 0:
@@ -181,7 +223,8 @@ def pick(doc, bd, mx, my):
         p_w = mg * hit["hitpos"]
         dist = (p_w - ray_p).GetLength()
         if best is None or dist < best[0]:
-            n_w = mg.MulV(hit["f_normal"]).GetNormalized()
+            n_loc = _smooth_normal(poly, hit, phong_cache) or hit["f_normal"]
+            n_w = mg.MulV(n_loc).GetNormalized()
             if n_w.Dot(ray_d) > 0.0:
                 n_w = -n_w
             best = (dist, p_w, n_w)

@@ -13,6 +13,8 @@ var list: ItemList
 var _add_menu: MenuButton
 var _btn_dup: Button
 var _btn_del: Button
+var _btn_up: Button
+var _btn_down: Button
 
 const SHAPE_LABELS := ["Rettangolo", "Ellisse", "Anello", "Gradiente", "Scrim", "Texture"]
 
@@ -25,7 +27,9 @@ func _init() -> void:
 	list = ItemList.new()
 	list.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	list.custom_minimum_size.y = 160
-	list.item_selected.connect(func(i: int) -> void: selection_changed.emit(i))
+	list.item_selected.connect(func(i: int) -> void:
+		selection_changed.emit(i)
+		_update_buttons())
 	add_child(list)
 	var row := HBoxContainer.new()
 	add_child(row)
@@ -44,6 +48,16 @@ func _init() -> void:
 	_btn_del.text = "Elimina"
 	_btn_del.pressed.connect(_on_delete)
 	row.add_child(_btn_del)
+	_btn_up = Button.new()
+	_btn_up.text = "▲"
+	_btn_up.tooltip_text = "Sposta su (le luci dopo nell'elenco coprono quelle prima con la fusione Normale)"
+	_btn_up.pressed.connect(func() -> void: _move(-1))
+	row.add_child(_btn_up)
+	_btn_down = Button.new()
+	_btn_down.text = "▼"
+	_btn_down.tooltip_text = "Sposta giù"
+	_btn_down.pressed.connect(func() -> void: _move(1))
+	row.add_child(_btn_down)
 
 
 func set_rig(r: LightRig) -> void:
@@ -61,6 +75,7 @@ func select(index: int) -> void:
 		list.select(index)
 	else:
 		list.deselect_all()
+	_update_buttons()
 
 
 func refresh() -> void:
@@ -74,8 +89,15 @@ func refresh() -> void:
 			txt += "  [solo]"
 		list.add_item(txt)
 	select(prev)
+	_update_buttons()
+
+
+func _update_buttons() -> void:
 	_btn_dup.disabled = rig.lights.is_empty()
 	_btn_del.disabled = rig.lights.is_empty()
+	var sel := selected_index()
+	_btn_up.disabled = sel <= 0
+	_btn_down.disabled = sel < 0 or sel >= rig.lights.size() - 1
 
 
 func _on_add(shape_id: int) -> void:
@@ -111,6 +133,21 @@ func add_and_select(l: RigLight) -> void:
 	select(rig.lights.size() - 1)
 	structure_changed.emit()
 	selection_changed.emit(rig.lights.size() - 1)
+
+
+func _move(delta: int) -> void:
+	var i := selected_index()
+	var j := i + delta
+	if i < 0 or j < 0 or j >= rig.lights.size():
+		return
+	var l: RigLight = rig.lights[i]
+	rig.lights.remove_at(i)
+	rig.lights.insert(j, l)
+	refresh()
+	select(j)
+	_update_buttons()
+	structure_changed.emit()
+	selection_changed.emit(j)
 
 
 func _on_duplicate() -> void:

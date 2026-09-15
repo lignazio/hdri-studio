@@ -20,7 +20,7 @@ layout(push_constant, std430) uniform Params {
 	vec4 size;       // width, height, light_count, supersample
 	vec4 bg_zenith;  // rgb, background mode (0 nero, 1 uniforme = horizon, 2 gradiente)
 	vec4 bg_horizon; // rgb, calibration flag
-	vec4 bg_nadir;   // rgb, -
+	vec4 bg_nadir;   // rgb, measure flag (1 = misura K della luce 0 nel suo frame locale)
 	vec4 base;       // rotazione (rad), esposizione (mult), enabled, flip
 } p;
 
@@ -197,15 +197,48 @@ vec3 shade(vec3 d, int n) {
 		int blend = int(c.w + 0.5);
 		if (blend == 0) col += rgb * w;
 		else if (blend == 1) col = max(col, rgb * w);
-		else col *= mix(vec3(1.0), rgb, w);
+		else if (blend == 2) col *= mix(vec3(1.0), rgb, w);
+		else col = mix(col, rgb, w); // normale: copre in ordine di elenco
 	}
 	return col;
+}
+
+// Misura di K = ∫ w(d)·cosθ dω per la luce 0, integrando nel suo frame locale: il pixel copre
+// (dax, day) in coordinate angolari, con d = normalize(tan ax·R + tan ay·U + F),
+// dω = sec²ax·sec²ay / (1 + tan²ax + tan²ay)^(3/2) dax day e cosθ = 1 / sqrt(1 + tan²ax + tan²ay).
+// Per le luci Texture pesa anche la luminanza dell'immagine. Scrive il contributo del pixel in .r.
+void measure(ivec2 pix, ivec2 sz) {
+	vec4 a = lights.data[0];
+	vec4 b = lights.data[1];
+	vec3 F, R, U;
+	light_frame(a.y, a.z, a.w, F, R, U);
+	float hw = b.x * 0.5, hh = b.y * 0.5;
+	float dax = 2.0 * hw / float(sz.x);
+	float day = 2.0 * hh / float(sz.y);
+	float ax = -hw + (float(pix.x) + 0.5) * dax;
+	float ay = -hh + (float(pix.y) + 0.5) * day;
+	// oltre 89° la proiezione tangente diverge: clamp (le luci più larghe di 178° sono sfondi)
+	ax = clamp(ax, -1.553, 1.553);
+	ay = clamp(ay, -1.553, 1.553);
+	float tx = tan(ax), ty = tan(ay);
+	float q = 1.0 + tx * tx + ty * ty;
+	vec3 d = normalize(tx * R + ty * U + F);
+	float w = light_weight(0, d);
+	if (int(a.x + 0.5) == 5) {
+		vec3 rgb = light_texture(0, d);
+		w *= dot(rgb, vec3(0.2126, 0.7152, 0.0722));
+	}
+	float sec2 = (1.0 + tx * tx) * (1.0 + ty * ty);
+	float domega = sec2 / (q * sqrt(q)) * dax * day;
+	float cos_t = 1.0 / sqrt(q);
+	imageStore(out_img, pix, vec4(w * cos_t * domega, 0.0, 0.0, 1.0));
 }
 
 void main() {
 	ivec2 pix = ivec2(gl_GlobalInvocationID.xy);
 	ivec2 sz = ivec2(p.size.xy);
 	if (pix.x >= sz.x || pix.y >= sz.y) return;
+	if (p.bg_nadir.w > 0.5) { measure(pix, sz); return; }
 	int n = int(p.size.z + 0.5);
 	int ss = max(int(p.size.w + 0.5), 1);
 	vec3 acc = vec3(0.0);

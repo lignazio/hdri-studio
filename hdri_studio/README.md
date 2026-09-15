@@ -28,6 +28,23 @@ preview (solo visualizzazione) · ⌘Z / ⇧⌘Z = undo/redo.
 Export: risoluzione 2k/4k/8k, half o float32, preset di orientamento per software (Cinema 4D = specchio
 orizzontale, misurato con la taratura), rotazione extra. Il rig si salva/apre come JSON.
 
+## Modalità fotometrica
+
+Nel pannello proprietà, *Fotometrico (illuminamento al centro)*: invece della radianza si imposta
+l'**illuminamento E** che la luce produce al centro della sfera su una superficie che la guarda (unità
+arbitrarie ma coerenti fra luci). La radianza è `E / K`, con `K = ∫ w(d)·cosθ dω` misurato sul GPU nel
+frame locale della luce — profilo, sfumatura e immagine compresi — e ricalcolato solo quando cambia la
+forma. Due luci con lo stesso E espongono allo stesso modo qualunque sia la loro dimensione: allargare
+una softbox la rende più morbida, non più forte. Il pannello mostra K e la radianza risultante.
+
+## Fusione e ordine
+
+Fusione per luce: **Somma** (fisica, default), **Massimo**, **Moltiplica** (maschere/bandiere) e
+**Normale** (la luce copre ciò che c'è sotto dove sta: utile per le HDRI light con il proprio fondo).
+Con Normale l'ordine conta: le luci più in basso nell'elenco coprono quelle sopra; ▲ ▼ riordinano.
+
+I bordi fra le colonne e fra preview e mappa si trascinano.
+
 ## Live link con Cinema 4D (Octane)
 
 Plugin in `plugins/c4d/hdri_studio_link/` — installazione e uso in `plugins/c4d/README.md`. In breve:
@@ -48,7 +65,8 @@ Il rig salva **solo il percorso** del file. Accanto a un'immagine puoi mettere u
 
     {"name": "Softbox 60x90", "width": 25, "height": 37, "intensity": 3, "ev": 0, "kelvin": 5600, "softness": 0.5, "roll": 0}
 
-Senza sidecar: 30° di larghezza, altezza dall'aspetto dell'immagine. Sul GPU le immagini vivono in un
+Senza sidecar: 30° di larghezza, altezza dall'aspetto dell'immagine. Le miniature sono raggruppate per
+sottocartella (intestazione gialla) e il menu a tendina limita la vista a una sottocartella. Sul GPU le immagini vivono in un
 texture array 2048×1024 × 12 strati (RGBA16F, ~200 MB): oltre 12 luci Texture diverse contemporaneamente
 le meno usate vengono ricaricate al bisogno.
 

@@ -10,6 +10,8 @@ const PUSH_CONSTANT_FLOATS := 20
 ## Texture array delle luci Texture: ogni immagine viene ricampionata a questa dimensione.
 const TEX_LAYER_SIZE := Vector2i(2048, 1024)
 const TEX_LAYERS := 12
+## Griglia della misura fotometrica (nel frame locale della luce).
+const MEASURE_RES := Vector2i(256, 256)
 
 var rd: RenderingDevice
 var width := 4096
@@ -28,6 +30,9 @@ var _base_is_placeholder := true
 var _tex_array := RID()
 var _tex_layers := {}   # percorso → strato
 var _tex_lru: Array[String] = []
+var _measure_tex := RID()
+var _measure_set := RID()
+var _k_cache := {}      # shape_key → K
 
 
 func _init(local_device := false) -> void:
@@ -113,6 +118,7 @@ func set_base_image(img: Image) -> void:
 func _upload_base(img: Image) -> void:
 	if _base_tex.is_valid():
 		rd.free_rid(_base_tex)
+	_measure_set = RID()
 	var fmt := RDTextureFormat.new()
 	fmt.width = img.get_width()
 	fmt.height = img.get_height()
@@ -217,8 +223,91 @@ func _ensure_uniform_set() -> void:
 	_uniform_set = rd.uniform_set_create([u0, u1, u2, u3], _shader, 0)
 
 
+## K = ∫ w(d)·cosθ dω della luce (sr, pesato dal profilo e dall'immagine): misurato sul GPU nel
+## frame locale della luce, con cache sui parametri di forma.
+func measure_k(l: RigLight) -> float:
+	var key := l.shape_key()
+	if _k_cache.has(key):
+		return _k_cache[key]
+	_ensure_measure_set()
+	var probe := l.duplicate_light()
+	probe.photometric = false
+	probe.intensity = 1.0
+	probe.ev = 0.0
+	probe.kelvin = 6500.0
+	probe.tint = Color.WHITE
+	probe.enabled = true
+	var layer := -1
+	if probe.shape == RigLight.Shape.TEXTURE:
+		layer = texture_layer(probe.texture_path)
+	var data := PackedFloat32Array()
+	probe.pack(data, layer)
+	var bytes := data.to_byte_array()
+	rd.buffer_update(_lights_buf, 0, bytes.size(), bytes)
+	var pc := PackedFloat32Array([
+		float(MEASURE_RES.x), float(MEASURE_RES.y), 1.0, 1.0,
+		0.0, 0.0, 0.0, 0.0,
+		0.0, 0.0, 0.0, 0.0,
+		0.0, 0.0, 0.0, 1.0,
+		0.0, 1.0, 0.0, 0.0,
+	])
+	var pc_bytes := pc.to_byte_array()
+	var cl := rd.compute_list_begin()
+	rd.compute_list_bind_compute_pipeline(cl, _pipeline)
+	rd.compute_list_bind_uniform_set(cl, _measure_set, 0)
+	rd.compute_list_set_push_constant(cl, pc_bytes, pc_bytes.size())
+	@warning_ignore("integer_division")
+	rd.compute_list_dispatch(cl, (MEASURE_RES.x + 7) / 8, (MEASURE_RES.y + 7) / 8, 1)
+	rd.compute_list_end()
+	if _local:
+		rd.submit()
+		rd.sync()
+	var f := rd.texture_get_data(_measure_tex, 0).to_float32_array()
+	var k := 0.0
+	var i := 0
+	while i < f.size():
+		k += f[i]
+		i += 4
+	_k_cache[key] = k
+	return k
+
+
+func _ensure_measure_set() -> void:
+	if _measure_set.is_valid():
+		return
+	var fmt := RDTextureFormat.new()
+	fmt.width = MEASURE_RES.x
+	fmt.height = MEASURE_RES.y
+	fmt.format = RenderingDevice.DATA_FORMAT_R32G32B32A32_SFLOAT
+	fmt.usage_bits = RenderingDevice.TEXTURE_USAGE_STORAGE_BIT | RenderingDevice.TEXTURE_USAGE_CAN_COPY_FROM_BIT
+	_measure_tex = rd.texture_create(fmt, RDTextureView.new())
+	var u0 := RDUniform.new()
+	u0.uniform_type = RenderingDevice.UNIFORM_TYPE_IMAGE
+	u0.binding = 0
+	u0.add_id(_measure_tex)
+	var u1 := RDUniform.new()
+	u1.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+	u1.binding = 1
+	u1.add_id(_lights_buf)
+	var u2 := RDUniform.new()
+	u2.uniform_type = RenderingDevice.UNIFORM_TYPE_SAMPLER_WITH_TEXTURE
+	u2.binding = 2
+	u2.add_id(_sampler)
+	u2.add_id(_base_tex)
+	var u3 := RDUniform.new()
+	u3.uniform_type = RenderingDevice.UNIFORM_TYPE_SAMPLER_WITH_TEXTURE
+	u3.binding = 3
+	u3.add_id(_sampler)
+	u3.add_id(_tex_array)
+	_measure_set = rd.uniform_set_create([u0, u1, u2, u3], _shader, 0)
+
+
 ## Esegue il bake del rig nella texture. Con calibration = true ignora le luci e disegna i marker degli assi.
 func bake(rig: LightRig, calibration := false) -> void:
+	# le luci fotometriche hanno bisogno del loro K prima del pack (la misura usa lo stesso buffer)
+	for l in rig.active_lights():
+		if l.photometric:
+			l.measured_k = measure_k(l)
 	_ensure_uniform_set()
 
 	var data := PackedFloat32Array()
@@ -266,7 +355,7 @@ func get_image() -> Image:
 
 
 func free_resources() -> void:
-	for rid in [_uniform_set, texture, _base_tex, _tex_array, _lights_buf, _sampler, _pipeline, _shader]:
+	for rid in [_uniform_set, _measure_set, texture, _measure_tex, _base_tex, _tex_array, _lights_buf, _sampler, _pipeline, _shader]:
 		if rid.is_valid():
 			rd.free_rid(rid)
 	_uniform_set = RID()

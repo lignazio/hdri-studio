@@ -16,7 +16,9 @@ var folder := ""
 var thumbs := ThumbnailCache.new()
 var _items: Array[Dictionary] = []
 var _buttons := {}
-var _grid: GridContainer
+var _sections := {}      # sottocartella relativa → {"header": Label, "grid": GridContainer}
+var _list: VBoxContainer
+var _subfolder: OptionButton
 var _filter: LineEdit
 var _path_label: Label
 var _status: Label
@@ -43,8 +45,11 @@ func _init() -> void:
 	_path_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_path_label.modulate = Color(1, 1, 1, 0.7)
 	add_child(_path_label)
+	_subfolder = OptionButton.new()
+	_subfolder.item_selected.connect(func(_i: int) -> void: _apply_filter())
+	add_child(_subfolder)
 	_filter = LineEdit.new()
-	_filter.placeholder_text = "Filtra…"
+	_filter.placeholder_text = "Filtra per nome…"
 	_filter.clear_button_enabled = true
 	_filter.text_changed.connect(func(_t: String) -> void: _apply_filter())
 	add_child(_filter)
@@ -52,10 +57,9 @@ func _init() -> void:
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	add_child(scroll)
-	_grid = GridContainer.new()
-	_grid.columns = COLUMNS
-	_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(_grid)
+	_list = VBoxContainer.new()
+	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(_list)
 	_status = Label.new()
 	_status.modulate = Color(1, 1, 1, 0.7)
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -76,19 +80,28 @@ func set_folder(path: String) -> void:
 	folder = path
 	_path_label.text = path if path != "" else "—"
 	_path_label.tooltip_text = path
-	for c in _grid.get_children():
+	for c in _list.get_children():
 		c.queue_free()
 	_buttons.clear()
+	_sections.clear()
 	_items.clear()
+	_subfolder.clear()
+	_subfolder.add_item("Tutte le cartelle")
 	if path == "" or not DirAccess.dir_exists_absolute(path):
 		_status.text = "Scegli una cartella con i tuoi EXR/HDR."
 		return
 	_scan(path)
-	_items.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a["name"].naturalnocasecmp_to(b["name"]) < 0)
+	# ordine: per sottocartella, poi per nome
+	_items.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if a["folder"] != b["folder"]:
+			return a["folder"].naturalnocasecmp_to(b["folder"]) < 0
+		return a["name"].naturalnocasecmp_to(b["name"]) < 0)
 	for it in _items:
 		_add_button(it)
+	for sub in _sections:
+		_subfolder.add_item(sub if sub != "" else "(radice)")
 	_apply_filter()
-	_status.text = "%d immagini" % _items.size()
+	_status.text = "%d immagini in %d cartelle" % [_items.size(), _sections.size()]
 
 
 func _scan(dir_path: String) -> void:
@@ -105,7 +118,8 @@ func _scan(dir_path: String) -> void:
 		if dir.current_is_dir():
 			_scan(full)
 		elif entry.get_extension().to_lower() in EXTS:
-			_items.append({"path": full, "name": entry.get_basename(), "sidecar": _sidecar(full)})
+			var rel := dir_path.trim_prefix(folder).trim_prefix("/").trim_prefix("\\")
+			_items.append({"path": full, "name": entry.get_basename(), "folder": rel, "sidecar": _sidecar(full)})
 		entry = dir.get_next()
 	dir.list_dir_end()
 
@@ -117,6 +131,22 @@ static func _sidecar(path: String) -> Dictionary:
 			if d is Dictionary:
 				return d
 	return {}
+
+
+func _section_grid(sub: String) -> GridContainer:
+	if _sections.has(sub):
+		return _sections[sub]["grid"]
+	var header := Label.new()
+	header.text = sub if sub != "" else "(radice)"
+	header.add_theme_font_size_override("font_size", 13)
+	header.modulate = Color(1.0, 0.8, 0.2, 0.9)
+	_list.add_child(header)
+	var grid := GridContainer.new()
+	grid.columns = COLUMNS
+	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_list.add_child(grid)
+	_sections[sub] = {"header": header, "grid": grid}
+	return grid
 
 
 func _add_button(it: Dictionary) -> void:
@@ -131,7 +161,8 @@ func _add_button(it: Dictionary) -> void:
 	b.custom_minimum_size = Vector2(120, 92)
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	b.pressed.connect(func() -> void: light_requested.emit(it["path"], _defaults(it)))
-	_grid.add_child(b)
+	_section_grid(it["folder"]).add_child(b)
+	b.set_meta("folder", it["folder"])
 	_buttons[it["path"]] = b
 	var tex := thumbs.request(it["path"])
 	if tex != null:
@@ -159,6 +190,18 @@ func _defaults(it: Dictionary) -> Dictionary:
 
 func _apply_filter() -> void:
 	var q := _filter.text.strip_edges().to_lower()
+	var only := ""
+	var all_folders := _subfolder.selected <= 0
+	if not all_folders:
+		only = _sections.keys()[_subfolder.selected - 1]
+	var visible_per_section := {}
 	for path in _buttons:
 		var b: Button = _buttons[path]
-		b.visible = q == "" or b.text.to_lower().contains(q) or path.to_lower().contains(q)
+		var sub: String = b.get_meta("folder")
+		b.visible = (all_folders or sub == only) and (q == "" or b.text.to_lower().contains(q) or path.get_file().to_lower().contains(q))
+		if b.visible:
+			visible_per_section[sub] = true
+	for sub in _sections:
+		var show: bool = visible_per_section.has(sub)
+		_sections[sub]["header"].visible = show
+		_sections[sub]["grid"].visible = show

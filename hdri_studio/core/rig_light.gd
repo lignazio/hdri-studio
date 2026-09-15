@@ -4,7 +4,9 @@ extends Resource
 
 enum Shape { RECT, ELLIPSE, RING, GRADIENT, SCRIM, TEXTURE }
 enum Falloff { LINEAR, SMOOTH, GAUSSIAN }
-enum Blend { ADD, MAX, MULTIPLY }
+## ADD somma (fisico), MAX massimo, MULTIPLY maschera, NORMAL copre lo sfondo dove sta (le luci dopo
+## nell'elenco coprono quelle prima).
+enum Blend { ADD, MAX, MULTIPLY, NORMAL }
 
 ## Numero di vec4 per luce nel buffer del compute shader. Deve coincidere con STRIDE in bake.glsl.
 const STRIDE := 5
@@ -23,6 +25,13 @@ const STRIDE := 5
 @export var falloff := Falloff.SMOOTH
 @export var intensity := 1.0
 @export_range(-10.0, 20.0) var ev := 0.0
+## Fotometrico: invece della radianza si specifica l'illuminamento E prodotto al centro della sfera
+## su una superficie rivolta verso la luce (unità arbitrarie ma coerenti fra luci: "lux"). La radianza
+## è E / K, con K = ∫ w(d)·cosθ dω misurato dal baker sulla forma reale (immagine compresa).
+@export var photometric := false
+@export var illuminance := 100.0
+## Ultimo K misurato dal baker (non serializzato).
+var measured_k := 1.0
 @export_range(1667.0, 25000.0) var kelvin := 6500.0
 @export var tint := Color.WHITE
 @export var blend := Blend.ADD
@@ -44,7 +53,16 @@ func duplicate_light() -> RigLight:
 
 
 func radiance() -> float:
+	if photometric:
+		return illuminance * pow(2.0, ev) / maxf(measured_k, 1e-9)
 	return intensity * pow(2.0, ev)
+
+
+## Chiave dei parametri da cui dipende K: se cambia, il baker rimisura.
+func shape_key() -> String:
+	return "%d|%.4f|%.4f|%.4f|%d|%.4f|%.4f|%.4f|%.4f|%.4f|%s" % [
+		shape, width, height, softness, falloff, ring_inner,
+		scrim_offset.x, scrim_offset.y, scrim_depth, scrim_source_size, texture_path]
 
 
 ## Colore lineare già moltiplicato per la radianza: è quello che entra nel bake.
@@ -73,6 +91,7 @@ func to_dict() -> Dictionary:
 		"width": width, "height": height, "softness": softness,
 		"falloff": Falloff.keys()[falloff],
 		"intensity": intensity, "ev": ev, "kelvin": kelvin,
+		"photometric": photometric, "illuminance": illuminance,
 		"tint": [tint.r, tint.g, tint.b], "blend": Blend.keys()[blend],
 		"ring_inner": ring_inner,
 		"scrim_offset": [scrim_offset.x, scrim_offset.y],
@@ -95,6 +114,8 @@ static func from_dict(d: Dictionary) -> RigLight:
 	l.softness = d.get("softness", l.softness)
 	l.falloff = Falloff.get(d.get("falloff", "SMOOTH"), Falloff.SMOOTH)
 	l.intensity = d.get("intensity", l.intensity)
+	l.photometric = d.get("photometric", false)
+	l.illuminance = d.get("illuminance", l.illuminance)
 	l.ev = d.get("ev", l.ev)
 	l.kelvin = d.get("kelvin", l.kelvin)
 	var t: Array = d.get("tint", [1, 1, 1])
