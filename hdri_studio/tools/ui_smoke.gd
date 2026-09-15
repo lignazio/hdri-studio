@@ -102,6 +102,25 @@ func _run(main: Node) -> void:
 	var pl := exp.get_pixel(int(uv.x * exp.get_width()), int(uv.y * exp.get_height()))
 	ok = ok and _check(pr.r > 1.0 and pl.r < 1.0, "flip C4D nativo: luce a u=%.2f nel file (%.2f vs %.2f)" % [1.0 - uv.x, pr.r, pl.r])
 
+	# modello GLB nel preview + LightPaint con raycast fisico
+	var glb := "res://out/torus.glb"
+	if FileAccess.file_exists(glb):
+		ok = ok and _check(main.preview.load_model(ProjectSettings.globalize_path(glb)), "carica torus.glb")
+		main.preview.set_model_material(Preview3D.ModelMaterial.CHROME)
+		for i in 4:
+			await process_frame
+		main._select(0)
+		var before_az: float = main.rig.lights[0].azimuth
+		main.rig.lights[0].elevation = 5.0
+		var center: Vector2 = main.preview.size * 0.5
+		var hit: bool = main.preview._try_paint(center, true)
+		ok = ok and _check(hit, "LightPaint sul modello: colpito")
+		# la camera guarda il toro dal davanti: il riflesso al centro deve puntare ~verso la camera
+		var lm: RigLight = main.rig.lights[0]
+		ok = ok and _check(lm.azimuth != before_az or absf(lm.elevation - 5.0) > 0.1, "LightPaint sul modello ha spostato la luce (az %.1f el %.1f)" % [lm.azimuth, lm.elevation])
+		main.preview.clear_model()
+		ok = ok and _check(not main.preview.has_model(), "modello rimosso")
+
 	print("[smoke] %s" % ("TUTTO OK" if ok else "FALLITO"))
 	quit(0 if ok else 1)
 

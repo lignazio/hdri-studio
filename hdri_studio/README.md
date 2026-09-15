@@ -35,6 +35,10 @@ pannello **Live link** → *File di export…* → *Attivo*; carica lo stesso fi
 ogni modifica riscrive il file e il plugin preme Reload sui nodi che lo usano. Protocollo JSON-lines su
 TCP 127.0.0.1:47820, con fallback sulla data di modifica del file se l'app non è collegata.
 
+LightPaint da C4D: tool "HDRI Studio LightPaint" nel plugin (vedi il README del plugin). Nel preview
+dell'app si può caricare un GLB (pannello *Modello nel preview*) al posto della sfera centrale, con
+materiale originale/cromato/glossy/diffuso: Shift+trascina sul modello funziona come sulle sfere.
+
 Smoke test del link (app + client Python finto, da due terminali o in sequenza):
 
     /Applications/Godot.app/Contents/MacOS/Godot --path hdri_studio -s res://tools/link_smoke.gd &

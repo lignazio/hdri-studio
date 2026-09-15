@@ -7,11 +7,11 @@ area: progetto
 
 # HDRI Studio — Piano
 
-> [!success] Stato: v0.6 — 15 settembre 2026 — Fase 2 (live link) pronta da provare in C4D
-> App Godot completa (Fase 1) più live link: server TCP, export automatico a ogni modifica, plugin
-> Cinema 4D che preme Reload sugli ImageTexture di Octane. Testato sul Mac con un client finto; il
-> test vero in C4D è il prossimo passo: [[#5.2 Fase 2 — stato e test in C4D]]. Progetto in
-> `hdri_studio/`, repository privato: https://github.com/lignazio/hdri-studio. Ambiente rilevato sulla macchina: macOS 15.7 su M1 Pro,
+> [!success] Stato: v0.7 — 15 settembre 2026 — live link confermato in C4D/Octane, LightPaint da C4D da provare
+> Fase 2 verificata sul PC ("funziona perfettamente"). Fase 3 iniziata: tool LightPaint in Cinema 4D
+> (picking sul modello → la luce selezionata va sul riflesso) e modello GLB nel preview dell'app.
+> Test da fare: [[#5.3 Fase 3 — stato e test in C4D]]. Progetto in `hdri_studio/`, repository
+> privato: https://github.com/lignazio/hdri-studio. Ambiente rilevato sulla macchina: macOS 15.7 su M1 Pro,
 > Godot 4.7.1, Blender 5.1.1, Cinema 4D 2025/2026, Houdini 20.0 e 21.0.
 
 ## 1. Cosa stiamo costruendo
@@ -320,15 +320,17 @@ Da rifinire quando lo usi: default delle nuove luci, range degli slider, tema.
       TCP non bloccante con riconnessione, preme i pulsanti *Reload* dei nodi che usano il file;
       fallback sulla data di modifica ogni secondo; comando "HDRI Studio: ricarica texture".
 - [x] Ricezione del messaggio `lightpaint` (Fase 3 lato app già pronta: conversione C4D → interna).
-- [ ] Caricamento GLB nel preview.
-- [ ] Export 8k (già possibile) e Radiance `.hdr`.
+- [x] Caricamento GLB nel preview (16/09: pannello *Modello nel preview*, materiale originale/cromato/glossy/diffuso, collisioni trimesh per il LightPaint locale).
+- [ ] Radiance `.hdr` (8k già possibile).
 
 ### 5.2 Fase 2 — stato e test in C4D
 
 Sul Mac: smoke test con un client Python che simula il plugin → hello, `hdri_updated` all'aggancio,
 `hdri_updated` dopo una modifica, `lightpaint` di ritorno che sposta la luce. Tutto verde.
 
-> [!todo] Da fare sul PC
+> [!success] Verificato sul PC il 15/09/2026: il Live Viewer di Octane si aggiorna da solo a ogni modifica.
+
+> [!todo] Procedura di installazione (per riferimento)
 > 1. `git pull`, poi installa il plugin: Edit → Preferences → Plugins → *Add Folder…* →
 >    `hdri_studio/plugins/c4d` → riavvia C4D. Nella console: `[hdri-studio] plugin caricato`.
 > 2. Nell'app: pannello **Live link** → *File di export…* (un `.exr` nella cartella `tex/` del progetto
@@ -340,9 +342,23 @@ Sul Mac: smoke test con un client Python che simula il plugin → hello, `hdri_u
 
 ### Fase 3 — LightPaint e maturità
 
-- LightPaint: click nel software 3D → punto e normale → la luce selezionata si sposta su
-  `reflect(V, N)`. Lato app è già implementato (messaggio `lightpaint`); manca il lato C4D: un tool o
-  uno script che, al click nel viewport, fa il picking sul modello e manda punto, normale e camera.
+- [x] LightPaint da C4D: tool `HDRI Studio LightPaint` (ToolData) nel plugin. Click o drag nel
+      viewport → raggio dal pixel (`bd.SW`) → `GeRayCollider` su tutte le mesh (cache dei generatori
+      comprese) → punto, normale di faccia e direzione di vista → messaggio `lightpaint` → l'app
+      calcola `reflect(V, N)` (con X invertita per il sistema left-handed) e sposta la luce selezionata.
+      Marker giallo nel viewport sull'ultimo punto colpito. **Da provare sul PC.**
+- [ ] Normali interpolate (phong) nel picking, se il salto di faccia in faccia disturba.
+- [ ] LightPaint che crea una luce nuova se nessuna è selezionata.
+
+### 5.3 Fase 3 — stato e test in C4D
+
+> [!todo] Da fare sul PC
+> 1. `git pull` e riavvia C4D (il plugin registra il nuovo tool).
+> 2. Nell'app: live link attivo, una luce selezionata (per esempio il Key scrim).
+> 3. In C4D: attiva **HDRI Studio LightPaint** (Extensions, o Shift+C → "LightPaint"), clicca su un
+>    punto del modello nel viewport. La luce deve spostarsi nell'app e, un istante dopo, il riflesso
+>    deve comparire in quel punto nel Live Viewer di Octane. Trascinando, il riflesso segue il mouse.
+> 4. Se non succede niente: console C4D (errori del tool) e stato del pannello Live link nell'app.
 - Modalità fotometrica, ACEScg, texture nelle luci, libreria di preset, plugin per gli altri software.
 
 ## 6. Validazione fisica

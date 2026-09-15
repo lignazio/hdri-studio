@@ -8,11 +8,22 @@ signal paint(direction: Vector3, commit: bool)
 
 const SPHERE_R := 1.0
 const SPHERE_POS := [Vector3(-2.6, 0, 0), Vector3(0, 0, 0), Vector3(2.6, 0, 0)]
+## Raggio della sfera in cui viene inscritto il modello caricato.
+const MODEL_R := 1.3
+
+enum ModelMaterial { ORIGINAL, CHROME, GLOSSY, DIFFUSE }
 
 var viewport: SubViewport
 var camera: Camera3D
 var env: Environment
+var model_path := ""
 var _chrome: ShaderMaterial
+var _glossy: StandardMaterial3D
+var _diffuse: StandardMaterial3D
+var _spheres: Array[MeshInstance3D] = []
+var _model_root: Node3D
+var _model_meshes: Array[MeshInstance3D] = []
+var _model_material := ModelMaterial.ORIGINAL
 var _yaw := 0.35
 var _pitch := 0.18
 var _dist := 7.0
@@ -56,20 +67,23 @@ func setup(tex: Texture2D) -> void:
 	_chrome = ShaderMaterial.new()
 	_chrome.shader = load("res://preview/chrome.gdshader")
 	_chrome.set_shader_parameter("panorama", tex)
-	var glossy := StandardMaterial3D.new()
-	glossy.albedo_color = Color(0.9, 0.9, 0.9)
-	glossy.metallic = 1.0
-	glossy.roughness = 0.35
-	var diffuse := StandardMaterial3D.new()
-	diffuse.albedo_color = Color(0.8, 0.8, 0.8)
-	diffuse.roughness = 1.0
-	var mats := [_chrome, glossy, diffuse]
+	_glossy = StandardMaterial3D.new()
+	_glossy.albedo_color = Color(0.9, 0.9, 0.9)
+	_glossy.metallic = 1.0
+	_glossy.roughness = 0.35
+	_diffuse = StandardMaterial3D.new()
+	_diffuse.albedo_color = Color(0.8, 0.8, 0.8)
+	_diffuse.roughness = 1.0
+	var mats := [_chrome, _glossy, _diffuse]
 	for i in 3:
 		var mi := MeshInstance3D.new()
 		mi.mesh = mesh
 		mi.material_override = mats[i]
 		mi.position = SPHERE_POS[i]
 		viewport.add_child(mi)
+		_spheres.append(mi)
+	_model_root = Node3D.new()
+	viewport.add_child(_model_root)
 
 	camera = Camera3D.new()
 	camera.fov = 35.0
@@ -84,6 +98,79 @@ func set_texture(tex: Texture2D) -> void:
 
 func set_exposure(k: float) -> void:
 	env.tonemap_exposure = k
+
+
+# --- modello -------------------------------------------------------------------------------------
+
+## Carica un GLB/GLTF al posto della sfera centrale, lo centra e lo scala dentro MODEL_R,
+## e gli aggiunge collisioni trimesh per il LightPaint.
+func load_model(path: String) -> bool:
+	var gltf := GLTFDocument.new()
+	var state := GLTFState.new()
+	var err := gltf.append_from_file(path, state)
+	if err != OK:
+		push_warning("Modello non caricabile: %s (%s)" % [path, error_string(err)])
+		return false
+	var scene := gltf.generate_scene(state)
+	if scene == null:
+		return false
+	clear_model()
+	_model_root.add_child(scene)
+	_model_meshes.clear()
+	_collect_meshes(scene)
+	if _model_meshes.is_empty():
+		clear_model()
+		return false
+	# bounding box in coordinate del modello
+	var aabb := AABB()
+	var first := true
+	for mi in _model_meshes:
+		var b: AABB = mi.global_transform * mi.get_aabb()
+		aabb = b if first else aabb.merge(b)
+		first = false
+	var radius := maxf(aabb.size.length() * 0.5, 1e-4)
+	var s := MODEL_R / radius
+	scene.scale = Vector3.ONE * s
+	scene.position = -aabb.get_center() * s
+	for mi in _model_meshes:
+		mi.create_trimesh_collision()
+	model_path = path
+	_spheres[1].visible = false
+	set_model_material(_model_material)
+	return true
+
+
+func clear_model() -> void:
+	for c in _model_root.get_children():
+		c.queue_free()
+	_model_meshes.clear()
+	model_path = ""
+	_spheres[1].visible = true
+
+
+func has_model() -> bool:
+	return not _model_meshes.is_empty()
+
+
+func set_model_material(mode: ModelMaterial) -> void:
+	_model_material = mode
+	var mat: Material = null
+	match mode:
+		ModelMaterial.CHROME:
+			mat = _chrome
+		ModelMaterial.GLOSSY:
+			mat = _glossy
+		ModelMaterial.DIFFUSE:
+			mat = _diffuse
+	for mi in _model_meshes:
+		mi.material_override = mat
+
+
+func _collect_meshes(n: Node) -> void:
+	if n is MeshInstance3D:
+		_model_meshes.append(n)
+	for c in n.get_children():
+		_collect_meshes(c)
 
 
 func _update_camera() -> void:
@@ -125,13 +212,23 @@ func _gui_input(event: InputEvent) -> void:
 			accept_event()
 
 
-## Raggio dal cursore → sfera più vicina → direzione riflessa. Restituisce false se non colpisce nulla.
+## Raggio dal cursore → modello (raycast fisico) o sfera più vicina → direzione riflessa.
+## Restituisce false se non colpisce nulla.
 func _try_paint(pos: Vector2, commit: bool) -> bool:
 	var o := camera.project_ray_origin(pos)
 	var d := camera.project_ray_normal(pos)
 	var best_t := INF
 	var best_n := Vector3.ZERO
-	for c in SPHERE_POS:
+	if has_model():
+		var space := viewport.find_world_3d().direct_space_state
+		var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(o, o + d * 200.0))
+		if not hit.is_empty():
+			best_t = (hit["position"] - o).length()
+			best_n = hit["normal"]
+	for i in SPHERE_POS.size():
+		if not _spheres[i].visible:
+			continue
+		var c: Vector3 = SPHERE_POS[i]
 		var oc: Vector3 = o - c
 		var b := oc.dot(d)
 		var disc := b * b - (oc.dot(oc) - SPHERE_R * SPHERE_R)

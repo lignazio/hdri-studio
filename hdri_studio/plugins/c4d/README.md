@@ -18,6 +18,15 @@
 3. Da qui ogni modifica in HDRI Studio riscrive il file (300 ms dopo l'ultimo cambiamento) e il plugin
    preme Reload sui nodi che lo usano. Nella console: `[hdri-studio] nome.exr → 1 nodi ricaricati`.
 
+## LightPaint
+
+Attiva il tool **HDRI Studio LightPaint** (menu Extensions, oppure Shift+C e scrivi "LightPaint").
+Seleziona una luce nell'app, poi clicca o trascina sul modello nel viewport di C4D: la luce si sposta
+dove serve per riflettersi in quel punto (visto dalla camera della vista attiva). Il punto colpito
+e la sua normale vengono disegnati in giallo nel viewport. Il picking usa la normale della faccia:
+su mesh poco suddivise il riflesso "salta" di faccia in faccia, su mesh dense o con subdivision è
+continuo.
+
 Se l'app non è aperta o non è collegata, il plugin controlla comunque ogni secondo la data di modifica
 dei file immagine usati nella scena e ricarica quelli cambiati.
 

@@ -32,6 +32,7 @@ var _file_dialog: FileDialog
 var _live_dirty := false
 var _live_deadline := 0
 var _link_hosts := {}
+var _model_label: Label
 
 
 func _ready() -> void:
@@ -98,7 +99,7 @@ func _build_layout() -> void:
 	center.add_child(status)
 
 	# colonna destra
-	var right := _column(root, 300)
+	var right := _column(root, 300, true)
 	bg_panel = BackgroundPanel.new()
 	right.add_child(bg_panel)
 	right.add_child(HSeparator.new())
@@ -107,6 +108,8 @@ func _build_layout() -> void:
 	right.add_child(HSeparator.new())
 	link_panel = LiveLinkPanel.new()
 	right.add_child(link_panel)
+	right.add_child(HSeparator.new())
+	_build_model_panel(right)
 
 	_file_dialog = FileDialog.new()
 	_file_dialog.access = FileDialog.ACCESS_FILESYSTEM
@@ -134,7 +137,52 @@ func _build_layout() -> void:
 	_update_link_status()
 
 
-func _column(parent: Container, width: float) -> VBoxContainer:
+func _build_model_panel(parent: Container) -> void:
+	var title := Label.new()
+	title.text = "Modello nel preview"
+	title.add_theme_font_size_override("font_size", 15)
+	parent.add_child(title)
+	var row := HBoxContainer.new()
+	parent.add_child(row)
+	var load_btn := Button.new()
+	load_btn.text = "Carica GLB…"
+	load_btn.pressed.connect(_pick_model)
+	row.add_child(load_btn)
+	var clear_btn := Button.new()
+	clear_btn.text = "Rimuovi"
+	clear_btn.pressed.connect(func() -> void:
+		preview.clear_model()
+		_model_label.text = "—")
+	row.add_child(clear_btn)
+	var mrow := HBoxContainer.new()
+	parent.add_child(mrow)
+	var ml := Label.new()
+	ml.text = "Materiale"
+	ml.custom_minimum_size.x = 96
+	mrow.add_child(ml)
+	var mat := OptionButton.new()
+	mat.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for it in ["Originale", "Cromato", "Glossy", "Diffuso"]:
+		mat.add_item(it)
+	mat.item_selected.connect(func(i: int) -> void: preview.set_model_material(i as Preview3D.ModelMaterial))
+	mrow.add_child(mat)
+	_model_label = Label.new()
+	_model_label.text = "—"
+	_model_label.clip_text = true
+	_model_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_model_label.modulate = Color(1, 1, 1, 0.7)
+	parent.add_child(_model_label)
+
+
+func _pick_model() -> void:
+	_dialog(FileDialog.FILE_MODE_OPEN_FILE, ["*.glb, *.gltf ; glTF"], "Modello per il preview", func(path: String) -> void:
+		if preview.load_model(path):
+			_model_label.text = path.get_file()
+		else:
+			_model_label.text = "Impossibile caricare " + path.get_file())
+
+
+func _column(parent: Container, width: float, scroll := false) -> VBoxContainer:
 	var panel := PanelContainer.new()
 	panel.custom_minimum_size.x = width
 	parent.add_child(panel)
@@ -144,7 +192,14 @@ func _column(parent: Container, width: float) -> VBoxContainer:
 	panel.add_child(margin)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 6)
-	margin.add_child(box)
+	if scroll:
+		var sc := ScrollContainer.new()
+		sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		margin.add_child(sc)
+		box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		sc.add_child(box)
+	else:
+		margin.add_child(box)
 	return box
 
 
@@ -368,21 +423,22 @@ func _on_link_message(msg: Dictionary, client_id: int) -> void:
 			_lightpaint_from_host(msg)
 
 
-## LightPaint dal software 3D: punto, normale e camera nelle coordinate dell'host.
-## Cinema 4D è left-handed: (x, y, z) → (−x, y, z) per passare alla convenzione interna.
+## LightPaint dal software 3D: punto, normale e direzione di vista (o posizione camera) nelle
+## coordinate dell'host. Cinema 4D è left-handed: (x, y, z) → (−x, y, z) per passare alla convenzione interna.
 func _lightpaint_from_host(msg: Dictionary) -> void:
 	if _selected < 0:
 		return
 	var p := _vec(msg.get("point", []))
 	var n := _vec(msg.get("normal", []))
-	var c := _vec(msg.get("camera", []))
-	if n == Vector3.ZERO:
+	var v := _vec(msg.get("view", []))
+	if v == Vector3.ZERO:
+		v = p - _vec(msg.get("camera", []))
+	if n == Vector3.ZERO or v == Vector3.ZERO:
 		return
 	if msg.get("host", "c4d") == "c4d":
-		p.x = -p.x
 		n.x = -n.x
-		c.x = -c.x
-	var v := (p - c).normalized()
+		v.x = -v.x
+	v = v.normalized()
 	n = n.normalized()
 	var r := v - 2.0 * v.dot(n) * n
 	_on_paint(r, true)
