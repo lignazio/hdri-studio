@@ -559,7 +559,7 @@ func _add_texture_light(path: String, defaults: Dictionary, az := NAN, el := NAN
 	l.texture_path = path
 	l.name = defaults.get("name", path.get_file().get_basename())
 	l.width = float(defaults.get("width", 30.0))
-	l.height = float(defaults.get("height", 30.0))
+	l.height = float(defaults.get("height", -1.0))
 	l.intensity = float(defaults.get("intensity", 1.0))
 	l.ev = float(defaults.get("ev", 0.0))
 	l.kelvin = float(defaults.get("kelvin", 6500.0))
@@ -570,6 +570,11 @@ func _add_texture_light(path: String, defaults: Dictionary, az := NAN, el := NAN
 	if baker.texture_layer(path) < 0:
 		export_panel.set_status("Immagine non leggibile: " + path.get_file())
 		return
+	if l.height <= 0.0:
+		# altezza dall'aspetto dell'immagine (come fa il catalogo con le miniature)
+		var sz := baker.texture_size(path)
+		var aspect := float(sz.x) / float(sz.y) if sz.y > 0 else 1.0
+		l.height = clampf(l.width / aspect, 0.5, 180.0)
 	light_list.add_and_select(l)
 
 

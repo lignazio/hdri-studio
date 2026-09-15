@@ -23,13 +23,14 @@ layout(push_constant, std430) uniform Params {
 	vec4 bg_horizon; // rgb, calibration flag
 	vec4 bg_nadir;   // rgb, mode: 1 = misura K della luce 0, 2 = proiezione planare della luce 0
 	vec4 base;       // rotazione (rad), esposizione (mult), enabled, flip
+	vec4 extra;      // lod di sfocatura della base, -, -, -
 } p;
 
 const float PI = 3.14159265358979;
 
 vec3 light_texture(int i, vec3 d);
 vec3 gradient_rgb(int i, vec3 d);
-const int STRIDE = 6; // vec4 per luce, deve coincidere con RigLight.STRIDE
+const int STRIDE = 7; // vec4 per luce, deve coincidere con RigLight.STRIDE
 const int GRAD_STOPS = 8; // tacche per gradiente (pos, r, g, b), come RigLight.GRAD_STOPS
 
 // --- geometria della sfera ---------------------------------------------------------------
@@ -167,16 +168,30 @@ vec2 light_mp(int i, vec3 d) {
 		return vec2(rect_cover(ax, ay, hw, hh, rr, b.z), 1.0);
 	}
 	// scrim: telo rettangolare illuminato da dietro da una sorgente a distanza `depth`,
-	// spostata di `offset`. Irradianza sul telo: E = depth / (|q|^2 + depth^2)^(3/2)
-	// (coseno + inverso del quadrato), normalizzata a picco 1. Una sorgente estesa è
-	// approssimata allargando la distanza efficace: deff^2 = depth^2 + size^2.
+	// spostata di `offset`. Irradianza sul telo da una sorgente puntiforme:
+	// E = depth / (|q|^2 + depth^2)^(3/2) (coseno + inverso del quadrato). Una sorgente estesa è
+	// un disco di raggio `size`: media su 12 punti (spirale di Vogel), normalizzata al valore sul
+	// piede della sorgente così il picco resta 1.
 	float mask = rect_cover(ax, ay, hw, hh, rr, b.z);
 	if (mask <= 0.0) return vec2(0.0);
 	vec2 q = vec2(ax / hw, ay / hh) - s.xy;
 	float depth = max(s.z, 1e-3);
-	float deff2 = depth * depth + s.w * s.w;
-	float deff = sqrt(deff2);
-	float prof = deff * deff2 / pow(dot(q, q) + deff2, 1.5);
+	float prof;
+	if (s.w <= 1e-4) {
+		float d2 = depth * depth;
+		prof = depth * d2 / pow(dot(q, q) + d2, 1.5);
+	} else {
+		float d2 = depth * depth;
+		float acc = 0.0, norm = 0.0;
+		for (int k = 0; k < 12; k++) {
+			float rk = s.w * sqrt((float(k) + 0.5) / 12.0);
+			float tk = float(k) * 2.39996323;
+			vec2 ok = rk * vec2(cos(tk), sin(tk));
+			acc += depth / pow(dot(q - ok, q - ok) + d2, 1.5);
+			norm += depth / pow(dot(ok, ok) + d2, 1.5);
+		}
+		prof = acc / norm;
+	}
 	return vec2(mask, prof);
 }
 
@@ -215,6 +230,12 @@ vec3 light_texture(int i, vec3 d) {
 	float ax = atan(dot(d, R), df);
 	float ay = atan(dot(d, U), df);
 	vec2 uv = vec2(0.5 + 0.5 * ax / (b.x * 0.5), 0.5 - 0.5 * ay / (b.y * 0.5));
+	// rotazione in quarti di giro e specchi (flag: bit0 flip H, bit1 flip V, bit2-3 rotazione)
+	int flags = int(lights.data[i * STRIDE + 6].x + 0.5);
+	int rot = (flags >> 2) & 3;
+	for (int k = 0; k < rot; k++) uv = vec2(1.0 - uv.y, uv.x);
+	if ((flags & 1) != 0) uv.x = 1.0 - uv.x;
+	if ((flags & 2) != 0) uv.y = 1.0 - uv.y;
 	return texture(light_textures, vec3(clamp(uv, 0.0, 1.0), e.z)).rgb;
 }
 
@@ -234,7 +255,7 @@ vec3 background(vec3 d) {
 		vec2 buv = uv_from_dir(d);
 		buv.x = fract(buv.x + p.base.x / (2.0 * PI));
 		if (p.base.w > 0.5) buv.x = 1.0 - buv.x;
-		col += texture(base_hdri, buv).rgb * p.base.y;
+		col += textureLod(base_hdri, buv, p.extra.x).rgb * p.base.y;
 	}
 	return col;
 }

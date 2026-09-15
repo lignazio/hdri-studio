@@ -24,6 +24,7 @@ var _scrim_rows: Array = []
 var _ring_rows: Array = []
 var _gradient_rows: Array = []
 var _texture_row: HBoxContainer
+var _texture_tools: HBoxContainer
 var _texture_label: Label
 var _photometric: CheckBox
 var _k_label: Label
@@ -113,6 +114,23 @@ func _init() -> void:
 	tb.text = "Cambia…"
 	tb.pressed.connect(func() -> void: texture_pick_requested.emit())
 	_texture_row.add_child(tb)
+	_texture_tools = HBoxContainer.new()
+	_box.add_child(_texture_tools)
+	var ttl := Label.new()
+	ttl.custom_minimum_size.x = 96
+	_texture_tools.add_child(ttl)
+	var fh := Button.new()
+	fh.text = "↔ Specchia"
+	fh.pressed.connect(func() -> void: _set_prop("texture_flip_h", not light.texture_flip_h, true))
+	_texture_tools.add_child(fh)
+	var fv := Button.new()
+	fv.text = "↕ Specchia"
+	fv.pressed.connect(func() -> void: _set_prop("texture_flip_v", not light.texture_flip_v, true))
+	_texture_tools.add_child(fv)
+	var rt := Button.new()
+	rt.text = "Ruota 90°"
+	rt.pressed.connect(func() -> void: _set_prop("texture_rotate", (light.texture_rotate + 1) % 4, true))
+	_texture_tools.add_child(rt)
 
 	_section("Scrim")
 	_scrim_rows.append(_row("scrim_offset_x", "Sorgente X", -1.0, 1.0, 0.01))
@@ -136,6 +154,19 @@ func _init() -> void:
 	_box.add_child(_k_label)
 	_row("ev", "EV", -10.0, 10.0, 0.1)
 	_row("kelvin", "Kelvin", 1000.0, 25000.0, 10.0)
+	var krow := HBoxContainer.new()
+	_box.add_child(krow)
+	var kl := Label.new()
+	kl.custom_minimum_size.x = 96
+	krow.add_child(kl)
+	for k in [3200, 4300, 5600, 6500]:
+		var kb := Button.new()
+		kb.text = str(k)
+		kb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		kb.pressed.connect(func() -> void:
+			_rows["kelvin"].set_value_silent(k)
+			_set_prop("kelvin", float(k), true))
+		krow.add_child(kb)
 	var tint_row := HBoxContainer.new()
 	_box.add_child(tint_row)
 	var tl := Label.new()
@@ -148,6 +179,16 @@ func _init() -> void:
 	_tint.color_changed.connect(func(c: Color) -> void: _set_prop("tint", c, false))
 	_tint.popup_closed.connect(func() -> void: changed.emit(true))
 	tint_row.add_child(_tint)
+	var gels := MenuButton.new()
+	gels.text = "Gelatine"
+	gels.flat = false
+	for gname in ColorTemp.GELS:
+		gels.get_popup().add_item(gname)
+	gels.get_popup().index_pressed.connect(func(i: int) -> void:
+		var c := ColorTemp.gel_color(ColorTemp.GELS.keys()[i])
+		_tint.color = c
+		_set_prop("tint", c, true))
+	tint_row.add_child(gels)
 	_blend = _option("Fusione", ["Somma", "Massimo", "Moltiplica", "Normale"], func(i: int) -> void: _set_prop("blend", i, true))
 
 	_section("Luce separata")
@@ -269,6 +310,7 @@ func _update_visibility() -> void:
 	for r in _gradient_rows:
 		r.visible = light.shape == RigLight.Shape.GRADIENT
 	_texture_row.visible = light.shape == RigLight.Shape.TEXTURE
+	_texture_tools.visible = light.shape == RigLight.Shape.TEXTURE
 	_rows["intensity"].visible = not light.photometric
 	_rows["illuminance"].visible = light.photometric
 	_k_label.visible = light.photometric

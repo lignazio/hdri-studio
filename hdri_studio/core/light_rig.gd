@@ -15,6 +15,8 @@ enum Background { BLACK, UNIFORM, GRADIENT }
 @export_range(-180.0, 180.0) var base_rotation := 0.0
 @export_range(-10.0, 10.0) var base_ev := 0.0
 @export var base_flip := false
+## Sfocatura dell'HDRI di base (0 = nessuna, 1 = solo la dominante).
+@export_range(0.0, 1.0) var base_blur := 0.0
 @export var resolution := Vector2i(4096, 2048)
 ## File scritto automaticamente dal live link a ogni modifica (vuoto = non impostato).
 @export var live_export_path := ""
@@ -58,7 +60,7 @@ func to_dict() -> Dictionary:
 		"bg_horizon": [bg_horizon.r, bg_horizon.g, bg_horizon.b],
 		"bg_nadir": [bg_nadir.r, bg_nadir.g, bg_nadir.b],
 		"base_hdri_path": base_hdri_path, "base_enabled": base_enabled,
-		"base_rotation": base_rotation, "base_ev": base_ev, "base_flip": base_flip,
+		"base_rotation": base_rotation, "base_ev": base_ev, "base_flip": base_flip, "base_blur": base_blur,
 		"resolution": [resolution.x, resolution.y],
 		"live_export_path": live_export_path,
 	}
@@ -80,6 +82,7 @@ static func from_dict(d: Dictionary) -> LightRig:
 	r.base_rotation = d.get("base_rotation", 0.0)
 	r.base_ev = d.get("base_ev", 0.0)
 	r.base_flip = d.get("base_flip", false)
+	r.base_blur = d.get("base_blur", 0.0)
 	var res: Array = d.get("resolution", [4096, 2048])
 	r.resolution = Vector2i(res[0], res[1])
 	r.live_export_path = d.get("live_export_path", "")

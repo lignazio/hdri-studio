@@ -402,6 +402,59 @@ func _run(main: Node) -> void:
 	var v: Color = main._map_value(gl.azimuth, gl.elevation)
 	_check(v.r > 0.5, "valore sotto il cursore al centro della luce: %.2f" % v.r)
 
+	# texture: specchio orizzontale sposta il contenuto; gradiente: valore della tacca oltre 1; base sfocata
+	main.rig.lights.clear()
+	main.rig.background = LightRig.Background.BLACK
+	var rect_tex := ProjectSettings.globalize_path("res://out/rect.exr")
+	var tl2 := RigLight.new()
+	tl2.shape = RigLight.Shape.TEXTURE
+	tl2.texture_path = rect_tex
+	tl2.width = 40.0
+	tl2.height = 20.0
+	tl2.softness = 0.0
+	tl2.intensity = 1.0
+	main.rig.add_light(tl2)
+	main.light_list.refresh()
+	main._dirty = true
+	await create_timer(0.4).timeout
+	var right: Color = main._map_value(5.0, 3.3)
+	var left: Color = main._map_value(-5.0, 3.3)
+	_check(right.r > 5.0 and left.r < 0.5, "texture: contenuto a destra (%.1f / %.1f)" % [right.r, left.r])
+	tl2.texture_flip_h = true
+	main._dirty = true
+	await create_timer(0.4).timeout
+	right = main._map_value(5.0, 3.3)
+	left = main._map_value(-5.0, 3.3)
+	_check(left.r > 5.0 and right.r < 0.5, "texture specchiata: contenuto a sinistra (%.1f / %.1f)" % [left.r, right.r])
+	var gv := RigLight.new()
+	gv.shape = RigLight.Shape.GRADIENT
+	gv.width = 40.0
+	gv.height = 40.0
+	gv.intensity = 1.0
+	gv.gradient_stops = [[0.0, 1.0, 1.0, 1.0, 4.0], [1.0, 0.0, 0.0, 0.0, 1.0]]
+	main.rig.lights.clear()
+	main.rig.add_light(gv)
+	main.light_list.refresh()
+	main._dirty = true
+	await create_timer(0.4).timeout
+	_check(absf(main._map_value(0.0, 0.0).r - 4.0) < 0.05, "gradiente: tacca con valore 4 → %.2f al centro" % main._map_value(0.0, 0.0).r)
+	main.rig.lights.clear()
+	main.baker.set_base_image_from_file(rect_tex)
+	main.rig.base_hdri_path = rect_tex
+	main.rig.base_enabled = true
+	main.rig.base_blur = 0.0
+	main._dirty = true
+	await create_timer(0.4).timeout
+	var sharp: Color = main._map_value(45.0, 30.0)
+	main.rig.base_blur = 1.0
+	main._dirty = true
+	await create_timer(0.4).timeout
+	var blurred: Color = main._map_value(45.0, 30.0)
+	var far: Color = main._map_value(-135.0, -30.0)
+	_check(sharp.r > 2.0 and blurred.r < 1.0 and absf(blurred.r - far.r) < 0.05, "base sfocata: %.2f → %.3f (lontano %.3f)" % [sharp.r, blurred.r, far.r])
+	main.rig.base_enabled = false
+	main.rig.base_blur = 0.0
+
 	ok = ok and _all_ok
 	print("[smoke] %s" % ("TUTTO OK" if ok else "FALLITO"))
 	quit(0 if ok else 1)

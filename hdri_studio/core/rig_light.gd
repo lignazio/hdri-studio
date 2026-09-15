@@ -12,7 +12,7 @@ enum GradientShape { CIRCULAR, RECTANGULAR }
 enum Blend { ADD, MAX, MULTIPLY, NORMAL }
 
 ## Numero di vec4 per luce nel buffer del compute shader. Deve coincidere con STRIDE in bake.glsl.
-const STRIDE := 6
+const STRIDE := 7
 ## Tacche massime per gradiente (vec4 = pos, r, g, b), come GRAD_STOPS in bake.glsl.
 const GRAD_STOPS := 8
 
@@ -35,7 +35,8 @@ const GRAD_STOPS := 8
 @export var gradient_type := GradientType.RADIAL
 @export var gradient_shape := GradientShape.CIRCULAR
 @export_range(-180.0, 180.0) var gradient_angle := 0.0
-var gradient_stops: Array = [[0.0, 1.0, 1.0, 1.0], [1.0, 0.0, 0.0, 0.0]]
+## Tacche: [pos, r, g, b, valore]; il valore moltiplica il colore (anche oltre 1).
+var gradient_stops: Array = [[0.0, 1.0, 1.0, 1.0, 1.0], [1.0, 0.0, 0.0, 0.0, 1.0]]
 @export var intensity := 1.0
 @export_range(-10.0, 20.0) var ev := 0.0
 ## Fotometrico: invece della radianza si specifica l'illuminamento E prodotto al centro della sfera
@@ -59,6 +60,10 @@ var measured_k := 1.0
 ## Texture: immagine EXR/HDR lineare mappata sul rettangolo della luce (solo il percorso: il rig
 ## non contiene mai i pixel).
 @export var texture_path := ""
+@export var texture_flip_h := false
+@export var texture_flip_v := false
+## Rotazione dell'immagine in quarti di giro (0..3).
+@export_range(0, 3) var texture_rotate := 0
 ## Luce separata: esclusa dall'HDRI esportata, scritta come EXR singolo (proiezione planare) e
 ## ricreata nel software 3D come area light nella stessa direzione, a `distance` dal centro.
 @export var separate := false
@@ -167,7 +172,8 @@ func physical_size() -> Vector2:
 func shape_key() -> String:
 	return "%d|%.4f|%.4f|%.4f|%.4f|%d|%.4f|%.4f|%.4f|%.4f|%.4f|%s|%d|%d|%.4f|%s" % [
 		shape, width, height, softness, corner_radius, falloff, ring_inner,
-		scrim_offset.x, scrim_offset.y, scrim_depth, scrim_source_size, texture_path,
+		scrim_offset.x, scrim_offset.y, scrim_depth, scrim_source_size,
+		texture_path + str(texture_flip_h) + str(texture_flip_v) + str(texture_rotate),
 		gradient_type, gradient_shape, gradient_angle, JSON.stringify(gradient_stops)]
 
 
@@ -188,7 +194,12 @@ func pack(out: PackedFloat32Array, tex_layer := -1) -> void:
 		scrim_offset.x, scrim_offset.y, scrim_depth, scrim_source_size,
 		ring_inner, 1.0 if enabled else 0.0, float(tex_layer), deg_to_rad(corner_radius),
 		float(gradient_type), float(gradient_shape), deg_to_rad(gradient_angle), float(mini(gradient_stops.size(), GRAD_STOPS)),
+		float((1 if texture_flip_h else 0) + (2 if texture_flip_v else 0) + 4 * texture_rotate), 0.0, 0.0, 0.0,
 	]))
+
+
+static func stop_value(s: Array) -> float:
+	return float(s[4]) if s.size() > 4 else 1.0
 
 
 ## Aggiunge GRAD_STOPS vec4 (pos, r, g, b) all'array del buffer dei gradienti.
@@ -198,7 +209,8 @@ func pack_gradient(out: PackedFloat32Array) -> void:
 	for k in GRAD_STOPS:
 		if k < stops.size():
 			var s: Array = stops[k]
-			out.append_array(PackedFloat32Array([s[0], s[1], s[2], s[3]]))
+			var v := stop_value(s)
+			out.append_array(PackedFloat32Array([s[0], s[1] * v, s[2] * v, s[3] * v]))
 		else:
 			out.append_array(PackedFloat32Array([1.0, 0.0, 0.0, 0.0]))
 
@@ -211,16 +223,16 @@ func gradient_color(t: float) -> Color:
 		return Color.WHITE
 	var s0: Array = stops[0]
 	if t <= s0[0]:
-		return Color(s0[1], s0[2], s0[3])
+		return Color(s0[1], s0[2], s0[3]) * stop_value(s0)
 	for k in range(1, stops.size()):
 		var s1: Array = stops[k]
 		if t <= s1[0]:
 			var u: float = (t - s0[0]) / maxf(s1[0] - s0[0], 1e-6)
 			if falloff != Falloff.LINEAR:
 				u = smoothstep(0.0, 1.0, u)
-			return Color(s0[1], s0[2], s0[3]).lerp(Color(s1[1], s1[2], s1[3]), u)
+			return (Color(s0[1], s0[2], s0[3]) * stop_value(s0)).lerp(Color(s1[1], s1[2], s1[3]) * stop_value(s1), u)
 		s0 = s1
-	return Color(s0[1], s0[2], s0[3])
+	return Color(s0[1], s0[2], s0[3]) * stop_value(s0)
 
 
 func to_dict() -> Dictionary:
@@ -237,7 +249,8 @@ func to_dict() -> Dictionary:
 		"ring_inner": ring_inner,
 		"scrim_offset": [scrim_offset.x, scrim_offset.y],
 		"scrim_depth": scrim_depth, "scrim_source_size": scrim_source_size,
-		"texture_path": texture_path,
+		"texture_path": texture_path, "texture_flip_h": texture_flip_h, "texture_flip_v": texture_flip_v,
+		"texture_rotate": texture_rotate,
 		"separate": separate, "distance": distance,
 	}
 
@@ -265,7 +278,7 @@ static func from_dict(d: Dictionary) -> RigLight:
 	if st.size() >= 1:
 		l.gradient_stops = []
 		for s in st:
-			l.gradient_stops.append([float(s[0]), float(s[1]), float(s[2]), float(s[3])])
+			l.gradient_stops.append([float(s[0]), float(s[1]), float(s[2]), float(s[3]), float(s[4]) if s.size() > 4 else 1.0])
 	l.intensity = d.get("intensity", l.intensity)
 	l.photometric = d.get("photometric", false)
 	l.illuminance = d.get("illuminance", l.illuminance)
@@ -280,6 +293,9 @@ static func from_dict(d: Dictionary) -> RigLight:
 	l.scrim_depth = d.get("scrim_depth", l.scrim_depth)
 	l.scrim_source_size = d.get("scrim_source_size", l.scrim_source_size)
 	l.texture_path = d.get("texture_path", "")
+	l.texture_flip_h = d.get("texture_flip_h", false)
+	l.texture_flip_v = d.get("texture_flip_v", false)
+	l.texture_rotate = int(d.get("texture_rotate", 0))
 	l.separate = d.get("separate", false)
 	l.distance = d.get("distance", l.distance)
 	return l

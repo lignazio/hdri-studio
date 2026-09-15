@@ -7,6 +7,32 @@ extends RefCounted
 
 const WHITE_K := 6500.0
 
+## Gelatine di correzione (CTO/CTB come spostamento in mired applicato a 6500 K) e di colore.
+## Valori approssimati: servono come punto di partenza, non come dati di catalogo.
+const GELS := {
+	"Nessuna (bianco)": Color.WHITE,
+	"CTO ⅛ (+20 mired)": null, "CTO ¼ (+42)": null, "CTO ½ (+81)": null, "CTO Full (+159)": null,
+	"CTB ¼ (−30)": null, "CTB ½ (−68)": null, "CTB Full (−131)": null,
+	"Plus Green": Color(0.86, 1.0, 0.78),
+	"Minus Green": Color(1.0, 0.86, 1.0),
+	"Straw": Color(1.0, 0.92, 0.72),
+	"Ambra": Color(1.0, 0.7, 0.35),
+	"Rosso": Color(1.0, 0.25, 0.15),
+	"Blu profondo": Color(0.25, 0.4, 1.0),
+	"Magenta": Color(1.0, 0.45, 0.85),
+}
+const GEL_MIRED := {"CTO ⅛ (+20 mired)": 20.0, "CTO ¼ (+42)": 42.0, "CTO ½ (+81)": 81.0, "CTO Full (+159)": 159.0,
+	"CTB ¼ (−30)": -30.0, "CTB ½ (−68)": -68.0, "CTB Full (−131)": -131.0}
+
+
+static func gel_color(name: String) -> Color:
+	if GEL_MIRED.has(name):
+		var mired: float = 1.0e6 / WHITE_K + GEL_MIRED[name]
+		return kelvin_to_rgb(1.0e6 / maxf(mired, 40.0))
+	var c = GELS.get(name, Color.WHITE)
+	return c if c != null else Color.WHITE
+
+
 static func kelvin_to_rgb(kelvin: float) -> Color:
 	var raw := _planck_rgb(kelvin)
 	var ref := _planck_rgb(WHITE_K)

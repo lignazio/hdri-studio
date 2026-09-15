@@ -15,7 +15,17 @@ var _selected := -1
 var _dragging := false
 var _color: ColorPickerButton
 var _pos_row: ParamRow
+var _value_row: ParamRow
 var _syncing := false
+static var clipboard: Array = []
+
+const PRESETS := {
+	"Bianco → nero": [[0.0, 1.0, 1.0, 1.0, 1.0], [1.0, 0.0, 0.0, 0.0, 1.0]],
+	"Nero → bianco": [[0.0, 0.0, 0.0, 0.0, 1.0], [1.0, 1.0, 1.0, 1.0, 1.0]],
+	"Caldo → freddo": [[0.0, 1.0, 0.75, 0.45, 1.0], [1.0, 0.45, 0.6, 1.0, 1.0]],
+	"Centro luminoso": [[0.0, 1.0, 1.0, 1.0, 4.0], [0.35, 1.0, 1.0, 1.0, 1.0], [1.0, 0.0, 0.0, 0.0, 1.0]],
+	"Piatto": [[0.0, 1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0, 1.0]],
+}
 
 
 func _init() -> void:
@@ -48,6 +58,42 @@ func _init() -> void:
 	_pos_row.value_changed.connect(func(v: float) -> void: _set_pos(v, false))
 	_pos_row.committed.connect(func() -> void: _sort_keep_selection(); changed.emit(true))
 	add_child(_pos_row)
+	_value_row = ParamRow.new("Valore", 0.0, 16.0, 0.01)
+	_value_row.tooltip_text = "Moltiplicatore della tacca: oltre 1 la zona è più luminosa del resto della luce"
+	_value_row.value_changed.connect(func(v: float) -> void: _set_value(v, false))
+	_value_row.committed.connect(func() -> void: changed.emit(true))
+	add_child(_value_row)
+	var prow := HBoxContainer.new()
+	add_child(prow)
+	var pl := Label.new()
+	pl.custom_minimum_size.x = 96
+	prow.add_child(pl)
+	var presets := MenuButton.new()
+	presets.text = "Preset"
+	presets.flat = false
+	for pname in PRESETS:
+		presets.get_popup().add_item(pname)
+	presets.get_popup().index_pressed.connect(func(i: int) -> void:
+		light.gradient_stops = (PRESETS.values()[i] as Array).duplicate(true)
+		_selected = 0
+		_sync_controls()
+		_bar.queue_redraw()
+		changed.emit(true))
+	prow.add_child(presets)
+	var copy := Button.new()
+	copy.text = "Copia"
+	copy.pressed.connect(func() -> void: clipboard = light.gradient_stops.duplicate(true))
+	prow.add_child(copy)
+	var paste := Button.new()
+	paste.text = "Incolla"
+	paste.pressed.connect(func() -> void:
+		if not clipboard.is_empty():
+			light.gradient_stops = clipboard.duplicate(true)
+			_selected = 0
+			_sync_controls()
+			_bar.queue_redraw()
+			changed.emit(true))
+	prow.add_child(paste)
 	var hint := Label.new()
 	hint.text = "click sulla barra: nuova tacca · trascina: sposta · tasto destro / Canc: elimina"
 	hint.add_theme_font_size_override("font_size", 11)
@@ -73,10 +119,12 @@ func _sync_controls() -> void:
 	var has := light != null and _selected >= 0 and _selected < _stops().size()
 	_color.disabled = not has
 	_pos_row.visible = has
+	_value_row.visible = has
 	if has:
 		var s: Array = _stops()[_selected]
 		_color.color = Color(s[1], s[2], s[3])
 		_pos_row.set_value_silent(s[0])
+		_value_row.set_value_silent(RigLight.stop_value(s))
 	_syncing = false
 
 
@@ -145,7 +193,12 @@ func _bar_input(ev: InputEvent) -> void:
 			elif r.grow(4).has_point(ev.position):
 				var t := clampf((ev.position.x - r.position.x) / r.size.x, 0.0, 1.0)
 				var c := light.gradient_color(t)
-				light.gradient_stops.append([t, c.r, c.g, c.b])
+				var v := maxf(maxf(c.r, c.g), c.b)
+				if v > 1.0:
+					c = c / v
+				else:
+					v = 1.0
+				light.gradient_stops.append([t, c.r, c.g, c.b, v])
 				_sort_stops()
 				_selected = _index_at(t)
 				_dragging = true
@@ -191,6 +244,17 @@ func _set_color(c: Color, commit: bool) -> void:
 	s[1] = c.r
 	s[2] = c.g
 	s[3] = c.b
+	_bar.queue_redraw()
+	changed.emit(commit)
+
+
+func _set_value(v: float, commit: bool) -> void:
+	if _syncing or _selected < 0:
+		return
+	var s: Array = light.gradient_stops[_selected]
+	if s.size() < 5:
+		s.append(1.0)
+	s[4] = v
 	_bar.queue_redraw()
 	changed.emit(commit)
 

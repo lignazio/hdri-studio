@@ -6,7 +6,7 @@ extends RefCounted
 
 const SHADER_PATH := "res://bake/bake.glsl"
 const MAX_LIGHTS := 64
-const PUSH_CONSTANT_FLOATS := 20
+const PUSH_CONSTANT_FLOATS := 24
 ## Texture array delle luci Texture: ogni immagine viene ricampionata a questa dimensione.
 const TEX_LAYER_SIZE := Vector2i(2048, 1024)
 const TEX_LAYERS := 12
@@ -34,6 +34,8 @@ var _tex_lru: Array[String] = []
 var _measure_tex := RID()
 var _measure_set := RID()
 var _k_cache := {}      # shape_key → K
+var _base_mips := 1
+var _tex_sizes := {}    # percorso → Vector2i dell'immagine originale
 
 
 func _init(local_device := false) -> void:
@@ -44,6 +46,8 @@ func _init(local_device := false) -> void:
 	var ss := RDSamplerState.new()
 	ss.min_filter = RenderingDevice.SAMPLER_FILTER_LINEAR
 	ss.mag_filter = RenderingDevice.SAMPLER_FILTER_LINEAR
+	ss.mip_filter = RenderingDevice.SAMPLER_FILTER_LINEAR
+	ss.max_lod = 32.0
 	ss.repeat_u = RenderingDevice.SAMPLER_REPEAT_MODE_REPEAT
 	ss.repeat_v = RenderingDevice.SAMPLER_REPEAT_MODE_CLAMP_TO_EDGE
 	_sampler = rd.sampler_create(ss)
@@ -154,13 +158,27 @@ func _upload_base(img: Image) -> void:
 	if _base_tex.is_valid():
 		rd.free_rid(_base_tex)
 	_measure_set = RID()
+	# mipmap sulla CPU: servono alla sfocatura della base (textureLod)
+	var mip := img.duplicate() as Image
+	if mip.get_width() > 1 and mip.get_height() > 1:
+		mip.generate_mipmaps()
+	var levels := mip.get_mipmap_count() + 1
+	# RD vuole un blocco per strato dell'array, con tutti i mip concatenati (lo stesso layout di Image)
+	var layers: Array[PackedByteArray] = [mip.get_data()]
 	var fmt := RDTextureFormat.new()
 	fmt.width = img.get_width()
 	fmt.height = img.get_height()
+	fmt.mipmaps = levels
 	fmt.format = RenderingDevice.DATA_FORMAT_R32G32B32A32_SFLOAT
 	fmt.usage_bits = RenderingDevice.TEXTURE_USAGE_SAMPLING_BIT | RenderingDevice.TEXTURE_USAGE_CAN_UPDATE_BIT
-	_base_tex = rd.texture_create(fmt, RDTextureView.new(), [img.get_data()])
+	_base_tex = rd.texture_create(fmt, RDTextureView.new(), layers)
+	_base_mips = levels
 	_uniform_set = RID()
+
+
+## LOD massimo utile per la sfocatura della base (l'ultimo mip è quasi un colore solo).
+func base_max_lod() -> float:
+	return maxf(_base_mips - 1.0, 0.0)
 
 
 func has_base_image() -> bool:
@@ -219,6 +237,7 @@ func texture_layer(path: String) -> int:
 	if img == null:
 		push_warning("Immagine della luce non leggibile: " + path)
 		return -1
+	_tex_sizes[path] = Vector2i(img.get_width(), img.get_height())
 	img.resize(TEX_LAYER_SIZE.x, TEX_LAYER_SIZE.y, Image.INTERPOLATE_LANCZOS)
 	img.convert(Image.FORMAT_RGBAH)
 	var layer: int
@@ -232,6 +251,11 @@ func texture_layer(path: String) -> int:
 	_tex_layers[path] = layer
 	_tex_lru.append(path)
 	return layer
+
+
+## Dimensioni dell'immagine originale di una luce Texture già caricata (Vector2i.ZERO se ignota).
+func texture_size(path: String) -> Vector2i:
+	return _tex_sizes.get(path, Vector2i.ZERO)
 
 
 ## Dimenticare un file (per esempio se è stato modificato su disco).
@@ -297,6 +321,7 @@ func measure_k(l: RigLight) -> float:
 		0.0, 0.0, 0.0, 0.0,
 		0.0, 0.0, 0.0, 1.0,
 		0.0, 1.0, 0.0, 0.0,
+		0.0, 0.0, 0.0, 0.0,
 	])
 	var pc_bytes := pc.to_byte_array()
 	var cl := rd.compute_list_begin()
@@ -414,6 +439,7 @@ func bake_planar(l: RigLight, long_side := 1024) -> Image:
 		0.0, 0.0, 0.0, 0.0,
 		0.0, 0.0, 0.0, 2.0,
 		0.0, 1.0, 0.0, 0.0,
+		0.0, 0.0, 0.0, 0.0,
 	])
 	var pc_bytes := pc.to_byte_array()
 	var cl := rd.compute_list_begin()
@@ -474,6 +500,7 @@ func bake(rig: LightRig, calibration := false, include_separate := true) -> void
 		rig.bg_horizon.r, rig.bg_horizon.g, rig.bg_horizon.b, 1.0 if calibration else 0.0,
 		rig.bg_nadir.r, rig.bg_nadir.g, rig.bg_nadir.b, 0.0,
 		deg_to_rad(rig.base_rotation), rig.base_exposure(), 1.0 if base_on else 0.0, 1.0 if rig.base_flip else 0.0,
+		rig.base_blur * base_max_lod(), 0.0, 0.0, 0.0,
 	])
 	assert(pc.size() == PUSH_CONSTANT_FLOATS)
 	var pc_bytes := pc.to_byte_array()

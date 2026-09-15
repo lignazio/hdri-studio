@@ -15,6 +15,7 @@ var _base_label: Label
 var _base_enabled: CheckBox
 var _base_rot: ParamRow
 var _base_ev: ParamRow
+var _base_blur: ParamRow
 var _base_flip: CheckBox
 
 
@@ -74,6 +75,11 @@ func _init() -> void:
 	_base_ev.value_changed.connect(func(v: float) -> void: _apply(func() -> void: rig.base_ev = v, false))
 	_base_ev.committed.connect(func() -> void: changed.emit(true))
 	add_child(_base_ev)
+	_base_blur = ParamRow.new("Sfocatura", 0.0, 1.0, 0.01)
+	_base_blur.tooltip_text = "Sfoca l'HDRI di base (mipmap): a 1 resta solo la dominante"
+	_base_blur.value_changed.connect(func(v: float) -> void: _apply(func() -> void: rig.base_blur = v, false))
+	_base_blur.committed.connect(func() -> void: changed.emit(true))
+	add_child(_base_blur)
 
 
 func _color_row(label: String, setter: Callable) -> ColorPickerButton:
@@ -111,4 +117,5 @@ func set_rig(r: LightRig) -> void:
 	_base_label.text = r.base_hdri_path.get_file() if r.base_hdri_path != "" else "—"
 	_base_rot.set_value_silent(r.base_rotation)
 	_base_ev.set_value_silent(r.base_ev)
+	_base_blur.set_value_silent(r.base_blur)
 	_syncing = false
