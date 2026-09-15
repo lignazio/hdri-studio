@@ -55,12 +55,18 @@ func _init(local_device := false) -> void:
 
 
 func _compile() -> void:
-	var src := FileAccess.get_file_as_string(SHADER_PATH)
-	assert(not src.is_empty(), "Shader non trovato: " + SHADER_PATH)
-	src = src.replace("#[compute]", "")
-	var shader_src := RDShaderSource.new()
-	shader_src.source_compute = src
-	var spirv := rd.shader_compile_spirv_from_source(shader_src)
+	# Nell'app esportata il sorgente .glsl non c'è: c'è la risorsa importata (RDShaderFile, già SPIR-V).
+	# Dall'editor preferiamo comunque compilare il sorgente, così gli errori sono leggibili.
+	var spirv: RDShaderSPIRV = null
+	if OS.has_feature("editor") and FileAccess.file_exists(SHADER_PATH):
+		var src := FileAccess.get_file_as_string(SHADER_PATH).replace("#[compute]", "")
+		var shader_src := RDShaderSource.new()
+		shader_src.source_compute = src
+		spirv = rd.shader_compile_spirv_from_source(shader_src)
+	else:
+		var sf := load(SHADER_PATH) as RDShaderFile
+		assert(sf != null, "Shader non trovato: " + SHADER_PATH)
+		spirv = sf.get_spirv()
 	if spirv.compile_error_compute != "":
 		push_error("bake.glsl: " + spirv.compile_error_compute)
 		assert(false)

@@ -45,6 +45,20 @@ Con Normale l'ordine conta: le luci più in basso nell'elenco coprono quelle sop
 
 I bordi fra le colonne e fra preview e mappa si trascinano.
 
+## App standalone
+
+`export_presets.cfg` contiene i preset **macOS** (universal) e **Windows** (x86_64, PCK incorporato).
+Servono i template di export di Godot 4.7.1 (Editor → Manage Export Templates → Download). Da terminale:
+
+    /Applications/Godot.app/Contents/MacOS/Godot --headless --path hdri_studio --export-release "macOS" "../dist/HDRI Studio.app"
+    /Applications/Godot.app/Contents/MacOS/Godot --headless --path hdri_studio --export-release "Windows" "../dist/windows/HDRI Studio.exe"
+
+oppure dall'editor: Project → Export. L'app esportata accetta `-- --selftest` (bake + EXR + rilettura,
+esce con 0 se tutto va) e `-- --screenshot`. `dist/` non è nel repository: si ricostruisce.
+
+Dal catalogo le miniature si possono anche **trascinare** sulla mappa (la luce nasce lì) o sul preview 3D
+(la luce nasce sul riflesso del punto colpito, come il LightPaint).
+
 ## Live link con Cinema 4D (Octane)
 
 Plugin in `plugins/c4d/hdri_studio_link/` — installazione e uso in `plugins/c4d/README.md`. In breve:

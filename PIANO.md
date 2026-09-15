@@ -366,8 +366,41 @@ Sul Mac: smoke test con un client Python che simula il plugin → hello, `hdri_u
 - [x] Fusione **Normale** (copre in ordine di elenco) e riordino ▲▼ delle luci.
 - [x] Colonne e preview/mappa ridimensionabili (split container).
 - [x] ID dei plugin C4D portati a valori alti dopo la collisione di 1065932 con `C4d_objects`.
-- [ ] Catalogo: anteprima al passaggio del mouse, tag/preferiti, drag & drop sulla mappa.
+- [x] Catalogo: drag & drop delle miniature sulla mappa (la luce nasce lì) e sul preview 3D (nasce
+      sul riflesso del punto colpito).
+- [x] App standalone: preset di export macOS/Windows, shader caricato dalla risorsa importata, self-test
+      da riga di comando; build provato su macOS (bake + EXR nell'app esportata).
+- [ ] Catalogo: anteprima al passaggio del mouse, tag/preferiti.
 - [ ] ACEScg in export.
+
+### Fase 4 — Luci separate in Cinema 4D (pianificata il 15/09/2026)
+
+Alcune luci del rig non finiscono nell'HDRI ma diventano **luci vere nella scena**: ognuna esportata
+come EXR singolo e ricreata in C4D come area light con quella texture, nella stessa direzione angolare,
+a una distanza dal centro scelta con uno slider. Il motivo: una luce vicina al soggetto dà ombre e
+riflessi con la parallasse giusta, cosa che un'HDRI all'infinito non può fare; il resto del set resta
+nell'HDRI.
+
+Coerenza fisica: un'area light di radianza `L` posta a distanza `D` con dimensione fisica
+`w = 2·D·tan(width/2)`, `h = 2·D·tan(height/2)` sottende lo stesso angolo solido della luce nell'HDRI
+vista dal centro, quindi produce lo stesso illuminamento lì; allontanandosi dal centro compare la
+parallasse, che è esattamente ciò che si vuole.
+
+Passi:
+
+1. **Flag per luce** "separata": esclusa dal bake dell'HDRI; all'export scrive `<rig>_<luce>.exr`
+   ritagliato al rettangolo della luce (margine = sfumatura), lineare, con la radianza già applicata.
+2. **Messaggio live link** `separate_lights`: lista di `{name, azimuth, elevation, roll, width, height,
+   distance, path}` inviata insieme a `hdri_updated`; slider *Distanza* nel pannello (globale, con
+   override per luce in seguito).
+3. **Plugin C4D**: un null `HDRI Studio Lights` con una luce per voce (Octane Light di tipo Area con
+   ImageTexture → il file; in alternativa area light nativa), posizione `centro + D·dir` (con la X
+   invertita per il sistema left-handed), orientamento look-at verso il centro più roll, scala alla
+   dimensione fisica; aggiornata a ogni messaggio, rimossa se il flag viene tolto. Il centro è un null
+   che l'utente può spostare sul soggetto.
+4. **Calibrazione dell'intensità in Octane**: la Power dell'area light non è radianza; si tara con il
+   furnace test di Fase 0 (luce separata vs stessa luce nell'HDRI → stesso pixel su una sfera diffusa).
+5. Opzioni: luce invisibile alla camera, distanza per luce, esportare tutte le luci separate in blocco.
 
 ### 5.3 Fase 3 — stato e test in C4D
 

@@ -60,6 +60,23 @@ func _ready() -> void:
 
 	if "--screenshot" in OS.get_cmdline_user_args():
 		_screenshot_frames = 12
+	if "--selftest" in OS.get_cmdline_user_args():
+		_selftest.call_deferred()
+
+
+## Verifica da riga di comando (anche nell'app esportata): bake, export EXR, rilettura.
+func _selftest() -> void:
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var path := "user://selftest.exr"
+	var err := export_to(path, {"resolution": Vector2i(1024, 512), "quiet": true})
+	var back := Image.new()
+	var err2 := back.load_exr_from_buffer(FileAccess.get_file_as_bytes(path))
+	var c := back.get_pixel(back.get_width() / 2, back.get_height() / 2) if err2 == OK else Color.BLACK
+	print("[selftest] export %s · rilettura %s · %dx%d · pixel centro %s · %s" % [
+		error_string(err), error_string(err2), back.get_width(), back.get_height(), c,
+		"OK" if err == OK and err2 == OK else "FALLITO"])
+	get_tree().quit(0 if err == OK and err2 == OK else 1)
 
 
 # --- layout ------------------------------------------------------------------------------------
@@ -142,6 +159,13 @@ func _build_layout() -> void:
 	light_list.texture_light_requested.connect(func() -> void: _pick_texture_file(true))
 	props.texture_pick_requested.connect(func() -> void: _pick_texture_file(false))
 	catalog.light_requested.connect(_add_texture_light)
+	map_view.light_dropped.connect(func(path: String, defaults: Dictionary, az: float, el: float) -> void:
+		_add_texture_light(path, defaults, az, el))
+	preview.light_dropped.connect(func(path: String, defaults: Dictionary, dir: Vector3) -> void:
+		if dir == Vector3.ZERO:
+			_add_texture_light(path, defaults)
+		else:
+			_add_texture_light(path, defaults, rad_to_deg(atan2(-dir.x, dir.z)), rad_to_deg(asin(clampf(dir.y, -1.0, 1.0)))))
 	catalog.folder_pick_requested.connect(_pick_catalog_folder)
 	props.changed.connect(_on_light_changed)
 	props.light_renamed.connect(func() -> void: light_list.refresh(); map_view.refresh())
@@ -307,9 +331,10 @@ func _process(_delta: float) -> void:
 		_screenshot_frames -= 1
 		if _screenshot_frames == 0:
 			var img := get_viewport().get_texture().get_image()
-			DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://out"))
-			img.save_png(ProjectSettings.globalize_path("res://out/app.png"))
-			print("Screenshot salvato: out/app.png")
+			var shot := "res://out/app.png" if OS.has_feature("editor") else "user://app.png"
+			DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(shot.get_base_dir()))
+			img.save_png(ProjectSettings.globalize_path(shot))
+			print("Screenshot salvato: " + ProjectSettings.globalize_path(shot))
 			get_tree().quit()
 
 
@@ -351,7 +376,8 @@ func _dialog(mode: FileDialog.FileMode, filters: PackedStringArray, title: Strin
 
 
 ## Nuova luce Texture dal catalogo (o da file): defaults dal sidecar o dall'aspetto dell'immagine.
-func _add_texture_light(path: String, defaults: Dictionary) -> void:
+## az/el: posizione iniziale (NAN = default).
+func _add_texture_light(path: String, defaults: Dictionary, az := NAN, el := NAN) -> void:
 	var l := RigLight.new()
 	l.shape = RigLight.Shape.TEXTURE
 	l.texture_path = path
@@ -363,7 +389,8 @@ func _add_texture_light(path: String, defaults: Dictionary) -> void:
 	l.kelvin = float(defaults.get("kelvin", 6500.0))
 	l.softness = float(defaults.get("softness", 0.5))
 	l.roll = float(defaults.get("roll", 0.0))
-	l.elevation = 30.0
+	l.azimuth = az if not is_nan(az) else 0.0
+	l.elevation = el if not is_nan(el) else 30.0
 	if baker.texture_layer(path) < 0:
 		export_panel.set_status("Immagine non leggibile: " + path.get_file())
 		return

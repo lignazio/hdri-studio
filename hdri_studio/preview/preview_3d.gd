@@ -5,6 +5,9 @@ extends SubViewportContainer
 ## la luce selezionata si sposta dove serve per riflettersi sotto il cursore.
 
 signal paint(direction: Vector3, commit: bool)
+## Una voce del catalogo è stata lasciata sul preview: direction è il riflesso nel punto colpito,
+## oppure Vector3.ZERO se non ha colpito nulla.
+signal light_dropped(path: String, defaults: Dictionary, direction: Vector3)
 
 const SPHERE_R := 1.0
 const SPHERE_POS := [Vector3(-2.6, 0, 0), Vector3(0, 0, 0), Vector3(2.6, 0, 0)]
@@ -212,9 +215,31 @@ func _gui_input(event: InputEvent) -> void:
 			accept_event()
 
 
+func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:
+	return data is Dictionary and data.get("type", "") == "catalog_light"
+
+
+func _drop_data(at_position: Vector2, data: Variant) -> void:
+	light_dropped.emit(data["path"], data["defaults"], reflection_at(at_position))
+
+
+## Direzione riflessa nel punto sotto il cursore (modello o sfere), Vector3.ZERO se nulla.
+func reflection_at(pos: Vector2) -> Vector3:
+	var r := _hit_reflection(pos)
+	return r
+
+
 ## Raggio dal cursore → modello (raycast fisico) o sfera più vicina → direzione riflessa.
 ## Restituisce false se non colpisce nulla.
 func _try_paint(pos: Vector2, commit: bool) -> bool:
+	var r := _hit_reflection(pos)
+	if r == Vector3.ZERO:
+		return false
+	paint.emit(r, commit)
+	return true
+
+
+func _hit_reflection(pos: Vector2) -> Vector3:
 	var o := camera.project_ray_origin(pos)
 	var d := camera.project_ray_normal(pos)
 	var best_t := INF
@@ -239,7 +264,6 @@ func _try_paint(pos: Vector2, commit: bool) -> bool:
 			best_t = t
 			best_n = (o + d * t - c).normalized()
 	if best_t == INF:
-		return false
+		return Vector3.ZERO
 	# Riflessione GLSL: r = d - 2 (d·n) n (Vector3.reflect ha il segno opposto)
-	paint.emit(d - 2.0 * d.dot(best_n) * best_n, commit)
-	return true
+	return d - 2.0 * d.dot(best_n) * best_n

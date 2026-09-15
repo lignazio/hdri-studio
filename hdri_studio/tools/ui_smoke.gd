@@ -235,6 +235,20 @@ func _run(main: Node) -> void:
 	main.preview.paint.emit(Vector3(0, 0, 1), true)
 	ok = ok and _check(main.rig.lights.size() == n0 + 1 and main._selected == n0, "LightPaint senza selezione crea una luce")
 
+	# drag & drop dal catalogo: sulla mappa (posizione) e sul preview (riflesso)
+	var dd := {"type": "catalog_light", "path": tex_path, "defaults": {"width": 20.0, "height": 20.0}}
+	var mrect: Rect2 = main.map_view._map_rect()
+	var drop_pos: Vector2 = mrect.position + mrect.size * Vector2(0.75, 0.25)
+	ok = ok and _check(main.map_view._can_drop_data(drop_pos, dd), "la mappa accetta il drop")
+	var nd: int = main.rig.lights.size()
+	main.map_view._drop_data(drop_pos, dd)
+	var dl: RigLight = main.rig.lights[main.rig.lights.size() - 1]
+	ok = ok and _check(main.rig.lights.size() == nd + 1 and absf(dl.azimuth - 90.0) < 0.5 and absf(dl.elevation - 45.0) < 0.5, "drop sulla mappa → az %.1f el %.1f" % [dl.azimuth, dl.elevation])
+	ok = ok and _check(main.preview._can_drop_data(Vector2.ZERO, dd), "il preview accetta il drop")
+	nd = main.rig.lights.size()
+	main.preview._drop_data(main.preview.size * 0.5, dd)
+	ok = ok and _check(main.rig.lights.size() == nd + 1, "drop sul preview crea la luce (sul riflesso se colpisce)")
+
 	print("[smoke] %s" % ("TUTTO OK" if ok else "FALLITO"))
 	quit(0 if ok else 1)
 

@@ -4,6 +4,8 @@ extends Control
 
 signal light_selected(index: int)
 signal light_moved(index: int, azimuth: float, elevation: float, commit: bool)
+## Una voce del catalogo è stata lasciata sulla mappa in questa posizione.
+signal light_dropped(path: String, defaults: Dictionary, azimuth: float, elevation: float)
 
 const HANDLE_R := 7.0
 const PICK_R := 14.0
@@ -138,6 +140,15 @@ func _gui_input(event: InputEvent) -> void:
 	elif event is InputEventMouseMotion and _dragging >= 0:
 		_move_to(event.position, false)
 		accept_event()
+
+
+func _can_drop_data(at_position: Vector2, data: Variant) -> bool:
+	return data is Dictionary and data.get("type", "") == "catalog_light" and _map_rect().has_point(at_position)
+
+
+func _drop_data(at_position: Vector2, data: Variant) -> void:
+	var uv := _pos_to_uv(at_position)
+	light_dropped.emit(data["path"], data["defaults"], (wrapf(uv.x, 0.0, 1.0) - 0.5) * 360.0, (0.5 - clampf(uv.y, 0.0, 1.0)) * 180.0)
 
 
 func _move_to(p: Vector2, commit: bool) -> void:

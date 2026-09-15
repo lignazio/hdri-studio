@@ -161,6 +161,17 @@ func _add_button(it: Dictionary) -> void:
 	b.custom_minimum_size = Vector2(120, 92)
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	b.pressed.connect(func() -> void: light_requested.emit(it["path"], _defaults(it)))
+	# trascinabile sulla mappa o sul preview 3D: il dato viaggia come Dictionary
+	b.set_drag_forwarding(func(_at: Vector2) -> Variant:
+		var preview := TextureRect.new()
+		preview.texture = b.icon
+		preview.custom_minimum_size = Vector2(96, 48)
+		preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		preview.modulate.a = 0.85
+		b.set_drag_preview(preview)
+		return {"type": "catalog_light", "path": it["path"], "defaults": _defaults(it)},
+		Callable(), Callable())
 	_section_grid(it["folder"]).add_child(b)
 	b.set_meta("folder", it["folder"])
 	_buttons[it["path"]] = b
