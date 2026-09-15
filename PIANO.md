@@ -11,7 +11,8 @@ area: progetto
 > App Godot completa: lista luci, proprietà, mappa con maniglie, LightPaint sulle sfere di preview,
 > sfondo a gradiente o HDRI di base, undo/redo, export EXR con preset per software, rig in JSON.
 > Smoke test automatico verde. Resta il test in **Cinema 4D + Octane** (taratura completa e reload):
-> istruzioni in [[#5.1 Fase 0 — stato e test C4D/Octane]]. Progetto in `hdri_studio/`. Ambiente rilevato sulla macchina: macOS 15.7 su M1 Pro,
+> istruzioni in [[#5.1 Fase 0 — stato e test C4D/Octane]]. Progetto in `hdri_studio/`,
+> repository privato: https://github.com/lignazio/hdri-studio (Mac e PC sincronizzati via git). Ambiente rilevato sulla macchina: macOS 15.7 su M1 Pro,
 > Godot 4.7.1, Blender 5.1.1, Cinema 4D 2025/2026, Houdini 20.0 e 21.0.
 
 ## 1. Cosa stiamo costruendo
