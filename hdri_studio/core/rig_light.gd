@@ -3,13 +3,18 @@ extends Resource
 ## Una luce parametrica sulla sfera. Tutti gli angoli in gradi, la radianza in unità lineari.
 
 enum Shape { RECT, ELLIPSE, RING, GRADIENT, SCRIM, TEXTURE }
+## Interpolazione fra le tacche del gradiente (GAUSSIAN resta solo per i rig vecchi → SMOOTH).
 enum Falloff { LINEAR, SMOOTH, GAUSSIAN }
+enum GradientType { RADIAL, LINEAR }
+enum GradientShape { CIRCULAR, RECTANGULAR }
 ## ADD somma (fisico), MAX massimo, MULTIPLY maschera, NORMAL copre lo sfondo dove sta (le luci dopo
 ## nell'elenco coprono quelle prima).
 enum Blend { ADD, MAX, MULTIPLY, NORMAL }
 
 ## Numero di vec4 per luce nel buffer del compute shader. Deve coincidere con STRIDE in bake.glsl.
-const STRIDE := 5
+const STRIDE := 6
+## Tacche massime per gradiente (vec4 = pos, r, g, b), come GRAD_STOPS in bake.glsl.
+const GRAD_STOPS := 8
 
 @export var name := "Light"
 @export var enabled := true
@@ -22,7 +27,15 @@ const STRIDE := 5
 @export_range(0.1, 360.0) var width := 30.0
 @export_range(0.1, 180.0) var height := 20.0
 @export_range(0.0, 90.0) var softness := 1.0
+## Raggio degli angoli (gradi) per le forme rettangolari: la sfumatura gira attorno agli angoli.
+@export_range(0.0, 90.0) var corner_radius := 0.0
 @export var falloff := Falloff.SMOOTH
+## Gradiente: radiale o lineare, maschera circolare o rettangolare, angolo del lineare (gradi),
+## tacche [pos 0..1, r, g, b] in ordine di posizione.
+@export var gradient_type := GradientType.RADIAL
+@export var gradient_shape := GradientShape.CIRCULAR
+@export_range(-180.0, 180.0) var gradient_angle := 0.0
+var gradient_stops: Array = [[0.0, 1.0, 1.0, 1.0], [1.0, 0.0, 0.0, 0.0]]
 @export var intensity := 1.0
 @export_range(-10.0, 20.0) var ev := 0.0
 ## Fotometrico: invece della radianza si specifica l'illuminamento E prodotto al centro della sfera
@@ -86,9 +99,10 @@ func physical_size() -> Vector2:
 
 ## Chiave dei parametri da cui dipende K: se cambia, il baker rimisura.
 func shape_key() -> String:
-	return "%d|%.4f|%.4f|%.4f|%d|%.4f|%.4f|%.4f|%.4f|%.4f|%s" % [
-		shape, width, height, softness, falloff, ring_inner,
-		scrim_offset.x, scrim_offset.y, scrim_depth, scrim_source_size, texture_path]
+	return "%d|%.4f|%.4f|%.4f|%.4f|%d|%.4f|%.4f|%.4f|%.4f|%.4f|%s|%d|%d|%.4f|%s" % [
+		shape, width, height, softness, corner_radius, falloff, ring_inner,
+		scrim_offset.x, scrim_offset.y, scrim_depth, scrim_source_size, texture_path,
+		gradient_type, gradient_shape, gradient_angle, JSON.stringify(gradient_stops)]
 
 
 ## Colore lineare già moltiplicato per la radianza: è quello che entra nel bake.
@@ -106,16 +120,51 @@ func pack(out: PackedFloat32Array, tex_layer := -1) -> void:
 		deg_to_rad(width), deg_to_rad(height), deg_to_rad(softness), float(falloff),
 		rgb.r, rgb.g, rgb.b, float(blend),
 		scrim_offset.x, scrim_offset.y, scrim_depth, scrim_source_size,
-		ring_inner, 1.0 if enabled else 0.0, float(tex_layer), 0.0,
+		ring_inner, 1.0 if enabled else 0.0, float(tex_layer), deg_to_rad(corner_radius),
+		float(gradient_type), float(gradient_shape), deg_to_rad(gradient_angle), float(mini(gradient_stops.size(), GRAD_STOPS)),
 	]))
+
+
+## Aggiunge GRAD_STOPS vec4 (pos, r, g, b) all'array del buffer dei gradienti.
+func pack_gradient(out: PackedFloat32Array) -> void:
+	var stops := gradient_stops.duplicate()
+	stops.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0])
+	for k in GRAD_STOPS:
+		if k < stops.size():
+			var s: Array = stops[k]
+			out.append_array(PackedFloat32Array([s[0], s[1], s[2], s[3]]))
+		else:
+			out.append_array(PackedFloat32Array([1.0, 0.0, 0.0, 0.0]))
+
+
+## Colore del gradiente in t (0..1), come nello shader (per l'editor e le anteprime).
+func gradient_color(t: float) -> Color:
+	var stops := gradient_stops.duplicate()
+	stops.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0])
+	if stops.is_empty():
+		return Color.WHITE
+	var s0: Array = stops[0]
+	if t <= s0[0]:
+		return Color(s0[1], s0[2], s0[3])
+	for k in range(1, stops.size()):
+		var s1: Array = stops[k]
+		if t <= s1[0]:
+			var u: float = (t - s0[0]) / maxf(s1[0] - s0[0], 1e-6)
+			if falloff != Falloff.LINEAR:
+				u = smoothstep(0.0, 1.0, u)
+			return Color(s0[1], s0[2], s0[3]).lerp(Color(s1[1], s1[2], s1[3]), u)
+		s0 = s1
+	return Color(s0[1], s0[2], s0[3])
 
 
 func to_dict() -> Dictionary:
 	return {
 		"name": name, "enabled": enabled, "solo": solo, "shape": Shape.keys()[shape],
 		"azimuth": azimuth, "elevation": elevation, "roll": roll,
-		"width": width, "height": height, "softness": softness,
+		"width": width, "height": height, "softness": softness, "corner_radius": corner_radius,
 		"falloff": Falloff.keys()[falloff],
+		"gradient_type": GradientType.keys()[gradient_type], "gradient_shape": GradientShape.keys()[gradient_shape],
+		"gradient_angle": gradient_angle, "gradient_stops": gradient_stops.duplicate(true),
 		"intensity": intensity, "ev": ev, "kelvin": kelvin,
 		"photometric": photometric, "illuminance": illuminance,
 		"tint": [tint.r, tint.g, tint.b], "blend": Blend.keys()[blend],
@@ -139,7 +188,18 @@ static func from_dict(d: Dictionary) -> RigLight:
 	l.width = d.get("width", l.width)
 	l.height = d.get("height", l.height)
 	l.softness = d.get("softness", l.softness)
+	l.corner_radius = d.get("corner_radius", 0.0)
 	l.falloff = Falloff.get(d.get("falloff", "SMOOTH"), Falloff.SMOOTH)
+	if l.falloff == Falloff.GAUSSIAN:
+		l.falloff = Falloff.SMOOTH
+	l.gradient_type = GradientType.get(d.get("gradient_type", "RADIAL"), GradientType.RADIAL)
+	l.gradient_shape = GradientShape.get(d.get("gradient_shape", "CIRCULAR"), GradientShape.CIRCULAR)
+	l.gradient_angle = d.get("gradient_angle", 0.0)
+	var st: Array = d.get("gradient_stops", [])
+	if st.size() >= 1:
+		l.gradient_stops = []
+		for s in st:
+			l.gradient_stops.append([float(s[0]), float(s[1]), float(s[2]), float(s[3])])
 	l.intensity = d.get("intensity", l.intensity)
 	l.photometric = d.get("photometric", false)
 	l.illuminance = d.get("illuminance", l.illuminance)

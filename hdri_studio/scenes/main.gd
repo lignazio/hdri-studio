@@ -797,6 +797,7 @@ func _default_rig() -> LightRig:
 	key.width = 70.0
 	key.height = 50.0
 	key.softness = 2.0
+	key.corner_radius = 4.0
 	key.intensity = 8.0
 	key.kelvin = 5600.0
 	key.scrim_depth = 0.5
@@ -820,6 +821,7 @@ func _default_rig() -> LightRig:
 	rim.width = 8.0
 	rim.height = 60.0
 	rim.softness = 1.5
+	rim.corner_radius = 2.0
 	rim.intensity = 20.0
 	rim.roll = 10.0
 	r.add_light(rim)

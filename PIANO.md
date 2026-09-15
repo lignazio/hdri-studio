@@ -7,7 +7,12 @@ area: progetto
 
 # HDRI Studio — Piano
 
-> [!success] Stato: v1.4 — 15 settembre 2026 — preset, tag/preferiti/anteprima, codec EXR
+> [!success] Stato: v1.5 — 15 settembre 2026 — angoli arrotondati e gradiente a tacche
+> Sfumatura con angoli arrotondati (SDF) per le forme rettangolari; gradiente radiale/lineare,
+> circolare/rettangolare, ruotabile, con tacche colorate in un editor dedicato (secondo buffer nel
+> compute shader). Caricamento dello shader a tre vie con log per l'app esportata.
+
+> [!success] Stato precedente: v1.4 — 15 settembre 2026 — preset, tag/preferiti/anteprima, codec EXR
 > Libreria di preset con miniature; catalogo con preferiti, tag, filtri e anteprima al passaggio del
 > mouse; export in ZIP/DWAA/DWAB/… via Blender in background e lettura degli EXR DWAA/B44/PXR24 del
 > catalogo tramite conversione in cache. Cosa manca: [[#10. Cosa manca rispetto al piano iniziale]].
@@ -575,6 +580,11 @@ luci Texture e catalogo, luci separate, app standalone.
 - 15/09/2026 — Assi in **Octane**: da dentro la sfera si vede esattamente il preview; le etichette
   degli assi differiscono solo su X perché C4D è left-handed (rosso = +X interno finisce su −X di C4D,
   Y e Z allineati). Conversione coordinate C4D → interne per LightPaint (Fase 3): `(x, y, z) → (−x, y, z)`.
+- 15/09/2026 — Sfumatura: distanza da rettangolo arrotondato (parametro *Angoli °*) al posto della
+  distanza a scacchiera, così la banda sfumata gira attorno agli angoli. Default 0 nella classe (rig
+  vecchi e test invariati), 3° per le luci create dall'interfaccia.
+- 15/09/2026 — Gradiente: le tacche (max 8, pos + rgb) stanno in un secondo SSBO indicizzato per luce;
+  il colore del gradiente moltiplica il colore della luce come fa l'immagine per le luci Texture.
 - 15/09/2026 — Fotometrico: K si misura sul GPU con lo stesso shader del bake (modalità `measure` nel
   frame locale della luce) invece di replicare i profili su CPU: una sola verità per le forme, precisione
   indipendente dalla dimensione della luce, costo ~ms solo quando cambia la forma.

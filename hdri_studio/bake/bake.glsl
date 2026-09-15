@@ -15,6 +15,7 @@ layout(set = 0, binding = 0, rgba32f) restrict writeonly uniform image2D out_img
 layout(set = 0, binding = 1, std430) restrict readonly buffer Lights { vec4 data[]; } lights;
 layout(set = 0, binding = 2) uniform sampler2D base_hdri;
 layout(set = 0, binding = 3) uniform sampler2DArray light_textures;
+layout(set = 0, binding = 4, std430) restrict readonly buffer Gradients { vec4 data[]; } grads;
 
 layout(push_constant, std430) uniform Params {
 	vec4 size;       // width, height, light_count, supersample
@@ -25,7 +26,11 @@ layout(push_constant, std430) uniform Params {
 } p;
 
 const float PI = 3.14159265358979;
-const int STRIDE = 5; // vec4 per luce, deve coincidere con RigLight.STRIDE
+
+vec3 light_texture(int i, vec3 d);
+vec3 gradient_rgb(int i, vec3 d);
+const int STRIDE = 6; // vec4 per luce, deve coincidere con RigLight.STRIDE
+const int GRAD_STOPS = 8; // tacche per gradiente (pos, r, g, b), come RigLight.GRAD_STOPS
 
 // --- geometria della sfera ---------------------------------------------------------------
 
@@ -65,14 +70,54 @@ float soft_edge(float edge_dist, float softness) {
 	return smoothstep(0.0, softness, edge_dist);
 }
 
-// t = 1 al centro, 0 al bordo.
-float falloff_curve(float t, float type) {
+// Copertura di un rettangolo (hw × hh) con angoli arrotondati di raggio rr e bordo sfumato ss:
+// distanza con segno dal rettangolo arrotondato, così la sfumatura gira attorno agli angoli invece
+// di formare una punta. La parte piena resta un rettangolo netto.
+float rect_cover(float ax, float ay, float hw, float hh, float rr, float ss) {
+	rr = min(rr, min(hw, hh));
+	vec2 q = abs(vec2(ax, ay)) - vec2(hw, hh) + vec2(rr);
+	float sd = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr;
+	return soft_edge(-sd, ss);
+}
+
+float ellipse_cover(float ax, float ay, float hw, float hh, float ss) {
+	float r = length(vec2(ax / hw, ay / hh));
+	return soft_edge((1.0 - r) * min(hw, hh), ss);
+}
+
+// Colore del gradiente della luce i nella direzione d: coordinate (ax/hw, ay/hh) in -1..1,
+// t = raggio (radiale) o proiezione lungo l'angolo (lineare), tacche interpolate.
+vec3 gradient_rgb(int i, vec3 d) {
+	vec4 a = lights.data[i * STRIDE + 0];
+	vec4 b = lights.data[i * STRIDE + 1];
+	vec4 g = lights.data[i * STRIDE + 5]; // tipo, forma, angolo, n tacche
+	int n = int(g.w + 0.5);
+	if (n <= 0) return vec3(1.0);
+	vec3 F, R, U;
+	light_frame(a.y, a.z, a.w, F, R, U);
+	float df = dot(d, F);
+	vec2 p = vec2(atan(dot(d, R), df) / (b.x * 0.5), atan(dot(d, U), df) / (b.y * 0.5));
+	float t;
+	if (g.x < 0.5) {
+		t = length(p);
+	} else {
+		float ca = cos(g.z), sa = sin(g.z);
+		t = (p.x * ca - p.y * sa + 1.0) * 0.5;
+	}
 	t = clamp(t, 0.0, 1.0);
-	if (type < 0.5) return t;
-	if (type < 1.5) return smoothstep(0.0, 1.0, t);
-	float r = 1.0 - t;
-	const float k = exp(-4.0);
-	return (exp(-4.0 * r * r) - k) / (1.0 - k);
+	bool smooth_interp = b.w > 0.5;
+	vec4 s0 = grads.data[i * GRAD_STOPS];
+	if (t <= s0.x) return s0.yzw;
+	for (int k = 1; k < n; k++) {
+		vec4 s1 = grads.data[i * GRAD_STOPS + k];
+		if (t <= s1.x) {
+			float u = (t - s0.x) / max(s1.x - s0.x, 1e-6);
+			if (smooth_interp) u = smoothstep(0.0, 1.0, u);
+			return mix(s0.yzw, s1.yzw, u);
+		}
+		s0 = s1;
+	}
+	return s0.yzw;
 }
 
 // (copertura, profilo) della luce i nella direzione d. La copertura è la forma con il suo bordo
@@ -93,36 +138,33 @@ vec2 light_mp(int i, vec3 d) {
 	float ay = atan(dot(d, U), df);
 	float hw = b.x * 0.5;
 	float hh = b.y * 0.5;
+	float rr = e.w; // raggio degli angoli
 	int shape = int(a.x + 0.5);
 
 	if (shape == 0) { // rect
-		float ed = min(hw - abs(ax), hh - abs(ay));
-		return vec2(soft_edge(ed, b.z), 1.0);
+		return vec2(rect_cover(ax, ay, hw, hh, rr, b.z), 1.0);
 	}
 	if (shape == 1) { // ellipse
-		float r = length(vec2(ax / hw, ay / hh));
-		return vec2(soft_edge((1.0 - r) * min(hw, hh), b.z), 1.0);
+		return vec2(ellipse_cover(ax, ay, hw, hh, b.z), 1.0);
 	}
 	if (shape == 2) { // ring: raggio esterno hw, interno hw * ring_inner
 		float r = length(vec2(ax, ay));
 		float inner = hw * e.x;
 		return vec2(soft_edge(min(r - inner, hw - r), b.z), 1.0);
 	}
-	if (shape == 3) { // gradient
-		float r = length(vec2(ax / hw, ay / hh));
-		float f = falloff_curve(1.0 - r, b.w);
-		return vec2(f, 1.0);
+	if (shape == 3) { // gradient: la maschera è circolare o rettangolare, il colore viene dalle tacche
+		vec4 g = lights.data[i * STRIDE + 5];
+		float cov = g.y < 0.5 ? ellipse_cover(ax, ay, hw, hh, b.z) : rect_cover(ax, ay, hw, hh, rr, b.z);
+		return vec2(cov, 1.0);
 	}
 	if (shape == 5) { // texture: copertura rettangolare, il contenuto arriva dall'immagine
-		float ed = min(hw - abs(ax), hh - abs(ay));
-		return vec2(soft_edge(ed, b.z), 1.0);
+		return vec2(rect_cover(ax, ay, hw, hh, rr, b.z), 1.0);
 	}
 	// scrim: telo rettangolare illuminato da dietro da una sorgente a distanza `depth`,
 	// spostata di `offset`. Irradianza sul telo: E = depth / (|q|^2 + depth^2)^(3/2)
 	// (coseno + inverso del quadrato), normalizzata a picco 1. Una sorgente estesa è
 	// approssimata allargando la distanza efficace: deff^2 = depth^2 + size^2.
-	float ed = min(hw - abs(ax), hh - abs(ay));
-	float mask = soft_edge(ed, b.z);
+	float mask = rect_cover(ax, ay, hw, hh, rr, b.z);
 	if (mask <= 0.0) return vec2(0.0);
 	vec2 q = vec2(ax / hw, ay / hh) - s.xy;
 	float depth = max(s.z, 1e-3);
@@ -132,11 +174,27 @@ vec2 light_mp(int i, vec3 d) {
 	return vec2(mask, prof);
 }
 
-// Peso complessivo (copertura × profilo): è la radianza relativa della luce in quella direzione,
-// usato dalla misura fotometrica e dalla proiezione planare.
+// Radianza rgb della luce i in d, copertura esclusa: colore × profilo × immagine o gradiente.
+vec3 light_rgb(int i, vec3 d, float profile) {
+	vec4 a = lights.data[i * STRIDE + 0];
+	vec4 c = lights.data[i * STRIDE + 2];
+	vec3 rgb = c.rgb * profile;
+	int shape = int(a.x + 0.5);
+	if (shape == 5) rgb *= light_texture(i, d);
+	else if (shape == 3) rgb *= gradient_rgb(i, d);
+	return rgb;
+}
+
+// Peso complessivo (copertura × profilo × luminanza di immagine/gradiente): radianza relativa della
+// luce in quella direzione, usato dalla misura fotometrica.
 float light_weight(int i, vec3 d) {
 	vec2 mp = light_mp(i, d);
-	return mp.x * mp.y;
+	if (mp.x <= 0.0) return 0.0;
+	vec3 rgb = light_rgb(i, d, mp.y);
+	vec4 c = lights.data[i * STRIDE + 2];
+	// normalizza rispetto al colore della luce: il peso è la luminanza relativa
+	float lum_c = max(dot(c.rgb, vec3(0.2126, 0.7152, 0.0722)), 1e-9);
+	return mp.x * dot(rgb, vec3(0.2126, 0.7152, 0.0722)) / lum_c;
 }
 
 // Colore dell'immagine della luce Texture i nella direzione d (1 se la luce non ha immagine).
@@ -203,8 +261,7 @@ vec3 shade(vec3 d, int n) {
 		float cover = mp.x;
 		if (cover <= 0.0) continue;
 		vec4 c = lights.data[i * STRIDE + 2]; // radianza rgb, blend
-		vec3 rgb = c.rgb * mp.y;
-		if (int(lights.data[i * STRIDE + 0].x + 0.5) == 5) rgb *= light_texture(i, d);
+		vec3 rgb = light_rgb(i, d, mp.y);
 		int blend = int(c.w + 0.5);
 		if (blend == 0) col += rgb * cover;
 		else if (blend == 1) col = max(col, rgb * cover);
@@ -235,10 +292,6 @@ void measure(ivec2 pix, ivec2 sz) {
 	float q = 1.0 + tx * tx + ty * ty;
 	vec3 d = normalize(tx * R + ty * U + F);
 	float w = light_weight(0, d);
-	if (int(a.x + 0.5) == 5) {
-		vec3 rgb = light_texture(0, d);
-		w *= dot(rgb, vec3(0.2126, 0.7152, 0.0722));
-	}
 	float sec2 = (1.0 + tx * tx) * (1.0 + ty * ty);
 	float domega = sec2 / (q * sqrt(q)) * dax * day;
 	float cos_t = 1.0 / sqrt(q);
@@ -251,7 +304,6 @@ void measure(ivec2 pix, ivec2 sz) {
 void planar(ivec2 pix, ivec2 sz) {
 	vec4 a = lights.data[0];
 	vec4 b = lights.data[1];
-	vec4 c = lights.data[2];
 	vec3 F, R, U;
 	light_frame(a.y, a.z, a.w, F, R, U);
 	float thw = tan(min(b.x * 0.5, 1.553));
@@ -264,10 +316,9 @@ void planar(ivec2 pix, ivec2 sz) {
 			float tx = (uv.x * 2.0 - 1.0) * thw;
 			float ty = (1.0 - uv.y * 2.0) * thh;
 			vec3 d = normalize(tx * R + ty * U + F);
-			float w = light_weight(0, d);
-			vec3 rgb = c.rgb;
-			if (int(a.x + 0.5) == 5) rgb *= light_texture(0, d);
-			acc += rgb * w;
+			vec2 mp = light_mp(0, d);
+			if (mp.x <= 0.0) continue;
+			acc += light_rgb(0, d, mp.y) * mp.x;
 		}
 	}
 	imageStore(out_img, pix, vec4(acc / float(ss * ss), 1.0));

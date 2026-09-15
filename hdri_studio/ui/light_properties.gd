@@ -29,6 +29,10 @@ var _photometric: CheckBox
 var _k_label: Label
 var _separate: CheckBox
 var _separate_rows: Array = []
+var _grad_type: OptionButton
+var _grad_shape: OptionButton
+var _grad_editor: GradientEditor
+var _corner_row: ParamRow
 
 
 func _init() -> void:
@@ -73,9 +77,25 @@ func _init() -> void:
 	_row("width", "Larghezza °", 0.5, 180.0, 0.1)
 	_row("height", "Altezza °", 0.5, 180.0, 0.1)
 	_row("softness", "Sfumatura °", 0.0, 45.0, 0.1)
+	_corner_row = _row("corner_radius", "Angoli °", 0.0, 45.0, 0.1)
 	_ring_rows.append(_row("ring_inner", "Raggio interno", 0.0, 0.98, 0.01))
-	_falloff = _option("Caduta", ["Lineare", "Morbida", "Gaussiana"], func(i: int) -> void: _set_prop("falloff", i, true))
+
+	_section("Gradiente")
+	_grad_type = _option("Tipo", ["Radiale", "Lineare"], func(i: int) -> void:
+		_set_prop("gradient_type", i, true)
+		_update_visibility())
+	_gradient_rows.append(_grad_type.get_parent())
+	_grad_shape = _option("Forma", ["Circolare", "Rettangolare"], func(i: int) -> void:
+		_set_prop("gradient_shape", i, true)
+		_update_visibility())
+	_gradient_rows.append(_grad_shape.get_parent())
+	_gradient_rows.append(_row("gradient_angle", "Angolo", -180.0, 180.0, 0.1))
+	_falloff = _option("Interpolazione", ["Lineare", "Morbida"], func(i: int) -> void: _set_prop("falloff", i, true))
 	_gradient_rows.append(_falloff.get_parent())
+	_grad_editor = GradientEditor.new()
+	_grad_editor.changed.connect(func(commit: bool) -> void: changed.emit(commit))
+	_box.add_child(_grad_editor)
+	_gradient_rows.append(_grad_editor)
 
 	_texture_row = HBoxContainer.new()
 	_box.add_child(_texture_row)
@@ -218,7 +238,10 @@ func set_light(l: RigLight) -> void:
 			_:
 				v = l.get(prop)
 		_rows[prop].set_value_silent(v)
-	_falloff.selected = l.falloff
+	_falloff.selected = mini(l.falloff, 1)
+	_grad_type.selected = l.gradient_type
+	_grad_shape.selected = l.gradient_shape
+	_grad_editor.set_light(l)
 	_blend.selected = l.blend
 	_tint.color = l.tint
 	_photometric.button_pressed = l.photometric
@@ -251,4 +274,8 @@ func _update_visibility() -> void:
 	_k_label.visible = light.photometric
 	for r in _separate_rows:
 		r.visible = light.separate
-	_rows["softness"].visible = light.shape != RigLight.Shape.GRADIENT
+	if light.shape == RigLight.Shape.GRADIENT:
+		_rows["gradient_angle"].visible = light.gradient_type == RigLight.GradientType.LINEAR
+	var rect_like: bool = light.shape in [RigLight.Shape.RECT, RigLight.Shape.SCRIM, RigLight.Shape.TEXTURE] \
+		or (light.shape == RigLight.Shape.GRADIENT and light.gradient_shape == RigLight.GradientShape.RECTANGULAR)
+	_corner_row.visible = rect_like

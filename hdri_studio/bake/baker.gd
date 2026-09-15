@@ -23,6 +23,7 @@ var _local := false
 var _shader := RID()
 var _pipeline := RID()
 var _lights_buf := RID()
+var _grads_buf := RID()
 var _base_tex := RID()
 var _sampler := RID()
 var _uniform_set := RID()
@@ -49,29 +50,57 @@ func _init(local_device := false) -> void:
 	var zero := PackedByteArray()
 	zero.resize(MAX_LIGHTS * RigLight.STRIDE * 16)
 	_lights_buf = rd.storage_buffer_create(zero.size(), zero)
+	var zero_g := PackedByteArray()
+	zero_g.resize(MAX_LIGHTS * RigLight.GRAD_STOPS * 16)
+	_grads_buf = rd.storage_buffer_create(zero_g.size(), zero_g)
 	_set_base_placeholder()
 	_create_texture_array()
 	set_resolution(width, height)
 
 
 func _compile() -> void:
-	# Nell'app esportata il sorgente .glsl non c'è: c'è la risorsa importata (RDShaderFile, già SPIR-V).
-	# Dall'editor preferiamo comunque compilare il sorgente, così gli errori sono leggibili.
+	# Tre strade, in ordine: sorgente su disco (editor: errori leggibili), risorsa importata
+	# (RDShaderFile, già SPIR-V), sorgente incorporato in BakeGlslSource (app esportata, sempre
+	# disponibile). Ogni fallimento finisce nel log: in un build release gli assert non esistono.
 	var spirv: RDShaderSPIRV = null
+	var how := ""
 	if OS.has_feature("editor") and FileAccess.file_exists(SHADER_PATH):
 		var src := FileAccess.get_file_as_string(SHADER_PATH).replace("#[compute]", "")
-		var shader_src := RDShaderSource.new()
-		shader_src.source_compute = src
-		spirv = rd.shader_compile_spirv_from_source(shader_src)
-	else:
+		spirv = _compile_source(src)
+		how = "sorgente"
+	if spirv == null:
 		var sf := load(SHADER_PATH) as RDShaderFile
-		assert(sf != null, "Shader non trovato: " + SHADER_PATH)
-		spirv = sf.get_spirv()
-	if spirv.compile_error_compute != "":
-		push_error("bake.glsl: " + spirv.compile_error_compute)
-		assert(false)
+		if sf != null:
+			spirv = sf.get_spirv()
+			how = "risorsa importata"
+			if spirv != null and (spirv.compile_error_compute != "" or spirv.bytecode_compute.is_empty()):
+				push_warning("bake.glsl (risorsa importata): %s" % spirv.compile_error_compute)
+				spirv = null
+	if spirv == null:
+		spirv = _compile_source(BakeGlslSource.SOURCE)
+		how = "sorgente incorporato"
+	if spirv == null or spirv.compile_error_compute != "":
+		push_error("bake.glsl non compilabile (%s): %s" % [how, spirv.compile_error_compute if spirv else "null"])
+		return
 	_shader = rd.shader_create_from_spirv(spirv)
 	_pipeline = rd.compute_pipeline_create(_shader)
+	if not _pipeline.is_valid():
+		push_error("bake.glsl: pipeline non creata (%s)" % how)
+	print("Baker: shader da %s" % how)
+
+
+func _compile_source(src: String) -> RDShaderSPIRV:
+	var shader_src := RDShaderSource.new()
+	shader_src.source_compute = src
+	var spirv := rd.shader_compile_spirv_from_source(shader_src)
+	if spirv.compile_error_compute != "":
+		push_error("bake.glsl: " + spirv.compile_error_compute)
+		return null
+	return spirv
+
+
+func is_ready() -> bool:
+	return _pipeline.is_valid()
 
 
 func set_resolution(w: int, h: int) -> void:
@@ -233,7 +262,11 @@ func _ensure_uniform_set() -> void:
 	u3.binding = 3
 	u3.add_id(_sampler)
 	u3.add_id(_tex_array)
-	_uniform_set = rd.uniform_set_create([u0, u1, u2, u3], _shader, 0)
+	var u4 := RDUniform.new()
+	u4.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+	u4.binding = 4
+	u4.add_id(_grads_buf)
+	_uniform_set = rd.uniform_set_create([u0, u1, u2, u3, u4], _shader, 0)
 
 
 ## K = ∫ w(d)·cosθ dω della luce (sr, pesato dal profilo e dall'immagine): misurato sul GPU nel
@@ -257,6 +290,7 @@ func measure_k(l: RigLight) -> float:
 	probe.pack(data, layer)
 	var bytes := data.to_byte_array()
 	rd.buffer_update(_lights_buf, 0, bytes.size(), bytes)
+	_upload_gradient_slot0(probe)
 	var pc := PackedFloat32Array([
 		float(MEASURE_RES.x), float(MEASURE_RES.y), 1.0, 1.0,
 		0.0, 0.0, 0.0, 0.0,
@@ -312,7 +346,11 @@ func _ensure_measure_set() -> void:
 	u3.binding = 3
 	u3.add_id(_sampler)
 	u3.add_id(_tex_array)
-	_measure_set = rd.uniform_set_create([u0, u1, u2, u3], _shader, 0)
+	var u4 := RDUniform.new()
+	u4.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+	u4.binding = 4
+	u4.add_id(_grads_buf)
+	_measure_set = rd.uniform_set_create([u0, u1, u2, u3, u4], _shader, 0)
 
 
 ## Texture planare di una luce (per l'area light nel software 3D): immagine RGBAF di long_side px sul
@@ -353,7 +391,11 @@ func bake_planar(l: RigLight, long_side := 1024) -> Image:
 	u3.binding = 3
 	u3.add_id(_sampler)
 	u3.add_id(_tex_array)
-	var uset := rd.uniform_set_create([u0, u1, u2, u3], _shader, 0)
+	var u4 := RDUniform.new()
+	u4.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+	u4.binding = 4
+	u4.add_id(_grads_buf)
+	var uset := rd.uniform_set_create([u0, u1, u2, u3, u4], _shader, 0)
 
 	var layer := -1
 	if l.shape == RigLight.Shape.TEXTURE:
@@ -365,6 +407,7 @@ func bake_planar(l: RigLight, long_side := 1024) -> Image:
 	probe.pack(data, layer)
 	var bytes := data.to_byte_array()
 	rd.buffer_update(_lights_buf, 0, bytes.size(), bytes)
+	_upload_gradient_slot0(probe)
 	var pc := PackedFloat32Array([
 		float(w), float(h), 1.0, 2.0,
 		0.0, 0.0, 0.0, 0.0,
@@ -389,6 +432,13 @@ func bake_planar(l: RigLight, long_side := 1024) -> Image:
 	return img
 
 
+func _upload_gradient_slot0(l: RigLight) -> void:
+	var g := PackedFloat32Array()
+	l.pack_gradient(g)
+	var gb := g.to_byte_array()
+	rd.buffer_update(_grads_buf, 0, gb.size(), gb)
+
+
 ## Esegue il bake del rig nella texture. Con calibration = true ignora le luci e disegna i marker degli
 ## assi. include_separate: le luci separate entrano nel preview ma non nell'HDRI esportata.
 func bake(rig: LightRig, calibration := false, include_separate := true) -> void:
@@ -399,6 +449,7 @@ func bake(rig: LightRig, calibration := false, include_separate := true) -> void
 	_ensure_uniform_set()
 
 	var data := PackedFloat32Array()
+	var gdata := PackedFloat32Array()
 	var count := 0
 	for l in rig.active_lights(include_separate):
 		if count >= MAX_LIGHTS:
@@ -408,10 +459,13 @@ func bake(rig: LightRig, calibration := false, include_separate := true) -> void
 		if l.shape == RigLight.Shape.TEXTURE:
 			layer = texture_layer(l.texture_path)
 		l.pack(data, layer)
+		l.pack_gradient(gdata)
 		count += 1
 	if count > 0:
 		var bytes := data.to_byte_array()
 		rd.buffer_update(_lights_buf, 0, bytes.size(), bytes)
+		var gbytes := gdata.to_byte_array()
+		rd.buffer_update(_grads_buf, 0, gbytes.size(), gbytes)
 
 	var base_on := rig.base_enabled and has_base_image()
 	var pc := PackedFloat32Array([
@@ -443,7 +497,7 @@ func get_image() -> Image:
 
 
 func free_resources() -> void:
-	for rid in [_uniform_set, _measure_set, texture, _measure_tex, _base_tex, _tex_array, _lights_buf, _sampler, _pipeline, _shader]:
+	for rid in [_uniform_set, _measure_set, texture, _measure_tex, _base_tex, _tex_array, _lights_buf, _grads_buf, _sampler, _pipeline, _shader]:
 		if rid.is_valid():
 			rd.free_rid(rid)
 	_uniform_set = RID()

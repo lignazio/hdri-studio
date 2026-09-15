@@ -118,6 +118,7 @@ func _on_add(shape_id: int) -> void:
 			l.width = 60.0
 			l.height = 45.0
 			l.softness = 0.0
+			l.gradient_stops = [[0.0, 1.0, 1.0, 1.0], [1.0, 0.0, 0.0, 0.0]]
 		RigLight.Shape.RING:
 			l.width = 30.0
 			l.height = 30.0
@@ -125,6 +126,7 @@ func _on_add(shape_id: int) -> void:
 		_:
 			l.intensity = 4.0
 	l.elevation = 30.0
+	l.corner_radius = 3.0
 	add_and_select(l)
 
 

@@ -112,6 +112,24 @@ pannello **Live link** → *File di export…* → *Attivo*; carica lo stesso fi
 ogni modifica riscrive il file e il plugin preme Reload sui nodi che lo usano. Protocollo JSON-lines su
 TCP 127.0.0.1:47820, con fallback sulla data di modifica del file se l'app non è collegata.
 
+## Forme, angoli e gradienti
+
+Le forme rettangolari (rettangolo, scrim, Texture, gradiente rettangolare) hanno **Angoli °**: il raggio
+degli angoli arrotondati. La parte piena resta un rettangolo netto, la sfumatura gira attorno agli angoli
+in tondo (distanza da rettangolo arrotondato) invece di formare una punta. 0 = angoli vivi.
+
+Il **Gradiente** ha tipo *Radiale* o *Lineare* (con *Angolo* di rotazione del gradiente dentro la forma,
+indipendente dalla rotazione della luce), forma *Circolare* o *Rettangolare*, interpolazione lineare o
+morbida, e un editor di **tacche**: click sulla barra aggiunge una tacca con il colore interpolato lì,
+trascina per spostarla, tasto destro o Canc la toglie, ogni tacca ha il suo colore (anche gradienti
+colorati: centro caldo, bordo freddo), *Inverti* le specchia. I colori delle tacche moltiplicano
+intensità, Kelvin e tinta della luce; la misura fotometrica pesa il gradiente per luminanza.
+
+Nell'app esportata il sorgente `.glsl` non c'è: il baker usa la risorsa importata e, in mancanza, il
+sorgente incorporato in `bake/bake_glsl_source.gd`, generato da `tools/embed_shader.py` (lo smoke test
+controlla che sia aggiornato). Se l'app esportata mostra tutto nero, lancia il `.console.exe` (Windows)
+o l'eseguibile da terminale: il baker stampa da dove ha caricato lo shader e gli errori.
+
 ## Luci Texture e catalogo
 
 Una luce **Texture** proietta un'immagine EXR/HDR lineare (una "HDRI light": softbox fotografata, lampada,
