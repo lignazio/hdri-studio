@@ -41,6 +41,8 @@ func _init() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	viewport = SubViewport.new()
 	viewport.handle_input_locally = false
+	viewport.msaa_3d = Viewport.MSAA_4X
+	viewport.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA
 	add_child(viewport)
 
 
@@ -52,8 +54,10 @@ func setup(tex: Texture2D) -> void:
 	mat.panorama = tex
 	mat.filter = true
 	sky.sky_material = mat
-	sky.radiance_size = Sky.RADIANCE_SIZE_256
-	sky.process_mode = Sky.PROCESS_MODE_REALTIME
+	# radianza a 1024 (riflessi glossy nitidi): in modalità incrementale il cielo viene rigenerato
+	# solo quando il materiale segnala un cambiamento → notify_sky_changed() dopo ogni bake
+	sky.radiance_size = Sky.RADIANCE_SIZE_1024
+	sky.process_mode = Sky.PROCESS_MODE_INCREMENTAL
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
 	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
@@ -65,8 +69,8 @@ func setup(tex: Texture2D) -> void:
 	var mesh := SphereMesh.new()
 	mesh.radius = SPHERE_R
 	mesh.height = SPHERE_R * 2.0
-	mesh.radial_segments = 96
-	mesh.rings = 48
+	mesh.radial_segments = 128
+	mesh.rings = 64
 	_chrome = ShaderMaterial.new()
 	_chrome.shader = load("res://preview/chrome.gdshader")
 	_chrome.set_shader_parameter("panorama", tex)
@@ -97,6 +101,11 @@ func setup(tex: Texture2D) -> void:
 func set_texture(tex: Texture2D) -> void:
 	(env.sky.sky_material as PanoramaSkyMaterial).panorama = tex
 	_chrome.set_shader_parameter("panorama", tex)
+
+
+## La texture del cielo è cambiata sul GPU (nuovo bake): fa rigenerare la mappa di radianza.
+func notify_sky_changed() -> void:
+	env.sky.sky_material.emit_changed()
 
 
 func set_exposure(k: float) -> void:

@@ -115,8 +115,9 @@ TCP 127.0.0.1:47820, con fallback sulla data di modifica del file se l'app non �
 ## Forme, angoli e gradienti
 
 Le forme rettangolari (rettangolo, scrim, Texture, gradiente rettangolare) hanno **Angoli °**: il raggio
-degli angoli arrotondati. La parte piena resta un rettangolo netto, la sfumatura gira attorno agli angoli
-in tondo (distanza da rettangolo arrotondato) invece di formare una punta. 0 = angoli vivi.
+degli angoli. Con 0 la sfumatura è il prodotto delle sfumature dei due assi (la caduta di una softbox:
+contorno rettangolare, angolo che sfuma senza "spina"); con un raggio > 0 la sfumatura segue un
+rettangolo arrotondato, con raggio mai inferiore alla sfumatura così la banda resta liscia ovunque.
 
 Il **Gradiente** ha tipo *Radiale* o *Lineare* (con *Angolo* di rotazione del gradiente dentro la forma,
 indipendente dalla rotazione della luce), forma *Circolare* o *Rettangolare*, interpolazione lineare o

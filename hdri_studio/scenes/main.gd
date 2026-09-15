@@ -362,6 +362,7 @@ func _restore(snapshot: Dictionary) -> void:
 func _process(_delta: float) -> void:
 	if _dirty:
 		baker.bake(rig)
+		preview.notify_sky_changed()
 		_dirty = false
 		if _selected >= 0 and rig.lights[_selected].photometric:
 			props.sync_values()

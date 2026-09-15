@@ -70,11 +70,17 @@ float soft_edge(float edge_dist, float softness) {
 	return smoothstep(0.0, softness, edge_dist);
 }
 
-// Copertura di un rettangolo (hw × hh) con angoli arrotondati di raggio rr e bordo sfumato ss:
-// distanza con segno dal rettangolo arrotondato, così la sfumatura gira attorno agli angoli invece
-// di formare una punta. La parte piena resta un rettangolo netto.
+// Copertura di un rettangolo (hw × hh) con bordo sfumato ss e angoli di raggio rr.
+// - rr = 0: prodotto delle sfumature dei due assi (la caduta di una softbox): contorno esterno
+//   rettangolare, funzione liscia ovunque, quindi nessuna "spina" sulla diagonale dell'angolo.
+// - rr > 0: distanza con segno dal rettangolo arrotondato. Il raggio è almeno pari alla sfumatura:
+//   la banda sfumata sta tutta dove la distanza è liscia (entro rr dal bordo) e la spina della
+//   distanza a scacchiera resta nella zona piena, dove non si vede.
 float rect_cover(float ax, float ay, float hw, float hh, float rr, float ss) {
-	rr = min(rr, min(hw, hh));
+	if (rr <= 1e-5) {
+		return soft_edge(hw - abs(ax), ss) * soft_edge(hh - abs(ay), ss);
+	}
+	rr = min(max(rr, ss), min(hw, hh));
 	vec2 q = abs(vec2(ax, ay)) - vec2(hw, hh) + vec2(rr);
 	float sd = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr;
 	return soft_edge(-sd, ss);
