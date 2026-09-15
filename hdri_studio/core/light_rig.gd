@@ -16,6 +16,8 @@ enum Background { BLACK, UNIFORM, GRADIENT }
 @export_range(-10.0, 10.0) var base_ev := 0.0
 @export var base_flip := false
 @export var resolution := Vector2i(4096, 2048)
+## File scritto automaticamente dal live link a ogni modifica (vuoto = non impostato).
+@export var live_export_path := ""
 
 
 func add_light(light: RigLight) -> RigLight:
@@ -51,6 +53,7 @@ func to_dict() -> Dictionary:
 		"base_hdri_path": base_hdri_path, "base_enabled": base_enabled,
 		"base_rotation": base_rotation, "base_ev": base_ev, "base_flip": base_flip,
 		"resolution": [resolution.x, resolution.y],
+		"live_export_path": live_export_path,
 	}
 
 
@@ -72,6 +75,7 @@ static func from_dict(d: Dictionary) -> LightRig:
 	r.base_flip = d.get("base_flip", false)
 	var res: Array = d.get("resolution", [4096, 2048])
 	r.resolution = Vector2i(res[0], res[1])
+	r.live_export_path = d.get("live_export_path", "")
 	return r
 
 

@@ -28,6 +28,18 @@ preview (solo visualizzazione) · ⌘Z / ⇧⌘Z = undo/redo.
 Export: risoluzione 2k/4k/8k, half o float32, preset di orientamento per software (Cinema 4D = specchio
 orizzontale, misurato con la taratura), rotazione extra. Il rig si salva/apre come JSON.
 
+## Live link con Cinema 4D (Octane)
+
+Plugin in `plugins/c4d/hdri_studio_link/` — installazione e uso in `plugins/c4d/README.md`. In breve:
+pannello **Live link** → *File di export…* → *Attivo*; carica lo stesso file in un ImageTexture di Octane;
+ogni modifica riscrive il file e il plugin preme Reload sui nodi che lo usano. Protocollo JSON-lines su
+TCP 127.0.0.1:47820, con fallback sulla data di modifica del file se l'app non è collegata.
+
+Smoke test del link (app + client Python finto, da due terminali o in sequenza):
+
+    /Applications/Godot.app/Contents/MacOS/Godot --path hdri_studio -s res://tools/link_smoke.gd &
+    python3 hdri_studio/plugins/c4d/hdri_studio_link/link_core.py
+
 Smoke test dell'interfaccia senza click (add/duplica/elimina, slider, mappa, LightPaint, undo, solo,
 HDRI di base, salva/apri rig, export con flip):
 
@@ -53,8 +65,10 @@ l'integrale numerico e con un render Cycles.
     core/      RigLight, LightRig (modello dati, JSON), ColorTemp (Kelvin → Rec.709 lineare), UndoStack
     bake/      bake.glsl (compute shader), HdriBaker (RenderingDevice, texture RGBA32F)
     preview/   Preview3D (viewport, sfere, LightPaint), shader della sfera cromata e della mappa 2D
-    ui/        ParamRow, LightListPanel, LightProperties, BackgroundPanel, ExportPanel, MapView
+    ui/        ParamRow, LightListPanel, LightProperties, BackgroundPanel, ExportPanel, LiveLinkPanel, MapView
     export/    HdriExport (EXR half/float32, PNG di controllo)
     scenes/    main.tscn / main.gd — app
-    tools/     spike di Fase 0, verifica Blender, smoke test UI
+    livelink/  LiveLink (server TCP, JSON-lines)
+    plugins/   c4d/hdri_studio_link (plugin Cinema 4D), c4d/octane_reload_probe.py (sonda di Fase 0)
+    tools/     spike di Fase 0, verifica Blender, smoke test UI e link
     out/       output generati (ignorati da git)

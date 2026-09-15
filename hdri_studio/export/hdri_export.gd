@@ -54,7 +54,21 @@ static func save_exr(img: Image, path: String, half := true) -> Error:
 		else:
 			out = img.duplicate() as Image
 			out.convert(Image.FORMAT_RGBAH)
-	return out.save_exr(ProjectSettings.globalize_path(path))
+	# Scrittura atomica: file temporaneo accanto alla destinazione, poi rinomina. Così un plugin che
+	# guarda il file non lo legge mai a metà.
+	var dest := ProjectSettings.globalize_path(path)
+	var tmp := dest + ".tmp.exr"
+	var err := out.save_exr(tmp)
+	if err != OK:
+		return err
+	if FileAccess.file_exists(dest):
+		DirAccess.remove_absolute(dest)
+	err = DirAccess.rename_absolute(tmp, dest)
+	if err != OK:
+		# fallback: scrittura diretta
+		DirAccess.remove_absolute(tmp)
+		err = out.save_exr(dest)
+	return err
 
 
 ## PNG di controllo: esposizione moltiplicativa, clamp, sRGB. Solo per guardare, mai per illuminare.

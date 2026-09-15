@@ -5,6 +5,8 @@ extends Control
 
 const PREVIEW_RES := Vector2i(2048, 1024)
 const PREVIEW_EV_STEP := 0.5
+## Attesa dopo l'ultima modifica prima dell'export automatico del live link.
+const LIVE_DEBOUNCE_MS := 300
 
 var baker: HdriBaker
 var rig: LightRig
@@ -17,6 +19,8 @@ var light_list: LightListPanel
 var props: LightProperties
 var bg_panel: BackgroundPanel
 var export_panel: ExportPanel
+var link_panel: LiveLinkPanel
+var link: LiveLink
 var status: Label
 
 var _dirty := true
@@ -25,6 +29,9 @@ var _selected := -1
 var _rig_path := ""
 var _screenshot_frames := -1
 var _file_dialog: FileDialog
+var _live_dirty := false
+var _live_deadline := 0
+var _link_hosts := {}
 
 
 func _ready() -> void:
@@ -34,6 +41,14 @@ func _ready() -> void:
 	baker.set_resolution(PREVIEW_RES.x, PREVIEW_RES.y)
 	tex_rd = Texture2DRD.new()
 	tex_rd.texture_rd_rid = baker.texture
+
+	link = LiveLink.new()
+	add_child(link)
+	link.message_received.connect(_on_link_message)
+	link.clients_changed.connect(func(n: int) -> void:
+		if n == 0:
+			_link_hosts.clear()
+		_update_link_status())
 
 	rig = _default_rig()
 	_build_layout()
@@ -89,6 +104,9 @@ func _build_layout() -> void:
 	right.add_child(HSeparator.new())
 	export_panel = ExportPanel.new()
 	right.add_child(export_panel)
+	right.add_child(HSeparator.new())
+	link_panel = LiveLinkPanel.new()
+	right.add_child(link_panel)
 
 	_file_dialog = FileDialog.new()
 	_file_dialog.access = FileDialog.ACCESS_FILESYSTEM
@@ -109,7 +127,11 @@ func _build_layout() -> void:
 	export_panel.save_rig_requested.connect(_save_rig)
 	export_panel.load_rig_requested.connect(_load_rig)
 	export_panel.resolution_changed.connect(func(r: Vector2i) -> void: rig.resolution = r)
+	link_panel.toggled_link.connect(_set_link_enabled)
+	link_panel.pick_path_requested.connect(_pick_live_path)
+	link_panel.push_now_requested.connect(func() -> void: _live_export())
 	_update_status()
+	_update_link_status()
 
 
 func _column(parent: Container, width: float) -> VBoxContainer:
@@ -133,9 +155,11 @@ func _bind_rig() -> void:
 	map_view.set_rig(rig)
 	bg_panel.set_rig(rig)
 	export_panel.set_resolution(rig.resolution)
+	link_panel.set_path(rig.live_export_path)
 	if rig.base_hdri_path != "":
 		baker.set_base_image_from_file(rig.base_hdri_path)
 	_dirty = true
+	_schedule_live()
 
 
 func _select(i: int) -> void:
@@ -146,6 +170,7 @@ func _select(i: int) -> void:
 
 func _on_light_changed(commit: bool) -> void:
 	_dirty = true
+	_schedule_live()
 	map_view.refresh()
 	light_list.refresh()
 	if commit:
@@ -189,6 +214,9 @@ func _process(_delta: float) -> void:
 	if _dirty:
 		baker.bake(rig)
 		_dirty = false
+	if _live_dirty and Time.get_ticks_msec() >= _live_deadline:
+		_live_dirty = false
+		_live_export()
 	if _screenshot_frames >= 0:
 		_screenshot_frames -= 1
 		if _screenshot_frames == 0:
@@ -247,19 +275,24 @@ func _export_exr() -> void:
 
 
 ## Bake a piena risoluzione con supersampling, preset di orientamento, scrittura EXR.
-func export_to(path: String) -> Error:
+## opts: "resolution" (Vector2i), "half" (bool), "target" (String), "shift" (float), "quiet" (bool).
+func export_to(path: String, opts := {}) -> Error:
 	if path.get_extension().to_lower() != "exr":
 		path += ".exr"
 	var t0 := Time.get_ticks_msec()
-	var res := export_panel.resolution()
-	rig.resolution = res
+	var res: Vector2i = opts.get("resolution", export_panel.resolution())
+	var half: bool = opts.get("half", export_panel.half())
+	var target: String = opts.get("target", export_panel.target())
+	var shift: float = opts.get("shift", export_panel.extra_shift())
+	if not opts.get("quiet", false):
+		rig.resolution = res
 	tex_rd.texture_rd_rid = RID() # la texture di preview sta per essere liberata
 	baker.set_resolution(res.x, res.y)
 	baker.supersample = 2
 	baker.bake(rig)
 	var img := baker.get_image()
-	img = HdriExport.apply_orientation(img, export_panel.target(), export_panel.extra_shift())
-	var err := HdriExport.save_exr(img, path, export_panel.half())
+	img = HdriExport.apply_orientation(img, target, shift)
+	var err := HdriExport.save_exr(img, path, half)
 	# torna alla risoluzione di preview e riaggancia la texture
 	baker.supersample = 1
 	baker.set_resolution(PREVIEW_RES.x, PREVIEW_RES.y)
@@ -267,14 +300,113 @@ func export_to(path: String) -> Error:
 	preview.set_texture(tex_rd)
 	map_view.set_texture(tex_rd)
 	_dirty = true
+	if opts.get("quiet", false):
+		return err
 	if err == OK:
 		export_panel.set_status("Esportato %s (%dx%d, %s, %s) in %.1f s" % [
-			path.get_file(), res.x, res.y, "half" if export_panel.half() else "float32",
-			export_panel.target(), (Time.get_ticks_msec() - t0) / 1000.0])
+			path.get_file(), res.x, res.y, "half" if half else "float32",
+			target, (Time.get_ticks_msec() - t0) / 1000.0])
 	else:
 		export_panel.set_status("Errore export: " + error_string(err))
 	_update_status()
 	return err
+
+
+# --- live link ----------------------------------------------------------------------------------
+
+func _set_link_enabled(on: bool) -> void:
+	if on:
+		if link.start() != OK:
+			link_panel.set_enabled(false)
+	else:
+		link.stop()
+	_update_link_status()
+	_schedule_live()
+
+
+func _pick_live_path() -> void:
+	_dialog(FileDialog.FILE_MODE_SAVE_FILE, ["*.exr ; OpenEXR"], "File del live link", func(path: String) -> void:
+		if path.get_extension().to_lower() != "exr":
+			path += ".exr"
+		rig.live_export_path = path
+		link_panel.set_path(path)
+		_commit()
+		_live_export())
+
+
+func _schedule_live() -> void:
+	if link_panel != null and link_panel.is_enabled() and rig.live_export_path != "":
+		_live_dirty = true
+		_live_deadline = Time.get_ticks_msec() + LIVE_DEBOUNCE_MS
+
+
+## Export alla risoluzione live sul file del link e notifica ai client collegati.
+func _live_export() -> void:
+	if rig.live_export_path == "":
+		link_panel.set_status("Scegli prima il file di export.")
+		return
+	var t0 := Time.get_ticks_msec()
+	var err := export_to(rig.live_export_path, {
+		"resolution": link_panel.live_resolution(), "half": true,
+		"target": export_panel.target(), "shift": export_panel.extra_shift(), "quiet": true})
+	if err != OK:
+		link_panel.set_status("Errore export live: " + error_string(err))
+		return
+	link.notify_hdri(rig.live_export_path, export_panel.target())
+	_update_link_status("ultimo invio %s in %d ms" % [Time.get_time_string_from_system(), Time.get_ticks_msec() - t0])
+
+
+func _on_link_message(msg: Dictionary, client_id: int) -> void:
+	match msg.get("type", ""):
+		"hello":
+			_link_hosts[client_id] = "%s %s" % [msg.get("host", "?"), msg.get("version", "")]
+			_update_link_status()
+			# il plugin appena collegato riceve subito l'HDRI corrente
+			if rig.live_export_path != "" and FileAccess.file_exists(rig.live_export_path):
+				link.notify_hdri(rig.live_export_path, export_panel.target())
+		"lightpaint":
+			_lightpaint_from_host(msg)
+
+
+## LightPaint dal software 3D: punto, normale e camera nelle coordinate dell'host.
+## Cinema 4D è left-handed: (x, y, z) → (−x, y, z) per passare alla convenzione interna.
+func _lightpaint_from_host(msg: Dictionary) -> void:
+	if _selected < 0:
+		return
+	var p := _vec(msg.get("point", []))
+	var n := _vec(msg.get("normal", []))
+	var c := _vec(msg.get("camera", []))
+	if n == Vector3.ZERO:
+		return
+	if msg.get("host", "c4d") == "c4d":
+		p.x = -p.x
+		n.x = -n.x
+		c.x = -c.x
+	var v := (p - c).normalized()
+	n = n.normalized()
+	var r := v - 2.0 * v.dot(n) * n
+	_on_paint(r, true)
+
+
+static func _vec(a: Array) -> Vector3:
+	return Vector3(a[0], a[1], a[2]) if a.size() >= 3 else Vector3.ZERO
+
+
+func _update_link_status(extra := "") -> void:
+	if link_panel == null:
+		return
+	if not link.is_listening():
+		link_panel.set_status("Spento. Attivalo e scegli il file: ogni modifica viene esportata e il plugin C4D ricarica la texture.")
+		return
+	var hosts := []
+	for k in _link_hosts:
+		hosts.append(_link_hosts[k])
+	var txt := "In ascolto su 127.0.0.1:%d · %d client" % [link.port, link.client_count()]
+	if not hosts.is_empty():
+		txt += " (%s)" % ", ".join(hosts)
+	if extra != "":
+		txt += " · " + extra
+	link_panel.set_status(txt)
 
 
 func _save_rig() -> void:

@@ -7,12 +7,11 @@ area: progetto
 
 # HDRI Studio — Piano
 
-> [!success] Stato: v0.5 — 15 settembre 2026 — Fase 1 (MVP) funzionante
-> App Godot completa: lista luci, proprietà, mappa con maniglie, LightPaint sulle sfere di preview,
-> sfondo a gradiente o HDRI di base, undo/redo, export EXR con preset per software, rig in JSON.
-> Smoke test automatico verde. Resta il test in **Cinema 4D + Octane** (taratura completa e reload):
-> istruzioni in [[#5.1 Fase 0 — stato e test C4D/Octane]]. Progetto in `hdri_studio/`,
-> repository privato: https://github.com/lignazio/hdri-studio (Mac e PC sincronizzati via git). Ambiente rilevato sulla macchina: macOS 15.7 su M1 Pro,
+> [!success] Stato: v0.6 — 15 settembre 2026 — Fase 2 (live link) pronta da provare in C4D
+> App Godot completa (Fase 1) più live link: server TCP, export automatico a ogni modifica, plugin
+> Cinema 4D che preme Reload sugli ImageTexture di Octane. Testato sul Mac con un client finto; il
+> test vero in C4D è il prossimo passo: [[#5.2 Fase 2 — stato e test in C4D]]. Progetto in
+> `hdri_studio/`, repository privato: https://github.com/lignazio/hdri-studio. Ambiente rilevato sulla macchina: macOS 15.7 su M1 Pro,
 > Godot 4.7.1, Blender 5.1.1, Cinema 4D 2025/2026, Houdini 20.0 e 21.0.
 
 ## 1. Cosa stiamo costruendo
@@ -312,17 +311,38 @@ il valore atteso e con la luce nella direzione attesa.
 
 Da rifinire quando lo usi: default delle nuove luci, range degli slider, tema.
 
-### Fase 2 — Live link (1–2 settimane)
+### Fase 2 — Live link — costruita il 15/09/2026
 
-- Server TCP nell'app, protocollo, autosave con debounce.
-- Plugin per Cinema 4D con reload automatico dell'ImageTexture di Octane.
-- Caricamento GLB nel preview.
-- Export 8k e Radiance `.hdr`.
+- [x] Server TCP nell'app (`livelink/live_link.gd`, JSON-lines, porta 47820), pannello Live link.
+- [x] Export automatico 300 ms dopo l'ultima modifica, alla risoluzione live (1k/2k/4k), scrittura
+      atomica (tmp + rename) così il plugin non legge mai un file a metà.
+- [x] Plugin Cinema 4D (`plugins/c4d/hdri_studio_link/`): `MessageData` con timer a 200 ms, client
+      TCP non bloccante con riconnessione, preme i pulsanti *Reload* dei nodi che usano il file;
+      fallback sulla data di modifica ogni secondo; comando "HDRI Studio: ricarica texture".
+- [x] Ricezione del messaggio `lightpaint` (Fase 3 lato app già pronta: conversione C4D → interna).
+- [ ] Caricamento GLB nel preview.
+- [ ] Export 8k (già possibile) e Radiance `.hdr`.
+
+### 5.2 Fase 2 — stato e test in C4D
+
+Sul Mac: smoke test con un client Python che simula il plugin → hello, `hdri_updated` all'aggancio,
+`hdri_updated` dopo una modifica, `lightpaint` di ritorno che sposta la luce. Tutto verde.
+
+> [!todo] Da fare sul PC
+> 1. `git pull`, poi installa il plugin: Edit → Preferences → Plugins → *Add Folder…* →
+>    `hdri_studio/plugins/c4d` → riavvia C4D. Nella console: `[hdri-studio] plugin caricato`.
+> 2. Nell'app: pannello **Live link** → *File di export…* (un `.exr` nella cartella `tex/` del progetto
+>    C4D) → *Attivo*. Lo stato deve dire "1 client (c4d 2026…)".
+> 3. Carica quel file nell'ImageTexture di Octane, poi sposta una luce nell'app: il Live Viewer deve
+>    aggiornarsi da solo entro un secondo. Nella console C4D: `nome.exr → 1 nodi ricaricati`.
+> 4. Se non aggiorna: dimmi cosa stampa la console, e se il fallback (chiudere l'app e sovrascrivere
+>    il file con un export manuale) ricarica.
 
 ### Fase 3 — LightPaint e maturità
 
 - LightPaint: click nel software 3D → punto e normale → la luce selezionata si sposta su
-  `reflect(V, N)`.
+  `reflect(V, N)`. Lato app è già implementato (messaggio `lightpaint`); manca il lato C4D: un tool o
+  uno script che, al click nel viewport, fa il picking sul modello e manda punto, normale e camera.
 - Modalità fotometrica, ACEScg, texture nelle luci, libreria di preset, plugin per gli altri software.
 
 ## 6. Validazione fisica
