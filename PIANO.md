@@ -7,10 +7,11 @@ area: progetto
 
 # HDRI Studio — Piano
 
-> [!success] Stato: v0.9 — 15 settembre 2026 — Fase 3 quasi completa
-> Fatto: LightPaint da C4D (normali interpolate; da provare, [[#5.3 Fase 3 — stato e test in C4D]]),
-> modello GLB nel preview, luci Texture, catalogo per sottocartelle, **modalità fotometrica** (K misurato
-> sul GPU, validato contro Cycles), fusione Normale, riordino, pannelli ridimensionabili.
+> [!success] Stato: v1.0 — 15 settembre 2026 — le tre fasi del piano sono chiuse
+> Verificato sul PC con Cinema 4D + Octane: live link e **LightPaint dal viewport**. Nell'app: luci
+> parametriche (sei forme, scrim e Texture comprese), catalogo per sottocartelle, modalità fotometrica
+> validata contro Cycles, fusione Normale, undo, export con preset per software, modello GLB nel
+> preview. Da qui in poi: rifiniture d'uso e le voci aperte in [[#Fase 3 — LightPaint e maturità]].
 > Progetto in `hdri_studio/`, repository privato: https://github.com/lignazio/hdri-studio. Ambiente rilevato sulla macchina: macOS 15.7 su M1 Pro,
 > Godot 4.7.1, Blender 5.1.1, Cinema 4D 2025/2026, Houdini 20.0 e 21.0.
 
@@ -346,7 +347,7 @@ Sul Mac: smoke test con un client Python che simula il plugin → hello, `hdri_u
       viewport → raggio dal pixel (`bd.SW`) → `GeRayCollider` su tutte le mesh (cache dei generatori
       comprese) → punto, normale di faccia e direzione di vista → messaggio `lightpaint` → l'app
       calcola `reflect(V, N)` (con X invertita per il sistema left-handed) e sposta la luce selezionata.
-      Marker giallo nel viewport sull'ultimo punto colpito. **Da provare sul PC.**
+      Marker giallo nel viewport sull'ultimo punto colpito. **Verificato sul PC il 15/09/2026.**
 - [x] **Luci Texture** (15/09): sesta forma, immagine EXR/HDR lineare mappata sul rettangolo angolare
       (texture array 2048×1024 × 12 strati RGBA16F nel compute shader, cache LRU per percorso).
       Intensità/EV/Kelvin/tinta moltiplicano l'immagine, la sfumatura fa da maschera.
@@ -370,7 +371,11 @@ Sul Mac: smoke test con un client Python che simula il plugin → hello, `hdri_u
 
 ### 5.3 Fase 3 — stato e test in C4D
 
-> [!todo] Da fare sul PC
+> [!success] Verificato sul PC il 15/09/2026: click sul modello in C4D → la luce si sposta nell'app e
+> il riflesso compare nel Live Viewer di Octane. Due intoppi risolti per strada: ID di plugin in
+> collisione con `C4d_objects` e cartella `res/` obbligatoria per il ToolData.
+
+> [!todo] Procedura (per riferimento)
 > 1. `git pull` e riavvia C4D (il plugin registra il nuovo tool).
 > 2. Nell'app: live link attivo, una luce selezionata (per esempio il Key scrim).
 > 3. In C4D: attiva **HDRI Studio LightPaint** (Extensions, o Shift+C → "LightPaint"), clicca su un
