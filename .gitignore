@@ -1,0 +1,6 @@
+.DS_Store
+*.zip
+hdri_studio/.godot/
+hdri_studio/out/*
+!hdri_studio/out/.gdignore
+!hdri_studio/out/calibration.exr
