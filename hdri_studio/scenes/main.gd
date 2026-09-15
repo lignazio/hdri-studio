@@ -459,6 +459,9 @@ func export_to(path: String, opts := {}) -> Error:
 	for l in rig.separate_lights():
 		var lp := HdriExport.separate_path(path, l.name)
 		var limg := baker.bake_planar(l, 1024)
+		var tgt: Dictionary = HdriExport.TARGETS.get(target, {})
+		if tgt.get("separate_flip_u", false):
+			limg.flip_x()
 		var lerr := HdriExport.save_exr(limg, lp, half)
 		if lerr == OK:
 			_last_separate.append({"light": l, "path": ProjectSettings.globalize_path(lp)})

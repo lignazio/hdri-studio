@@ -404,9 +404,11 @@ Passi:
    (scelta dell'utente: Octane Area Light con ImageTexture), matrice `(F·D, R, U, F)` con −Z verso il
    centro, `LIGHT_AREADETAILS_SIZEX/Y` alla dimensione fisica, primo slot immagine → l'EXR + Reload;
    rimuove le luci non più in lista. Costante `LIGHT_EMITS_ALONG_Z` se Octane emette lungo +Z.
-4. [ ] **Calibrazione dell'intensità in Octane**: la Power dell'area light non è radianza; si tara con
-   il furnace test di Fase 0 (luce separata vs stessa luce nell'HDRI → stesso pixel su una sfera
-   diffusa). Va fatta sul PC.
+4. [ ] **Calibrazione dell'intensità in Octane**: nella luce modello *Surface brightness* attivo
+   (emissione per unità di area = radianza) e Power = 1; il furnace test (luce separata vs stessa luce
+   nell'HDRI → stesso pixel su una sfera diffusa) dà il fattore da mettere nel template. Va fatta sul PC.
+   Verso di emissione misurato il 15/09: **+Z** (`LIGHT_EMITS_ALONG_Z = +1`); posizione, dimensione e
+   texture confermate automatiche. Specchio della texture da confermare con una luce asimmetrica.
 5. [ ] Opzioni: luce invisibile alla camera, esportare tutte le luci separate in blocco, verso della
    texture se risultasse specchiata.
 

@@ -142,10 +142,10 @@ def reload_all(doc):
 LIGHTS_NULL = "HDRI Studio Lights"
 TEMPLATE_NAME = "HS_TEMPLATE"
 LIGHT_PREFIX = "HS: "
-# Verso di emissione della luce modello lungo il suo asse Z locale: -1 = emette verso -Z (la luce guarda
-# il centro con la faccia -Z, texture dritta vista dal centro), +1 = emette verso +Z. Se le luci
-# separate illuminano dalla parte sbagliata, cambia questo segno.
-LIGHT_EMITS_ALONG_Z = -1
+# Verso di emissione della luce modello lungo il suo asse Z locale. Misurato il 15/09/2026 con Octane:
+# le area light emettono verso +Z, quindi la luce guarda il centro con la faccia +Z. Se una luce
+# modello di altro tipo illuminasse dalla parte sbagliata, cambia questo segno.
+LIGHT_EMITS_ALONG_Z = +1
 
 
 def _find_by_name(op, name):

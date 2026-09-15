@@ -28,6 +28,20 @@ e la sua normale vengono disegnati in giallo nel viewport. Il picking usa la nor
 su mesh poco suddivise il riflesso "salta" di faccia in faccia, su mesh dense o con subdivision è
 continuo.
 
+## Luci separate
+
+Nella scena crea una **Octane Area Light**, mettile un ImageTexture nello slot texture dell'emissione e
+chiamala `HS_TEMPLATE`. Nell'emissione attiva **Surface brightness** (l'emissione diventa per unità di
+area, come la radianza dell'HDRI: una luce grande e una piccola con la stessa texture hanno la stessa
+luminosità superficiale) e lascia Power = 1. Il plugin clona questa luce per ogni luce marcata *Separata*
+nell'app, sotto il null `HDRI Studio Lights`: direzione, distanza, dimensione fisica (`Size X/Y`) e
+texture sono automatiche e seguono l'app. Il null si può spostare sul soggetto.
+
+Calibrazione della Power (una volta): la stessa luce prima nell'HDRI, poi separata; una sfera diffusa
+al centro; il rapporto fra i due pixel è la Power da mettere nel template. Le costanti in cima al `.pyp`
+(`LIGHT_EMITS_ALONG_Z`) e in `export/hdri_export.gd` (`separate_flip_u`) regolano verso e specchio
+della texture, misurati con Octane.
+
 Se l'app non è aperta o non è collegata, il plugin controlla comunque ogni secondo la data di modifica
 dei file immagine usati nella scena e ricarica quelli cambiati.
 
