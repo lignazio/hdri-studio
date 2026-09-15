@@ -49,6 +49,13 @@ var _model_label: Label
 var _last_separate: Array = []
 var _convert_pid := -1
 var _convert_files: Array = []
+var _last_export_path := ""
+var _autosave_ms := 0
+var _live_change_ms := 0
+var _live_full_pending := false
+const AUTOSAVE_MS := 60000
+## Sotto questa pausa fra due modifiche il live link esporta a metà risoluzione, poi rifinisce.
+const LIVE_FAST_WINDOW_MS := 1500
 
 
 func _ready() -> void:
@@ -73,6 +80,12 @@ func _ready() -> void:
 	undo.reset(rig.to_dict())
 	_select(0)
 
+	# riapre l'ultimo rig salvato/aperto
+	var args := OS.get_cmdline_user_args()
+	var last: String = AppSettings.get_value("last_rig", "")
+	if last != "" and FileAccess.file_exists(last) and not ("--fresh" in args or "--screenshot" in args or "--selftest" in args):
+		load_rig_from(last)
+	_autosave_ms = Time.get_ticks_msec()
 	if "--screenshot" in OS.get_cmdline_user_args():
 		_screenshot_frames = 12
 	if "--selftest" in OS.get_cmdline_user_args():
@@ -230,6 +243,11 @@ func _build_layout() -> void:
 	bg_panel.changed.connect(_on_light_changed)
 	bg_panel.base_hdri_requested.connect(_pick_base_hdri)
 	export_panel.export_requested.connect(_export_exr)
+	export_panel.open_folder_requested.connect(func() -> void:
+		var dir := _last_export_path.get_base_dir() if _last_export_path != "" else String(AppSettings.get_value("export_dir", ""))
+		if dir != "":
+			OS.shell_open(dir))
+	props.sidecar_save_requested.connect(_save_sidecar)
 	export_panel.save_rig_requested.connect(_save_rig)
 	export_panel.load_rig_requested.connect(_load_rig)
 	export_panel.resolution_changed.connect(func(r: Vector2i) -> void: rig.resolution = r)
@@ -376,6 +394,7 @@ func _nudge(daz: float, del: float, commit: bool) -> void:
 
 func _on_light_changed(commit: bool) -> void:
 	_dirty = true
+	_live_full_pending = true
 	_schedule_live()
 	map_view.refresh()
 	light_list.refresh()
@@ -443,6 +462,9 @@ func _process(_delta: float) -> void:
 	if _live_dirty and Time.get_ticks_msec() >= _live_deadline:
 		_live_dirty = false
 		_live_export()
+	if Time.get_ticks_msec() - _autosave_ms > AUTOSAVE_MS:
+		_autosave_ms = Time.get_ticks_msec()
+		_autosave()
 	if _convert_pid >= 0 and not OS.is_process_running(_convert_pid):
 		var code := OS.get_process_exit_code(_convert_pid)
 		_convert_pid = -1
@@ -635,8 +657,10 @@ func _save_preset(name: String) -> void:
 
 
 func _load_preset(path: String) -> void:
+	var prev: String = AppSettings.get_value("last_rig", "")
 	if load_rig_from(path):
 		_rig_path = "" # un preset caricato non è "il file del rig"
+		AppSettings.set_value("last_rig", prev)
 		_update_status()
 
 
@@ -670,7 +694,53 @@ func _pick_base_hdri() -> void:
 
 
 func _export_exr() -> void:
+	var dir: String = AppSettings.get_value("export_dir", "")
+	if dir != "" and DirAccess.dir_exists_absolute(dir):
+		_file_dialog.current_dir = dir
+	_file_dialog.current_file = (_rig_path.get_file().get_basename() if _rig_path != "" else "hdri") + ".exr"
 	_dialog(FileDialog.FILE_MODE_SAVE_FILE, ["*.exr ; OpenEXR"], "Esporta HDRI", export_to)
+
+
+## Autosave di sicurezza: user://autosave/<data-ora>.json, ne tiene 10.
+func _autosave() -> void:
+	var dir := "user://autosave"
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(dir))
+	var stamp := Time.get_datetime_string_from_system(false, true).replace(":", "-").replace(" ", "_")
+	rig.save_json(dir.path_join("rig_" + stamp + ".json"))
+	var d := DirAccess.open(dir)
+	if d == null:
+		return
+	var files: Array[String] = []
+	d.list_dir_begin()
+	var e := d.get_next()
+	while e != "":
+		if e.begins_with("rig_") and e.ends_with(".json"):
+			files.append(e)
+		e = d.get_next()
+	d.list_dir_end()
+	files.sort()
+	while files.size() > 10:
+		DirAccess.remove_absolute(dir.path_join(files.pop_front()))
+
+
+## Scrive il sidecar JSON accanto all'immagine della luce Texture selezionata.
+func _save_sidecar() -> void:
+	if _selected < 0:
+		return
+	var l: RigLight = rig.lights[_selected]
+	if l.shape != RigLight.Shape.TEXTURE or l.texture_path == "":
+		return
+	var side := {"name": l.name, "width": l.width, "height": l.height, "intensity": l.intensity,
+		"ev": l.ev, "kelvin": l.kelvin, "softness": l.softness, "roll": l.roll}
+	var path := l.texture_path.get_basename() + ".json"
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	if f == null:
+		export_panel.set_status("Sidecar non scrivibile: " + path.get_file())
+		return
+	f.store_string(JSON.stringify(side, "\t"))
+	f.close() # il catalogo lo rilegge subito
+	export_panel.set_status("Default salvati in " + path.get_file())
+	catalog.set_folder(catalog.folder)
 
 
 ## Bake a piena risoluzione con supersampling, preset di orientamento, scrittura EXR.
@@ -714,6 +784,8 @@ func export_to(path: String, opts := {}) -> Error:
 	if opts.get("quiet", false):
 		return err
 	if err == OK:
+		_last_export_path = ProjectSettings.globalize_path(path)
+		AppSettings.set_value("export_dir", _last_export_path.get_base_dir())
 		export_panel.set_status("Esportato %s (%dx%d, %s, %s) in %.1f s" % [
 			path.get_file(), res.x, res.y, "half" if half else "float32",
 			target, (Time.get_ticks_msec() - t0) / 1000.0])
@@ -769,7 +841,8 @@ func _pick_live_path() -> void:
 func _schedule_live() -> void:
 	if link_panel != null and link_panel.is_enabled() and rig.live_export_path != "":
 		_live_dirty = true
-		_live_deadline = Time.get_ticks_msec() + LIVE_DEBOUNCE_MS
+		_live_change_ms = Time.get_ticks_msec()
+		_live_deadline = _live_change_ms + LIVE_DEBOUNCE_MS
 
 
 ## Export alla risoluzione live sul file del link e notifica ai client collegati.
@@ -778,9 +851,20 @@ func _live_export() -> void:
 		link_panel.set_status("Scegli prima il file di export.")
 		return
 	var t0 := Time.get_ticks_msec()
+	# risoluzione adattiva: durante una sequenza di modifiche ravvicinate esporta a metà risoluzione,
+	# poi, dopo una pausa, rifinisce alla risoluzione live piena
+	var res := link_panel.live_resolution()
+	var fast := Time.get_ticks_msec() - _live_change_ms < LIVE_FAST_WINDOW_MS and _live_full_pending
+	if fast:
+		res = Vector2i(maxi(res.x / 2, 512), maxi(res.y / 2, 256))
 	var err := export_to(rig.live_export_path, {
-		"resolution": link_panel.live_resolution(), "half": true,
+		"resolution": res, "half": true,
 		"target": export_panel.target(), "shift": export_panel.extra_shift(), "quiet": true})
+	if fast:
+		_live_dirty = true
+		_live_deadline = Time.get_ticks_msec() + LIVE_FAST_WINDOW_MS
+	else:
+		_live_full_pending = false
 	if err != OK:
 		link_panel.set_status("Errore export live: " + error_string(err))
 		return
@@ -811,7 +895,7 @@ func separate_message() -> Dictionary:
 			vecs.append([c.x, c.y, c.z])
 		var size := l.physical_size()
 		entries.append({
-			"name": l.name, "path": e["path"], "distance": l.distance,
+			"name": l.name, "path": e["path"], "distance": l.distance, "visible": l.separate_visible,
 			"size": [size.x, size.y], "forward": vecs[0], "right": vecs[1], "up": vecs[2],
 			"azimuth": lz.azimuth, "elevation": l.elevation, "roll": l.roll,
 		})
@@ -885,6 +969,7 @@ func save_rig_to(path: String) -> Error:
 	var err := rig.save_json(path)
 	if err == OK:
 		_rig_path = path
+		AppSettings.set_value("last_rig", ProjectSettings.globalize_path(path))
 		export_panel.set_status("Rig salvato: " + path.get_file())
 	else:
 		export_panel.set_status("Errore salvataggio: " + error_string(err))
@@ -903,6 +988,7 @@ func load_rig_from(path: String) -> bool:
 		return false
 	rig = r
 	_rig_path = path
+	AppSettings.set_value("last_rig", ProjectSettings.globalize_path(path))
 	_bind_rig()
 	undo.reset(rig.to_dict())
 	_select(0 if rig.lights.size() > 0 else -1)

@@ -2,7 +2,7 @@ extends SceneTree
 ## Test del drag & drop dal catalogo alla mappa attraverso il vero percorso del mouse.
 ## Muove il cursore di sistema (Godot individua il bersaglio del drop dalla posizione reale del
 ## cursore, non dagli eventi iniettati): non toccare il mouse durante l'esecuzione.
-## Uso:  Godot --path hdri_studio -s res://tools/drag_test.gd
+## Uso:  Godot --path hdri_studio -s res://tools/drag_test.gd -- --fresh
 
 func _initialize() -> void:
 	var main := (load("res://scenes/main.tscn") as PackedScene).instantiate()

@@ -1,6 +1,6 @@
 extends SceneTree
 ## Smoke test dell'app senza click: istanzia main.tscn e percorre le azioni principali.
-## Uso:  Godot --path hdri_studio -s res://tools/ui_smoke.gd
+## Uso:  Godot --path hdri_studio -s res://tools/ui_smoke.gd -- --fresh
 
 func _initialize() -> void:
 	var main := (load("res://scenes/main.tscn") as PackedScene).instantiate()
@@ -454,6 +454,27 @@ func _run(main: Node) -> void:
 	_check(sharp.r > 2.0 and blurred.r < 1.0 and absf(blurred.r - far.r) < 0.05, "base sfocata: %.2f → %.3f (lontano %.3f)" % [sharp.r, blurred.r, far.r])
 	main.rig.base_enabled = false
 	main.rig.base_blur = 0.0
+
+	# sidecar dalla luce, autosave, cartella di export ricordata
+	main.rig.lights.clear()
+	main._add_texture_light(ProjectSettings.globalize_path("res://out/softbox/rect_sub.exr"), {"width": 22.0, "height": 11.0, "intensity": 3.5})
+	main._select(0)
+	main._save_sidecar()
+	var side := ProjectSettings.globalize_path("res://out/softbox/rect_sub.json")
+	_check(FileAccess.file_exists(side) and JSON.parse_string(FileAccess.get_file_as_string(side)).get("intensity", 0) == 3.5, "sidecar scritto dalla luce")
+	DirAccess.remove_absolute(side)
+	main._autosave()
+	var ad := DirAccess.open("user://autosave")
+	var n_auto := 0
+	if ad != null:
+		ad.list_dir_begin()
+		var e := ad.get_next()
+		while e != "":
+			if e.ends_with(".json"):
+				n_auto += 1
+			e = ad.get_next()
+	_check(n_auto >= 1 and n_auto <= 10, "autosave: %d file" % n_auto)
+	_check(String(AppSettings.get_value("export_dir", "")) != "", "cartella di export ricordata")
 
 	ok = ok and _all_ok
 	print("[smoke] %s" % ("TUTTO OK" if ok else "FALLITO"))

@@ -3,6 +3,7 @@ extends VBoxContainer
 ## Risoluzione, formato, preset di orientamento, export e file di rig.
 
 signal export_requested()
+signal open_folder_requested()
 signal save_rig_requested()
 signal load_rig_requested()
 signal resolution_changed(res: Vector2i)
@@ -62,6 +63,11 @@ func _init() -> void:
 	b.text = "Esporta EXR…"
 	b.pressed.connect(func() -> void: export_requested.emit())
 	row.add_child(b)
+	var of := Button.new()
+	of.text = "Apri cartella"
+	of.tooltip_text = "Apre nel Finder/Esplora la cartella dell'ultimo export"
+	of.pressed.connect(func() -> void: open_folder_requested.emit())
+	row.add_child(of)
 	var sep := HSeparator.new()
 	add_child(sep)
 	var row2 := HBoxContainer.new()

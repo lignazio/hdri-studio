@@ -7,6 +7,7 @@ signal changed(commit: bool)
 signal light_renamed()
 ## L'utente vuole cambiare l'immagine della luce Texture (main apre la dialog).
 signal texture_pick_requested()
+signal sidecar_save_requested()
 
 var light: RigLight
 var _box: VBoxContainer
@@ -29,6 +30,7 @@ var _texture_label: Label
 var _photometric: CheckBox
 var _k_label: Label
 var _separate: CheckBox
+var _separate_visible: CheckBox
 var _separate_rows: Array = []
 var _grad_type: OptionButton
 var _grad_shape: OptionButton
@@ -131,6 +133,11 @@ func _init() -> void:
 	rt.text = "Ruota 90°"
 	rt.pressed.connect(func() -> void: _set_prop("texture_rotate", (light.texture_rotate + 1) % 4, true))
 	_texture_tools.add_child(rt)
+	var sd := Button.new()
+	sd.text = "Salva default"
+	sd.tooltip_text = "Scrive accanto all'immagine un sidecar .json con dimensione, intensità, Kelvin, sfumatura e rotazione di questa luce: il catalogo li userà come default"
+	sd.pressed.connect(func() -> void: sidecar_save_requested.emit())
+	_texture_tools.add_child(sd)
 
 	_section("Scrim")
 	_scrim_rows.append(_row("scrim_offset_x", "Sorgente X", -1.0, 1.0, 0.01))
@@ -200,6 +207,11 @@ func _init() -> void:
 		_update_visibility())
 	_box.add_child(_separate)
 	_separate_rows.append(_row("distance", "Distanza (cm)", 1.0, 10000.0, 1.0, true))
+	_separate_visible = CheckBox.new()
+	_separate_visible.text = "Visibile alla camera nel 3D"
+	_separate_visible.toggled.connect(func(v: bool) -> void: _set_prop("separate_visible", v, true))
+	_box.add_child(_separate_visible)
+	_separate_rows.append(_separate_visible)
 
 	set_light(null)
 
@@ -287,6 +299,7 @@ func set_light(l: RigLight) -> void:
 	_tint.color = l.tint
 	_photometric.button_pressed = l.photometric
 	_separate.button_pressed = l.separate
+	_separate_visible.button_pressed = l.separate_visible
 	_k_label.text = "K = %.4f sr · radianza risultante %.3f" % [l.measured_k, l.radiance()] if l.photometric else ""
 	_texture_label.text = l.texture_path.get_file() if l.texture_path != "" else "—"
 	_texture_label.tooltip_text = l.texture_path

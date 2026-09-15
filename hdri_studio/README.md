@@ -99,6 +99,27 @@ luci seguono; togliendo il flag la luce sparisce dalla scena.
 Da tarare al primo uso (costanti in cima al `.pyp`): il verso di emissione della luce modello
 (`LIGHT_EMITS_ALONG_Z`) e, con il furnace test, il rapporto fra la Power di Octane e la radianza.
 
+## Rifiniture d'uso (15/09)
+
+- **Mappa**: griglia in gradi, contorno reale delle luci (selezionate in giallo), az/el e RGB del pixel
+  sotto il cursore nella status bar.
+- **Preview**: click (senza trascinare) su un riflesso seleziona la luce che lo produce; tasto destro
+  ruota il modello; slider di esposizione, FOV e scala del modello nel pannello *Preview*.
+- **Tastiera**: frecce spostano le luci selezionate di 1° (Shift 10°), H accende/spegne, ⌘D duplica,
+  Canc elimina, Q/E esposizione, ⌘Z / ⇧⌘Z undo/redo. Selezione multipla nella lista (⌘/Shift-click):
+  trascinare una luce del gruppo sulla mappa sposta tutto il gruppo.
+- **Luci**: Kelvin rapidi (3200/4300/5600/6500) e menu *Gelatine* (CTO/CTB per mired, Plus/Minus
+  Green, Straw, colori); scrim con sorgente a disco integrata (12 campioni); Texture con specchio
+  H/V, rotazione 90° e *Salva default* (scrive il sidecar); gradiente con *Valore* per tacca (oltre
+  1), preset, copia/incolla.
+- **Sfondo**: *Sfocatura* dell'HDRI di base (mipmap).
+- **Catalogo**: *Miniature EV* (rigenera le miniature con un offset). **Preset**: rinomina.
+- **Export**: ricorda la cartella, propone il nome del rig, *Apri cartella*. **Live link**: risoluzione
+  adattiva (metà durante le modifiche ravvicinate, piena dopo 1,5 s di pausa). Luci separate:
+  *Visibile alla camera nel 3D* per luce (Blender; C4D solo se il tag Octane espone "camera visibility").
+- **Avvio**: riapre l'ultimo rig salvato/aperto (`-- --fresh` per partire dal rig di default);
+  autosave ogni minuto in `user://autosave/` (ultimi 10).
+
 ## Live link con Blender
 
 Add-on in `plugins/blender/hdri_studio_link/` — installazione e uso in `plugins/blender/README.md`.
@@ -161,7 +182,7 @@ Smoke test del link (app + client Python finto, da due terminali o in sequenza):
 Smoke test dell'interfaccia senza click (add/duplica/elimina, slider, mappa, LightPaint, undo, solo,
 HDRI di base, salva/apri rig, export con flip):
 
-    /Applications/Godot.app/Contents/MacOS/Godot --path hdri_studio -s res://tools/ui_smoke.gd
+    /Applications/Godot.app/Contents/MacOS/Godot --path hdri_studio -s res://tools/ui_smoke.gd -- --fresh
 
 ## Spike di Fase 0 (bake → EXR → PNG di controllo, senza UI)
 

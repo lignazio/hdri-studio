@@ -203,7 +203,7 @@ def sync_separate_lights(msg):
         obj.matrix_basis = mat
         obj.data.materials.clear()
         obj.data.materials.append(_material(name, e["path"]))
-        obj.visible_camera = bpy.context.scene.hdri_studio_visible_camera
+        obj.visible_camera = bool(e.get("visible", True)) and bpy.context.scene.hdri_studio_visible_camera
         touched += 1
     for name, obj in existing.items():
         if name not in wanted:

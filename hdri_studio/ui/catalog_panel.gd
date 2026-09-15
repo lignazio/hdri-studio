@@ -76,6 +76,15 @@ func _init() -> void:
 	_tag_filter = OptionButton.new()
 	_tag_filter.item_selected.connect(func(_i: int) -> void: _apply_filter())
 	add_child(_tag_filter)
+	var erow := ParamRow.new("Miniature EV", -4.0, 4.0, 0.5)
+	erow.tooltip_text = "Esposizione delle miniature rispetto all'automatica (rigenera le miniature)"
+	ThumbnailCache.exposure_ev = float(AppSettings.get_value("thumb_ev", 0.0))
+	erow.set_value_silent(ThumbnailCache.exposure_ev)
+	erow.committed.connect(func() -> void:
+		ThumbnailCache.exposure_ev = erow.get_value()
+		AppSettings.set_value("thumb_ev", ThumbnailCache.exposure_ev)
+		set_folder(folder))
+	add_child(erow)
 	_menu = PopupMenu.new()
 	_menu.add_check_item("★ Preferito", 0)
 	_menu.add_item("Tag…", 1)

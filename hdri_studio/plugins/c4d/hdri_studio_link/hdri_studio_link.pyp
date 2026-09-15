@@ -246,6 +246,22 @@ def sync_separate_lights(doc, msg):
         if obj.IsInstanceOf(c4d.Olight):
             obj[c4d.LIGHT_AREADETAILS_SIZEX] = w
             obj[c4d.LIGHT_AREADETAILS_SIZEY] = h
+        # visibilità alla camera: per le luci Octane serve il tag Octane; in mancanza, non tocchiamo nulla
+        vis = bool(e.get("visible", True))
+        for node in _nodes_of(obj):
+            bc = node.GetDataInstance()
+            if bc is None:
+                continue
+            desc = node.GetDescription(c4d.DESCFLAGS_DESC_NONE)
+            if desc is None:
+                continue
+            for dbc, paramid, _g in desc:
+                try:
+                    name = dbc.GetString(c4d.DESC_NAME).lower()
+                    if "camera visibility" in name or name == "camera visible":
+                        node[paramid[0].id] = vis
+                except Exception:
+                    pass
         if not _set_image_path(obj, e["path"]):
             print("[hdri-studio] luce '%s': nessuno slot immagine trovato (metti un ImageTexture nella luce modello)" % name)
         touched += 1

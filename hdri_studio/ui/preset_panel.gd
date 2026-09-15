@@ -22,6 +22,9 @@ var _delete_dialog: ConfirmationDialog
 var _btn_load: Button
 var _btn_merge: Button
 var _btn_delete: Button
+var _btn_rename: Button
+var _rename_dialog: ConfirmationDialog
+var _rename_edit: LineEdit
 
 
 func _init() -> void:
@@ -63,6 +66,15 @@ func _init() -> void:
 	_btn_delete.text = "Elimina"
 	_btn_delete.pressed.connect(func() -> void: if _selected != "": _delete_dialog.popup_centered())
 	row2.add_child(_btn_delete)
+	_btn_rename = Button.new()
+	_btn_rename.text = "Rinomina"
+	_btn_rename.pressed.connect(func() -> void:
+		if _selected == "":
+			return
+		_rename_edit.text = _selected.get_file().get_basename()
+		_rename_dialog.popup_centered()
+		_rename_edit.grab_focus())
+	row2.add_child(_btn_rename)
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -86,6 +98,13 @@ func _init() -> void:
 	_delete_dialog.dialog_text = "Eliminare il preset?"
 	_delete_dialog.confirmed.connect(_on_delete_confirmed)
 	add_child(_delete_dialog)
+	_rename_dialog = ConfirmationDialog.new()
+	_rename_dialog.title = "Nuovo nome"
+	_rename_edit = LineEdit.new()
+	_rename_edit.text_submitted.connect(func(_t: String) -> void: _rename_dialog.hide(); _on_rename_confirmed())
+	_rename_dialog.add_child(_rename_edit)
+	_rename_dialog.confirmed.connect(_on_rename_confirmed)
+	add_child(_rename_dialog)
 	_update_buttons()
 
 
@@ -157,6 +176,23 @@ func _update_buttons() -> void:
 	_btn_load.disabled = not has
 	_btn_merge.disabled = not has
 	_btn_delete.disabled = not has
+	_btn_rename.disabled = not has
+
+
+func _on_rename_confirmed() -> void:
+	var n := slug(_rename_edit.text)
+	if _selected == "" or n == "":
+		return
+	var dst := folder.path_join(n + ".json")
+	if dst == _selected or FileAccess.file_exists(dst):
+		return
+	DirAccess.rename_absolute(_selected, dst)
+	var png := _selected.get_basename() + ".png"
+	if FileAccess.file_exists(png):
+		DirAccess.rename_absolute(png, dst.get_basename() + ".png")
+	_selected = dst
+	refresh()
+	_select(dst)
 
 
 func _on_save_confirmed() -> void:

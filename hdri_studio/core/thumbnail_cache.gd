@@ -7,6 +7,8 @@ signal ready(path: String, texture: ImageTexture, size: Vector2i)
 
 const SIZE := Vector2i(384, 192)
 const DIR := "user://thumbs_384"
+## Offset in EV aggiunto all'esposizione automatica delle miniature (fa parte della chiave di cache).
+static var exposure_ev := 0.0
 
 var _queue: Array[String] = []
 var _queued := {}
@@ -81,7 +83,7 @@ func image_size(path: String) -> Vector2i:
 
 static func _key(path: String) -> String:
 	var mtime := FileAccess.get_modified_time(path)
-	return (path + ":" + str(mtime)).md5_text()
+	return (path + ":" + str(mtime) + ":" + ("%.2f" % exposure_ev)).md5_text()
 
 
 static func _read_meta(key: String) -> Vector2i:
@@ -134,7 +136,7 @@ static func _make_thumb(img: Image) -> Image:
 		n += 1
 		i += 4
 	var mean := sum / maxf(n, 1)
-	var k := clampf(0.35 / maxf(mean, 1e-6), 0.02, 50.0)
+	var k := clampf(0.35 / maxf(mean, 1e-6), 0.02, 50.0) * pow(2.0, exposure_ev)
 	i = 0
 	while i < f.size():
 		f[i] *= k

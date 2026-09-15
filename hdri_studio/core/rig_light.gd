@@ -68,6 +68,8 @@ var measured_k := 1.0
 ## ricreata nel software 3D come area light nella stessa direzione, a `distance` dal centro.
 @export var separate := false
 @export_range(1.0, 10000.0) var distance := 200.0
+## Luce separata visibile alla camera nel software 3D (altrimenti solo riflessi e illuminazione).
+@export var separate_visible := true
 
 
 func duplicate_light() -> RigLight:
@@ -251,7 +253,7 @@ func to_dict() -> Dictionary:
 		"scrim_depth": scrim_depth, "scrim_source_size": scrim_source_size,
 		"texture_path": texture_path, "texture_flip_h": texture_flip_h, "texture_flip_v": texture_flip_v,
 		"texture_rotate": texture_rotate,
-		"separate": separate, "distance": distance,
+		"separate": separate, "distance": distance, "separate_visible": separate_visible,
 	}
 
 
@@ -298,4 +300,5 @@ static func from_dict(d: Dictionary) -> RigLight:
 	l.texture_rotate = int(d.get("texture_rotate", 0))
 	l.separate = d.get("separate", false)
 	l.distance = d.get("distance", l.distance)
+	l.separate_visible = d.get("separate_visible", true)
 	return l

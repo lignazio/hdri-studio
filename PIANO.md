@@ -7,7 +7,13 @@ area: progetto
 
 # HDRI Studio — Piano
 
-> [!success] Stato: v1.5 — 15 settembre 2026 — angoli arrotondati e gradiente a tacche
+> [!success] Stato: v1.6 — 15 settembre 2026 — rifiniture d'uso su tutte le feature esistenti
+> Mappa con contorni e griglia, selezione dal riflesso, tastiera e multi-selezione, gelatine, scrim a
+> disco, texture specchiabili, tacche con valore, sfocatura della base, sidecar dalla luce, rinomina
+> preset, export che ricorda cartella e nome, live link adattivo, ultimo rig e autosave. Elenco
+> completo nel README (*Rifiniture d'uso*). Prossimo: Fase 6, le cinque feature nuove concordate.
+
+> [!success] Stato precedente: v1.5 — 15 settembre 2026 — angoli arrotondati e gradiente a tacche
 > Sfumatura con angoli arrotondati (SDF) per le forme rettangolari; gradiente radiale/lineare,
 > circolare/rettangolare, ruotabile, con tacche colorate in un editor dedicato (secondo buffer nel
 > compute shader). Caricamento dello shader a tre vie con log per l'app esportata.
@@ -464,6 +470,17 @@ Passi:
    ruota le basi con la matrice misurata in Fase 0 (interno → Blender: X→Y, Y→Z, Z→X).
 5. Test: `link_smoke.gd` + un client Blender headless (`blender -b --python`) che si collega, riceve
    `hdri_updated`, ricarica e verifica il pixel; furnace test per la strength.
+
+### Fase 6 — Feature nuove concordate (da fare, 15/09/2026)
+
+1. **Ruota tutto il set**: slider a livello di rig che ruota tutte le luci attorno all'asse verticale;
+   *Duplica specchiata* (sinistra ↔ destra).
+2. **Esposimetro**: illuminamento totale al centro (HDRI intera, sfondo compreso) per una superficie
+   che guarda una direzione scelta, in "lux" e EV; riuso della misura fotometrica estesa alla mappa.
+3. **Vista clipping** nel preview: falsi colori sopra una soglia (il valore sotto il cursore sulla
+   mappa è già fatto).
+4. **Camera dal live link**: C4D e Blender mandano la camera attiva; il preview la usa.
+5. **Materiali di prova per gioielleria**: oro giallo/bianco, argento, platino, spazzolato, vetro.
 
 ### 5.4 Fase 4 — test in C4D
 

@@ -1,6 +1,6 @@
 extends SceneTree
 ## Verifica che la sfera diffusa (illuminata dalla mappa di radianza del cielo) segua i cambiamenti
-## del rig: con luci → senza → di nuovo con luci. Uso: Godot --path hdri_studio -s res://tools/sky_smoke.gd
+## del rig: con luci → senza → di nuovo con luci. Uso: Godot --path hdri_studio -s res://tools/sky_smoke.gd -- --fresh
 
 func _initialize() -> void:
 	var main := (load("res://scenes/main.tscn") as PackedScene).instantiate()
