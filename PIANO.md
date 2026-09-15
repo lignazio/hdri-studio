@@ -7,10 +7,12 @@ area: progetto
 
 # HDRI Studio — Piano
 
-> [!success] Stato: v1.1 — 15 settembre 2026 — Fase 4 costruita, da provare in C4D
+> [!success] Stato: v1.2 — 15 settembre 2026 — Fase 4 in prova in C4D, Fase 5 (Blender) pianificata
 > Luci separate: flag per luce, EXR planare singolo, messaggio `separate_lights`, plugin che clona la
-> luce modello `HS_TEMPLATE`. Test sul PC: [[#5.4 Fase 4 — test in C4D]]. In più: drag & drop dal
-> catalogo (verificato con il cursore reale), app standalone con preset macOS/Windows.
+> luce modello `HS_TEMPLATE`; posizione, dimensione e texture confermate automatiche, verso e
+> specchio regolabili dal pannello Live link, Power da tarare ([[#5.4 Fase 4 — test in C4D]]).
+> Prossimo su richiesta: [[#Fase 5 — Live link per Blender (pianificata il 15/09/2026, da fare su richiesta)]].
+> In più: drag & drop dal catalogo, app standalone con preset macOS/Windows.
 
 > [!success] Stato precedente: v1.0 — 15 settembre 2026 — le tre fasi del piano sono chiuse
 > Verificato sul PC con Cinema 4D + Octane: live link e **LightPaint dal viewport**. Nell'app: luci
@@ -411,6 +413,35 @@ Passi:
    texture confermate automatiche. Specchio della texture da confermare con una luce asimmetrica.
 5. [ ] Opzioni: luce invisibile alla camera, esportare tutte le luci separate in blocco, verso della
    texture se risultasse specchiata.
+
+### Fase 5 — Live link per Blender (pianificata il 15/09/2026, da fare su richiesta)
+
+Stesso protocollo di C4D (TCP 47820, JSON-lines, `hdri_updated` / `separate_lights` / `lightpaint`),
+un add-on Python al posto del plugin. Rispetto a C4D è più semplice su ogni fronte: Blender ricarica
+un'immagine con `image.reload()`, ha timer nel thread principale (`bpy.app.timers`), il picking nel
+viewport è `scene.ray_cast` con normali interpolate gratis, e le area light hanno texture e dimensione
+fisica native (`light.size`, `size_y`, nodi emission con Image Texture). L'orientamento è già misurato
+in Fase 0: rotazione pura, nessuno specchio (centro immagine = +X, alto = +Z).
+
+Passi:
+
+1. **Add-on** `plugins/blender/hdri_studio_link/` (`__init__.py` + `link_core.py` riusato tale e
+   quale): pannello nella sidebar N (*HDRI Studio*): stato del collegamento, pulsante *Ricarica*,
+   operatore modale *LightPaint* (click nel viewport → `ray_cast` → `lightpaint` con punto, normale e
+   direzione di vista, host `blender`: nessuna inversione di assi).
+2. **Reload**: a `hdri_updated`, per ogni `bpy.data.images` il cui filepath coincide → `reload()`;
+   fallback su mtime come in C4D. Nessun pulsante da premere: Cycles ed EEVEE rileggono da soli.
+3. **Luci separate**: collezione `HDRI Studio Lights` con una area light per voce: `light.shape =
+   'RECTANGLE'`, `size`/`size_y` = dimensione fisica, matrice da `forward/right/up` (Blender è
+   right-handed: le basi arrivano senza inversione, come per Godot), nodi `Emission` con l'EXR planare
+   in `Image Texture` e `Strength` = 1 (la texture porta la radianza; in Blender la strength di una
+   area light è già per unità di area, quindi il fattore dovrebbe essere 1 — da confermare con il
+   furnace test). Le area light emettono lungo −Z: matrice `(F·D, R, U, F)`.
+4. **Conversione**: nel messaggio `separate_lights` l'app manda le basi nelle coordinate del target
+   scelto nel pannello Export; con *Godot / Blender* nessuna inversione. Blender è Z-up: il plugin
+   ruota le basi con la matrice misurata in Fase 0 (interno → Blender: X→Y, Y→Z, Z→X).
+5. Test: `link_smoke.gd` + un client Blender headless (`blender -b --python`) che si collega, riceve
+   `hdri_updated`, ricarica e verifica il pixel; furnace test per la strength.
 
 ### 5.4 Fase 4 — test in C4D
 
