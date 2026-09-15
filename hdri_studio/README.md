@@ -40,7 +40,8 @@ una softbox la rende più morbida, non più forte. Il pannello mostra K e la rad
 ## Fusione e ordine
 
 Fusione per luce: **Somma** (fisica, default), **Massimo**, **Moltiplica** (maschere/bandiere) e
-**Normale** (la luce copre ciò che c'è sotto dove sta: utile per le HDRI light con il proprio fondo).
+**Normale** (la luce copre ciò che c'è sotto in tutta la sua forma, parti scure comprese: per le HDRI
+light con il proprio fondo e per gli scrim che hanno un corpo dietro il telo; il Gradiente resta morbido).
 Con Normale l'ordine conta: le luci più in basso nell'elenco coprono quelle sopra; ▲ ▼ riordinano.
 
 I bordi fra le colonne e fra preview e mappa si trascinano.

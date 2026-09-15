@@ -75,9 +75,11 @@ float falloff_curve(float t, float type) {
 	return (exp(-4.0 * r * r) - k) / (1.0 - k);
 }
 
-// Peso in [0, 1] della luce i nella direzione d. Per le luci Texture il peso è la maschera del
-// rettangolo; il colore dell'immagine viene campionato a parte in light_texture().
-float light_weight(int i, vec3 d) {
+// (copertura, profilo) della luce i nella direzione d. La copertura è la forma con il suo bordo
+// sfumato: è il peso con cui la luce si fonde con ciò che c'è sotto. Il profilo modula l'intensità
+// dentro la forma (hotspot dello scrim). Per il gradiente non c'è un "fondo": copertura = profilo.
+// Per le luci Texture il colore dell'immagine viene campionato a parte in light_texture().
+vec2 light_mp(int i, vec3 d) {
 	vec4 a = lights.data[i * STRIDE + 0]; // shape, az, el, roll
 	vec4 b = lights.data[i * STRIDE + 1]; // w, h, softness, falloff
 	vec4 s = lights.data[i * STRIDE + 3]; // scrim: offset xy, depth, source size
@@ -95,24 +97,25 @@ float light_weight(int i, vec3 d) {
 
 	if (shape == 0) { // rect
 		float ed = min(hw - abs(ax), hh - abs(ay));
-		return soft_edge(ed, b.z);
+		return vec2(soft_edge(ed, b.z), 1.0);
 	}
 	if (shape == 1) { // ellipse
 		float r = length(vec2(ax / hw, ay / hh));
-		return soft_edge((1.0 - r) * min(hw, hh), b.z);
+		return vec2(soft_edge((1.0 - r) * min(hw, hh), b.z), 1.0);
 	}
 	if (shape == 2) { // ring: raggio esterno hw, interno hw * ring_inner
 		float r = length(vec2(ax, ay));
 		float inner = hw * e.x;
-		return soft_edge(min(r - inner, hw - r), b.z);
+		return vec2(soft_edge(min(r - inner, hw - r), b.z), 1.0);
 	}
 	if (shape == 3) { // gradient
 		float r = length(vec2(ax / hw, ay / hh));
-		return falloff_curve(1.0 - r, b.w);
+		float f = falloff_curve(1.0 - r, b.w);
+		return vec2(f, 1.0);
 	}
-	if (shape == 5) { // texture: maschera rettangolare, il contenuto arriva dall'immagine
+	if (shape == 5) { // texture: copertura rettangolare, il contenuto arriva dall'immagine
 		float ed = min(hw - abs(ax), hh - abs(ay));
-		return soft_edge(ed, b.z);
+		return vec2(soft_edge(ed, b.z), 1.0);
 	}
 	// scrim: telo rettangolare illuminato da dietro da una sorgente a distanza `depth`,
 	// spostata di `offset`. Irradianza sul telo: E = depth / (|q|^2 + depth^2)^(3/2)
@@ -120,13 +123,20 @@ float light_weight(int i, vec3 d) {
 	// approssimata allargando la distanza efficace: deff^2 = depth^2 + size^2.
 	float ed = min(hw - abs(ax), hh - abs(ay));
 	float mask = soft_edge(ed, b.z);
-	if (mask <= 0.0) return 0.0;
+	if (mask <= 0.0) return vec2(0.0);
 	vec2 q = vec2(ax / hw, ay / hh) - s.xy;
 	float depth = max(s.z, 1e-3);
 	float deff2 = depth * depth + s.w * s.w;
 	float deff = sqrt(deff2);
 	float prof = deff * deff2 / pow(dot(q, q) + deff2, 1.5);
-	return mask * prof;
+	return vec2(mask, prof);
+}
+
+// Peso complessivo (copertura × profilo): è la radianza relativa della luce in quella direzione,
+// usato dalla misura fotometrica e dalla proiezione planare.
+float light_weight(int i, vec3 d) {
+	vec2 mp = light_mp(i, d);
+	return mp.x * mp.y;
 }
 
 // Colore dell'immagine della luce Texture i nella direzione d (1 se la luce non ha immagine).
@@ -189,16 +199,17 @@ vec3 shade(vec3 d, int n) {
 	for (int i = 0; i < n; i++) {
 		vec4 e = lights.data[i * STRIDE + 4];
 		if (e.y < 0.5) continue;
-		float w = light_weight(i, d);
-		if (w <= 0.0) continue;
+		vec2 mp = light_mp(i, d);
+		float cover = mp.x;
+		if (cover <= 0.0) continue;
 		vec4 c = lights.data[i * STRIDE + 2]; // radianza rgb, blend
-		vec3 rgb = c.rgb;
+		vec3 rgb = c.rgb * mp.y;
 		if (int(lights.data[i * STRIDE + 0].x + 0.5) == 5) rgb *= light_texture(i, d);
 		int blend = int(c.w + 0.5);
-		if (blend == 0) col += rgb * w;
-		else if (blend == 1) col = max(col, rgb * w);
-		else if (blend == 2) col *= mix(vec3(1.0), rgb, w);
-		else col = mix(col, rgb, w); // normale: copre in ordine di elenco
+		if (blend == 0) col += rgb * cover;
+		else if (blend == 1) col = max(col, rgb * cover);
+		else if (blend == 2) col *= mix(vec3(1.0), rgb, cover);
+		else col = mix(col, rgb, cover); // normale: copre in ordine di elenco, con le sue parti scure
 	}
 	return col;
 }
