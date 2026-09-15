@@ -25,14 +25,21 @@ func add_light(light: RigLight) -> RigLight:
 	return light
 
 
-## Luci che entrano nel bake: abilitate, e se c'è un solo attivo solo quelle.
-func active_lights() -> Array:
+## Luci che entrano nel bake: abilitate, e se c'è un solo attivo solo quelle. Le luci separate
+## entrano solo nel preview (include_separate), mai nell'HDRI esportata.
+func active_lights(include_separate := true) -> Array:
 	var any_solo := false
 	for l in lights:
 		if l.solo and l.enabled:
 			any_solo = true
 			break
-	return lights.filter(func(l: RigLight) -> bool: return l.enabled and (l.solo or not any_solo))
+	return lights.filter(func(l: RigLight) -> bool:
+		return l.enabled and (l.solo or not any_solo) and (include_separate or not l.separate))
+
+
+## Luci separate attive (per l'export singolo e il live link).
+func separate_lights() -> Array:
+	return active_lights(true).filter(func(l: RigLight) -> bool: return l.separate)
 
 
 func base_exposure() -> float:

@@ -249,6 +249,47 @@ func _run(main: Node) -> void:
 	main.preview._drop_data(main.preview.size * 0.5, dd)
 	ok = ok and _check(main.rig.lights.size() == nd + 1, "drop sul preview crea la luce (sul riflesso se colpisce)")
 
+	# luce separata: esclusa dall'HDRI, EXR planare accanto, messaggio per il plugin
+	for l in main.rig.lights:
+		l.enabled = false
+	main.rig.background = LightRig.Background.BLACK
+	var sep := RigLight.new()
+	sep.name = "Key sep"
+	sep.shape = RigLight.Shape.RECT
+	sep.azimuth = 0.0
+	sep.elevation = 0.0
+	sep.width = 40.0
+	sep.height = 20.0
+	sep.softness = 0.0
+	sep.intensity = 3.0
+	sep.separate = true
+	sep.distance = 150.0
+	main.light_list.add_and_select(sep)
+	await process_frame
+	await process_frame
+	var pimg2: Image = main.baker.get_image()
+	ok = ok and _check(absf(pimg2.get_pixel(pimg2.get_width() / 2, pimg2.get_height() / 2).r - 3.0) < 0.01, "preview: la luce separata è visibile")
+	var planar: Image = main.baker.bake_planar(sep, 512)
+	ok = ok and _check(planar.get_width() == 512 and absi(planar.get_height() - int(round(512 * tan(deg_to_rad(10)) / tan(deg_to_rad(20))))) <= 1, "planare %dx%d (aspetto tan)" % [planar.get_width(), planar.get_height()])
+	var pcen := planar.get_pixel(planar.get_width() / 2, planar.get_height() / 2)
+	var pcorner := planar.get_pixel(2, 2)
+	ok = ok and _check(absf(pcen.r - 3.0) < 0.01 and absf(pcorner.r - 3.0) < 0.01, "planare: radianza 3.0 al centro (%.2f) e all'angolo (%.2f)" % [pcen.r, pcorner.r])
+	var sz := sep.physical_size()
+	ok = ok and _check(absf(sz.x - 2.0 * 150.0 * tan(deg_to_rad(20.0))) < 0.01, "dimensione fisica %.1f × %.1f cm" % [sz.x, sz.y])
+	main.export_panel._res.selected = 0
+	ok = ok and _check(main.export_to("res://out/smoke_sep.exr") == OK, "export con luce separata")
+	await process_frame
+	await process_frame
+	var sep_path := ProjectSettings.globalize_path("res://out/smoke_sep_key_sep.exr")
+	ok = ok and _check(FileAccess.file_exists(sep_path), "EXR singolo scritto accanto all'HDRI")
+	var hdri := Image.new()
+	hdri.load_exr_from_buffer(FileAccess.get_file_as_bytes("res://out/smoke_sep.exr"))
+	ok = ok and _check(hdri.get_pixel(hdri.get_width() / 2, hdri.get_height() / 2).r < 0.001, "HDRI esportata senza la luce separata")
+	var msg: Dictionary = main.separate_message()
+	ok = ok and _check(msg["lights"].size() == 1 and msg["lights"][0]["distance"] == 150.0 and msg["lights"][0]["path"] == sep_path, "messaggio separate_lights: 1 luce, distanza 150")
+	var fwd: Array = msg["lights"][0]["forward"]
+	ok = ok and _check(absf(fwd[2] - 1.0) < 1e-4, "forward verso +Z (az 0)")
+
 	print("[smoke] %s" % ("TUTTO OK" if ok else "FALLITO"))
 	quit(0 if ok else 1)
 

@@ -27,6 +27,8 @@ var _texture_row: HBoxContainer
 var _texture_label: Label
 var _photometric: CheckBox
 var _k_label: Label
+var _separate: CheckBox
+var _separate_rows: Array = []
 
 
 func _init() -> void:
@@ -128,6 +130,16 @@ func _init() -> void:
 	tint_row.add_child(_tint)
 	_blend = _option("Fusione", ["Somma", "Massimo", "Moltiplica", "Normale"], func(i: int) -> void: _set_prop("blend", i, true))
 
+	_section("Luce separata")
+	_separate = CheckBox.new()
+	_separate.text = "Separata → area light nel 3D"
+	_separate.tooltip_text = "Esclusa dall'HDRI esportata: scritta come EXR singolo (proiezione planare) e ricreata\nnel software 3D come area light nella stessa direzione, a questa distanza dal centro.\nNel preview resta visibile nell'HDRI."
+	_separate.toggled.connect(func(v: bool) -> void:
+		_set_prop("separate", v, true, true)
+		_update_visibility())
+	_box.add_child(_separate)
+	_separate_rows.append(_row("distance", "Distanza (cm)", 1.0, 10000.0, 1.0, true))
+
 	set_light(null)
 
 
@@ -210,6 +222,7 @@ func set_light(l: RigLight) -> void:
 	_blend.selected = l.blend
 	_tint.color = l.tint
 	_photometric.button_pressed = l.photometric
+	_separate.button_pressed = l.separate
 	_k_label.text = "K = %.4f sr · radianza risultante %.3f" % [l.measured_k, l.radiance()] if l.photometric else ""
 	_texture_label.text = l.texture_path.get_file() if l.texture_path != "" else "—"
 	_texture_label.tooltip_text = l.texture_path
@@ -236,4 +249,6 @@ func _update_visibility() -> void:
 	_rows["intensity"].visible = not light.photometric
 	_rows["illuminance"].visible = light.photometric
 	_k_label.visible = light.photometric
+	for r in _separate_rows:
+		r.visible = light.separate
 	_rows["softness"].visible = light.shape != RigLight.Shape.GRADIENT

@@ -100,7 +100,12 @@ func _draw_overlay() -> void:
 		if not l.enabled:
 			col.a = 0.35
 		_overlay.draw_circle(p, HANDLE_R + 1.5, Color(0, 0, 0, 0.6))
-		_overlay.draw_arc(p, HANDLE_R, 0.0, TAU, 24, col, 2.0)
+		if l.separate:
+			# quadrato: la luce non entra nell'HDRI, diventa un'area light nel 3D
+			var r2 := Rect2(p - Vector2(HANDLE_R, HANDLE_R), Vector2(HANDLE_R * 2, HANDLE_R * 2))
+			_overlay.draw_rect(r2, col, false, 2.0)
+		else:
+			_overlay.draw_arc(p, HANDLE_R, 0.0, TAU, 24, col, 2.0)
 		if i == selected:
 			_overlay.draw_circle(p, 2.5, col)
 		_overlay.draw_string_outline(font, p + Vector2(HANDLE_R + 4, 4), l.name, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, 3, Color(0, 0, 0, 0.8))

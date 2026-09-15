@@ -11,6 +11,12 @@ attivo, click o trascina sul modello nel viewport: il plugin fa il picking (GeRa
 mesh, cache dei generatori comprese) e manda punto, normale e direzione di vista all'app, che sposta
 la luce selezionata dove serve per riflettersi in quel punto.
 
+Luci separate (Fase 4): il messaggio "separate_lights" elenca le luci del rig marcate come separate,
+con direzione, distanza, dimensione fisica e il loro EXR planare. Il plugin le ricrea sotto un null
+"HDRI Studio Lights" clonando una luce modello chiamata "HS_TEMPLATE" (un'Octane Area Light con un
+ImageTexture nel suo slot texture: la prepari una volta, il plugin la clona, la posiziona, la scala e
+le assegna l'EXR). Il null si può spostare sul soggetto: le luci lo seguono.
+
 Installazione: Edit > Preferences > Plugins > aggiungi la cartella `plugins/c4d` (quella che contiene
 `hdri_studio_link/`), riavvia Cinema 4D. Nel menu Extensions compare "HDRI Studio: ricarica texture".
 """
@@ -128,6 +134,124 @@ def reload_all(doc):
             touched += 1
     if touched:
         c4d.EventAdd(c4d.EVENT_FORCEREDRAW)
+    return touched
+
+
+# --- luci separate ---------------------------------------------------------------------------------
+
+LIGHTS_NULL = "HDRI Studio Lights"
+TEMPLATE_NAME = "HS_TEMPLATE"
+LIGHT_PREFIX = "HS: "
+# Verso di emissione della luce modello lungo il suo asse Z locale: -1 = emette verso -Z (la luce guarda
+# il centro con la faccia -Z, texture dritta vista dal centro), +1 = emette verso +Z. Se le luci
+# separate illuminano dalla parte sbagliata, cambia questo segno.
+LIGHT_EMITS_ALONG_Z = -1
+
+
+def _find_by_name(op, name):
+    while op:
+        if op.GetName() == name:
+            return op
+        found = _find_by_name(op.GetDown(), name)
+        if found is not None:
+            return found
+        op = op.GetNext()
+    return None
+
+
+def _children(op):
+    out = []
+    child = op.GetDown()
+    while child:
+        out.append(child)
+        child = child.GetNext()
+    return out
+
+
+def _nodes_of(obj):
+    """L'oggetto, i suoi tag e gli shader appesi a entrambi."""
+    nodes = [obj]
+    _walk_shaders(obj.GetFirstShader(), nodes)
+    tag = obj.GetFirstTag()
+    while tag:
+        nodes.append(tag)
+        _walk_shaders(tag.GetFirstShader(), nodes)
+        tag = tag.GetNext()
+    return nodes
+
+
+def _set_image_path(obj, path):
+    """Assegna `path` al primo parametro immagine trovato nella luce (tag Octane / shader) e preme Reload."""
+    for node in _nodes_of(obj):
+        bc = node.GetDataInstance()
+        if bc is None:
+            continue
+        for pid, val in bc:
+            if isinstance(val, str) and val.lower().endswith(EXTS):
+                bc.SetString(pid, path)
+                press_reload(node)
+                return True
+            if isinstance(val, c4d.BaseContainer):
+                for pid2, val2 in val:
+                    if isinstance(val2, str) and val2.lower().endswith(EXTS):
+                        val.SetString(pid2, path)
+                        press_reload(node)
+                        return True
+    return False
+
+
+def _vec(a):
+    return c4d.Vector(float(a[0]), float(a[1]), float(a[2]))
+
+
+def sync_separate_lights(doc, msg):
+    """Crea/aggiorna/rimuove le luci separate sotto il null; restituisce quante ne ha toccate."""
+    entries = msg.get("lights", [])
+    root = _find_by_name(doc.GetFirstObject(), LIGHTS_NULL)
+    if root is None:
+        if not entries:
+            return 0
+        root = c4d.BaseObject(c4d.Onull)
+        root.SetName(LIGHTS_NULL)
+        doc.InsertObject(root)
+    template = _find_by_name(doc.GetFirstObject(), TEMPLATE_NAME)
+    existing = {c.GetName(): c for c in _children(root)}
+    wanted = set()
+    touched = 0
+    for e in entries:
+        name = LIGHT_PREFIX + e["name"]
+        wanted.add(name)
+        obj = existing.get(name)
+        if obj is None:
+            if template is None:
+                print("[hdri-studio] luce separata '%s': manca la luce modello '%s' nella scena" % (e["name"], TEMPLATE_NAME))
+                continue
+            obj = template.GetClone(c4d.COPYFLAGS_NONE)
+            obj.SetName(name)
+            obj.InsertUnder(root)
+        F, R, U = _vec(e["forward"]), _vec(e["right"]), _vec(e["up"])
+        d = float(e["distance"])
+        # base propria (nessuno specchio sull'oggetto): se R×U = -F, il preset ha specchiato l'immagine
+        # e la stessa cosa va fatta all'asse X della luce
+        if (R.Cross(U) - F).GetLength() > 1e-3:
+            R = -R
+        if LIGHT_EMITS_ALONG_Z < 0:
+            mat = c4d.Matrix(F * d, R, U, F)          # -Z guarda il centro, X = destra vista dal centro
+        else:
+            mat = c4d.Matrix(F * d, -R, U, -F)        # +Z guarda il centro
+        obj.SetMl(mat)
+        w, h = float(e["size"][0]), float(e["size"][1])
+        if obj.IsInstanceOf(c4d.Olight):
+            obj[c4d.LIGHT_AREADETAILS_SIZEX] = w
+            obj[c4d.LIGHT_AREADETAILS_SIZEY] = h
+        if not _set_image_path(obj, e["path"]):
+            print("[hdri-studio] luce '%s': nessuno slot immagine trovato (metti un ImageTexture nella luce modello)" % name)
+        touched += 1
+    for name, obj in existing.items():
+        if name not in wanted:
+            obj.Remove()
+            touched += 1
+    c4d.EventAdd(c4d.EVENT_FORCEREDRAW)
     return touched
 
 
@@ -321,6 +445,12 @@ class HdriStudioLink(c4d.plugins.MessageData):
                 n = reload_file(doc, path)
                 self.watch.touch(path)
                 print("[hdri-studio] %s → %d nodi ricaricati" % (os.path.basename(path), n))
+            elif msg.get("type") == "separate_lights":
+                n = sync_separate_lights(doc, msg)
+                for e in msg.get("lights", []):
+                    self.watch.touch(e.get("path", ""))
+                if n:
+                    print("[hdri-studio] luci separate: %d aggiornate" % n)
         if self.client.connected != self._was_connected:
             self._was_connected = self.client.connected
             print("[hdri-studio] %s" % ("collegato all'app" if self.client.connected else "app non raggiungibile, uso la data dei file"))

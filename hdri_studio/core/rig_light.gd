@@ -46,6 +46,10 @@ var measured_k := 1.0
 ## Texture: immagine EXR/HDR lineare mappata sul rettangolo della luce (solo il percorso: il rig
 ## non contiene mai i pixel).
 @export var texture_path := ""
+## Luce separata: esclusa dall'HDRI esportata, scritta come EXR singolo (proiezione planare) e
+## ricreata nel software 3D come area light nella stessa direzione, a `distance` dal centro.
+@export var separate := false
+@export_range(1.0, 10000.0) var distance := 200.0
 
 
 func duplicate_light() -> RigLight:
@@ -56,6 +60,28 @@ func radiance() -> float:
 	if photometric:
 		return illuminance * pow(2.0, ev) / maxf(measured_k, 1e-9)
 	return intensity * pow(2.0, ev)
+
+
+## Frame ortonormale della luce (come nello shader): F guarda la luce dal centro, R verso destra sulla
+## mappa, U verso l'alto, con il roll applicato.
+func frame() -> Array[Vector3]:
+	var az := deg_to_rad(azimuth)
+	var el := deg_to_rad(elevation)
+	var c := cos(el)
+	var F := Vector3(-c * sin(az), sin(el), c * cos(az))
+	var up := Vector3(0, 0, 1) if absf(F.y) > 0.999 else Vector3(0, 1, 0)
+	var R := F.cross(up).normalized()
+	var U := R.cross(F)
+	var cr := cos(deg_to_rad(roll))
+	var sr := sin(deg_to_rad(roll))
+	var R2 := R * cr + U * sr
+	var U2 := -R * sr + U * cr
+	return [F, R2, U2]
+
+
+## Dimensione fisica del rettangolo che sottende (width × height) a distanza `distance`.
+func physical_size() -> Vector2:
+	return Vector2(2.0 * distance * tan(deg_to_rad(width) * 0.5), 2.0 * distance * tan(deg_to_rad(height) * 0.5))
 
 
 ## Chiave dei parametri da cui dipende K: se cambia, il baker rimisura.
@@ -97,6 +123,7 @@ func to_dict() -> Dictionary:
 		"scrim_offset": [scrim_offset.x, scrim_offset.y],
 		"scrim_depth": scrim_depth, "scrim_source_size": scrim_source_size,
 		"texture_path": texture_path,
+		"separate": separate, "distance": distance,
 	}
 
 
@@ -127,4 +154,6 @@ static func from_dict(d: Dictionary) -> RigLight:
 	l.scrim_depth = d.get("scrim_depth", l.scrim_depth)
 	l.scrim_source_size = d.get("scrim_source_size", l.scrim_source_size)
 	l.texture_path = d.get("texture_path", "")
+	l.separate = d.get("separate", false)
+	l.distance = d.get("distance", l.distance)
 	return l

@@ -59,6 +59,20 @@ esce con 0 se tutto va) e `-- --screenshot`. `dist/` non è nel repository: si r
 Dal catalogo le miniature si possono anche **trascinare** sulla mappa (la luce nasce lì) o sul preview 3D
 (la luce nasce sul riflesso del punto colpito, come il LightPaint).
 
+## Luci separate (area light in Cinema 4D)
+
+Nel pannello proprietà, *Separata → area light nel 3D* con lo slider **Distanza (cm)**. La luce resta
+visibile nel preview ma **non entra nell'HDRI esportata**: viene scritta come EXR singolo accanto
+all'HDRI (`<nome>_<luce>.exr`, proiezione planare in tan-space, radianza già applicata) e il live link
+manda al plugin direzione, dimensione fisica `2·D·tan(w/2) × 2·D·tan(h/2)` e percorso. In C4D il plugin
+clona una luce modello chiamata **`HS_TEMPLATE`** (un'Octane Area Light con un ImageTexture nel suo slot
+texture, preparata una volta), la mette sotto il null `HDRI Studio Lights` nella direzione giusta a
+distanza D, orientata verso il centro, con la dimensione fisica e l'EXR assegnato. Spostando il null le
+luci seguono; togliendo il flag la luce sparisce dalla scena.
+
+Da tarare al primo uso (costanti in cima al `.pyp`): il verso di emissione della luce modello
+(`LIGHT_EMITS_ALONG_Z`) e, con il furnace test, il rapporto fra la Power di Octane e la radianza.
+
 ## Live link con Cinema 4D (Octane)
 
 Plugin in `plugins/c4d/hdri_studio_link/` — installazione e uso in `plugins/c4d/README.md`. In breve:
@@ -123,5 +137,5 @@ l'integrale numerico e con un render Cycles.
     scenes/    main.tscn / main.gd — app
     livelink/  LiveLink (server TCP, JSON-lines)
     plugins/   c4d/hdri_studio_link (plugin Cinema 4D), c4d/octane_reload_probe.py (sonda di Fase 0)
-    tools/     spike di Fase 0, verifica Blender, smoke test UI e link
+    tools/     spike di Fase 0, verifica Blender, smoke test UI e link, test del drag & drop
     out/       output generati (ignorati da git)

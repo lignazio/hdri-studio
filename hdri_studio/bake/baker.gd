@@ -308,17 +308,92 @@ func _ensure_measure_set() -> void:
 	_measure_set = rd.uniform_set_create([u0, u1, u2, u3], _shader, 0)
 
 
-## Esegue il bake del rig nella texture. Con calibration = true ignora le luci e disegna i marker degli assi.
-func bake(rig: LightRig, calibration := false) -> void:
+## Texture planare di una luce (per l'area light nel software 3D): immagine RGBAF di long_side px sul
+## lato lungo, aspetto = tan(w/2) / tan(h/2), radianza già applicata, supersampling 2×2.
+func bake_planar(l: RigLight, long_side := 1024) -> Image:
+	if l.photometric:
+		l.measured_k = measure_k(l)
+	var thw := tan(deg_to_rad(minf(l.width, 178.0)) * 0.5)
+	var thh := tan(deg_to_rad(minf(l.height, 178.0)) * 0.5)
+	var w := long_side
+	var h := long_side
+	if thw >= thh:
+		h = maxi(int(round(long_side * thh / thw)), 4)
+	else:
+		w = maxi(int(round(long_side * thw / thh)), 4)
+	# texture e uniform set temporanei
+	var fmt := RDTextureFormat.new()
+	fmt.width = w
+	fmt.height = h
+	fmt.format = RenderingDevice.DATA_FORMAT_R32G32B32A32_SFLOAT
+	fmt.usage_bits = RenderingDevice.TEXTURE_USAGE_STORAGE_BIT | RenderingDevice.TEXTURE_USAGE_CAN_COPY_FROM_BIT
+	var tex := rd.texture_create(fmt, RDTextureView.new())
+	var u0 := RDUniform.new()
+	u0.uniform_type = RenderingDevice.UNIFORM_TYPE_IMAGE
+	u0.binding = 0
+	u0.add_id(tex)
+	var u1 := RDUniform.new()
+	u1.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+	u1.binding = 1
+	u1.add_id(_lights_buf)
+	var u2 := RDUniform.new()
+	u2.uniform_type = RenderingDevice.UNIFORM_TYPE_SAMPLER_WITH_TEXTURE
+	u2.binding = 2
+	u2.add_id(_sampler)
+	u2.add_id(_base_tex)
+	var u3 := RDUniform.new()
+	u3.uniform_type = RenderingDevice.UNIFORM_TYPE_SAMPLER_WITH_TEXTURE
+	u3.binding = 3
+	u3.add_id(_sampler)
+	u3.add_id(_tex_array)
+	var uset := rd.uniform_set_create([u0, u1, u2, u3], _shader, 0)
+
+	var layer := -1
+	if l.shape == RigLight.Shape.TEXTURE:
+		layer = texture_layer(l.texture_path)
+	var data := PackedFloat32Array()
+	var probe := l.duplicate_light()
+	probe.measured_k = l.measured_k
+	probe.enabled = true
+	probe.pack(data, layer)
+	var bytes := data.to_byte_array()
+	rd.buffer_update(_lights_buf, 0, bytes.size(), bytes)
+	var pc := PackedFloat32Array([
+		float(w), float(h), 1.0, 2.0,
+		0.0, 0.0, 0.0, 0.0,
+		0.0, 0.0, 0.0, 0.0,
+		0.0, 0.0, 0.0, 2.0,
+		0.0, 1.0, 0.0, 0.0,
+	])
+	var pc_bytes := pc.to_byte_array()
+	var cl := rd.compute_list_begin()
+	rd.compute_list_bind_compute_pipeline(cl, _pipeline)
+	rd.compute_list_bind_uniform_set(cl, uset, 0)
+	rd.compute_list_set_push_constant(cl, pc_bytes, pc_bytes.size())
+	@warning_ignore("integer_division")
+	rd.compute_list_dispatch(cl, (w + 7) / 8, (h + 7) / 8, 1)
+	rd.compute_list_end()
+	if _local:
+		rd.submit()
+		rd.sync()
+	var img := Image.create_from_data(w, h, false, Image.FORMAT_RGBAF, rd.texture_get_data(tex, 0))
+	rd.free_rid(uset)
+	rd.free_rid(tex)
+	return img
+
+
+## Esegue il bake del rig nella texture. Con calibration = true ignora le luci e disegna i marker degli
+## assi. include_separate: le luci separate entrano nel preview ma non nell'HDRI esportata.
+func bake(rig: LightRig, calibration := false, include_separate := true) -> void:
 	# le luci fotometriche hanno bisogno del loro K prima del pack (la misura usa lo stesso buffer)
-	for l in rig.active_lights():
+	for l in rig.active_lights(include_separate):
 		if l.photometric:
 			l.measured_k = measure_k(l)
 	_ensure_uniform_set()
 
 	var data := PackedFloat32Array()
 	var count := 0
-	for l in rig.active_lights():
+	for l in rig.active_lights(include_separate):
 		if count >= MAX_LIGHTS:
 			push_warning("Più di %d luci: le altre vengono ignorate" % MAX_LIGHTS)
 			break

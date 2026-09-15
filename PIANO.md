@@ -7,7 +7,12 @@ area: progetto
 
 # HDRI Studio — Piano
 
-> [!success] Stato: v1.0 — 15 settembre 2026 — le tre fasi del piano sono chiuse
+> [!success] Stato: v1.1 — 15 settembre 2026 — Fase 4 costruita, da provare in C4D
+> Luci separate: flag per luce, EXR planare singolo, messaggio `separate_lights`, plugin che clona la
+> luce modello `HS_TEMPLATE`. Test sul PC: [[#5.4 Fase 4 — test in C4D]]. In più: drag & drop dal
+> catalogo (verificato con il cursore reale), app standalone con preset macOS/Windows.
+
+> [!success] Stato precedente: v1.0 — 15 settembre 2026 — le tre fasi del piano sono chiuse
 > Verificato sul PC con Cinema 4D + Octane: live link e **LightPaint dal viewport**. Nell'app: luci
 > parametriche (sei forme, scrim e Texture comprese), catalogo per sottocartelle, modalità fotometrica
 > validata contro Cycles, fusione Normale, undo, export con preset per software, modello GLB nel
@@ -388,19 +393,35 @@ parallasse, che è esattamente ciò che si vuole.
 
 Passi:
 
-1. **Flag per luce** "separata": esclusa dal bake dell'HDRI; all'export scrive `<rig>_<luce>.exr`
-   ritagliato al rettangolo della luce (margine = sfumatura), lineare, con la radianza già applicata.
-2. **Messaggio live link** `separate_lights`: lista di `{name, azimuth, elevation, roll, width, height,
-   distance, path}` inviata insieme a `hdri_updated`; slider *Distanza* nel pannello (globale, con
-   override per luce in seguito).
-3. **Plugin C4D**: un null `HDRI Studio Lights` con una luce per voce (Octane Light di tipo Area con
-   ImageTexture → il file; in alternativa area light nativa), posizione `centro + D·dir` (con la X
-   invertita per il sistema left-handed), orientamento look-at verso il centro più roll, scala alla
-   dimensione fisica; aggiornata a ogni messaggio, rimossa se il flag viene tolto. Il centro è un null
-   che l'utente può spostare sul soggetto.
-4. **Calibrazione dell'intensità in Octane**: la Power dell'area light non è radianza; si tara con il
-   furnace test di Fase 0 (luce separata vs stessa luce nell'HDRI → stesso pixel su una sfera diffusa).
-5. Opzioni: luce invisibile alla camera, distanza per luce, esportare tutte le luci separate in blocco.
+1. [x] **Flag per luce** "separata" con slider *Distanza (cm)*: esclusa dal bake dell'HDRI esportata
+   (nel preview resta visibile), all'export scrive `<rig>_<luce>.exr` con una **proiezione planare**:
+   i pixel campionano uniformemente in tan-space, cioè esattamente la texture di un rettangolo piano a
+   distanza D che sottende (w × h). Lineare, radianza già applicata, 1024 px sul lato lungo.
+2. [x] **Messaggio live link** `separate_lights`: per luce `forward/right/up` già nelle coordinate del
+   software (X invertita per Octane; per "C4D nativo" no, e il plugin specchia l'asse X della luce),
+   distanza, dimensione fisica, percorso. Inviato con ogni `hdri_updated` e all'aggancio del plugin.
+3. [x] **Plugin C4D**: null `HDRI Studio Lights`; per ogni voce clona la luce modello `HS_TEMPLATE`
+   (scelta dell'utente: Octane Area Light con ImageTexture), matrice `(F·D, R, U, F)` con −Z verso il
+   centro, `LIGHT_AREADETAILS_SIZEX/Y` alla dimensione fisica, primo slot immagine → l'EXR + Reload;
+   rimuove le luci non più in lista. Costante `LIGHT_EMITS_ALONG_Z` se Octane emette lungo +Z.
+4. [ ] **Calibrazione dell'intensità in Octane**: la Power dell'area light non è radianza; si tara con
+   il furnace test di Fase 0 (luce separata vs stessa luce nell'HDRI → stesso pixel su una sfera
+   diffusa). Va fatta sul PC.
+5. [ ] Opzioni: luce invisibile alla camera, esportare tutte le luci separate in blocco, verso della
+   texture se risultasse specchiata.
+
+### 5.4 Fase 4 — test in C4D
+
+> [!todo] Da fare sul PC
+> 1. `git pull`, riavvia C4D. Nella scena crea un'**Octane Area Light**, mettile un ImageTexture nello
+>    slot texture (qualsiasi EXR), chiamala `HS_TEMPLATE`.
+> 2. Nell'app: live link attivo; su una luce spunta *Separata*, distanza per esempio 150 cm.
+> 3. In C4D deve comparire il null `HDRI Studio Lights` con dentro `HS: <nome luce>`, nella direzione
+>    giusta, con la texture della luce. Spostando la luce nell'app, la luce in C4D segue.
+> 4. Da verificare e riferirmi: (a) la luce illumina verso il centro o via dal centro? (se via, cambio
+>    il segno di `LIGHT_EMITS_ALONG_Z`); (b) la texture è dritta o specchiata? (c) con una sfera
+>    diffusa al centro, la luce separata dà la stessa esposizione della stessa luce lasciata nell'HDRI?
+>    Il rapporto fra i due è la calibrazione della Power.
 
 ### 5.3 Fase 3 — stato e test in C4D
 

@@ -20,7 +20,7 @@ layout(push_constant, std430) uniform Params {
 	vec4 size;       // width, height, light_count, supersample
 	vec4 bg_zenith;  // rgb, background mode (0 nero, 1 uniforme = horizon, 2 gradiente)
 	vec4 bg_horizon; // rgb, calibration flag
-	vec4 bg_nadir;   // rgb, measure flag (1 = misura K della luce 0 nel suo frame locale)
+	vec4 bg_nadir;   // rgb, mode: 1 = misura K della luce 0, 2 = proiezione planare della luce 0
 	vec4 base;       // rotazione (rad), esposizione (mult), enabled, flip
 } p;
 
@@ -234,10 +234,39 @@ void measure(ivec2 pix, ivec2 sz) {
 	imageStore(out_img, pix, vec4(w * cos_t * domega, 0.0, 0.0, 1.0));
 }
 
+// Proiezione planare della luce 0: la texture di un'area light rettangolare che, a distanza D,
+// sottende (width × height). Il punto (x, y) del piano corrisponde a d = normalize((x/D)·R + (y/D)·U + F),
+// quindi i pixel campionano uniformemente in tan-space. Scrive la radianza rgb (già con intensità).
+void planar(ivec2 pix, ivec2 sz) {
+	vec4 a = lights.data[0];
+	vec4 b = lights.data[1];
+	vec4 c = lights.data[2];
+	vec3 F, R, U;
+	light_frame(a.y, a.z, a.w, F, R, U);
+	float thw = tan(min(b.x * 0.5, 1.553));
+	float thh = tan(min(b.y * 0.5, 1.553));
+	int ss = max(int(p.size.w + 0.5), 1);
+	vec3 acc = vec3(0.0);
+	for (int sy = 0; sy < ss; sy++) {
+		for (int sx = 0; sx < ss; sx++) {
+			vec2 uv = (vec2(pix) + (vec2(sx, sy) + 0.5) / float(ss)) / vec2(sz);
+			float tx = (uv.x * 2.0 - 1.0) * thw;
+			float ty = (1.0 - uv.y * 2.0) * thh;
+			vec3 d = normalize(tx * R + ty * U + F);
+			float w = light_weight(0, d);
+			vec3 rgb = c.rgb;
+			if (int(a.x + 0.5) == 5) rgb *= light_texture(0, d);
+			acc += rgb * w;
+		}
+	}
+	imageStore(out_img, pix, vec4(acc / float(ss * ss), 1.0));
+}
+
 void main() {
 	ivec2 pix = ivec2(gl_GlobalInvocationID.xy);
 	ivec2 sz = ivec2(p.size.xy);
 	if (pix.x >= sz.x || pix.y >= sz.y) return;
+	if (p.bg_nadir.w > 1.5) { planar(pix, sz); return; }
 	if (p.bg_nadir.w > 0.5) { measure(pix, sz); return; }
 	int n = int(p.size.z + 0.5);
 	int ss = max(int(p.size.w + 0.5), 1);

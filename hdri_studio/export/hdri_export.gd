@@ -20,6 +20,17 @@ const TARGETS := {
 const DEFAULT_TARGET := "Cinema 4D + Octane"
 
 
+## Percorso dell'EXR singolo di una luce separata, accanto all'HDRI principale: <base>_<nome>.exr
+static func separate_path(base_path: String, light_name: String) -> String:
+	var slug := ""
+	for ch in light_name.to_lower():
+		slug += ch if ch.is_valid_identifier() or ch.is_valid_int() else "_"
+	slug = slug.strip_edges().trim_prefix("_").trim_suffix("_")
+	if slug == "":
+		slug = "luce"
+	return base_path.get_basename() + "_" + slug + ".exr"
+
+
 ## Applica il preset (specchio + rotazione) e restituisce una nuova immagine.
 static func apply_orientation(img: Image, target: String, extra_shift_deg := 0.0) -> Image:
 	var t: Dictionary = TARGETS.get(target, TARGETS["Godot / Blender"])

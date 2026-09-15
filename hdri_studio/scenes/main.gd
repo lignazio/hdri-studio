@@ -34,6 +34,8 @@ var _live_dirty := false
 var _live_deadline := 0
 var _link_hosts := {}
 var _model_label: Label
+## Luci separate scritte dall'ultimo export (per il messaggio al plugin).
+var _last_separate: Array = []
 
 
 func _ready() -> void:
@@ -448,10 +450,20 @@ func export_to(path: String, opts := {}) -> Error:
 	tex_rd.texture_rd_rid = RID() # la texture di preview sta per essere liberata
 	baker.set_resolution(res.x, res.y)
 	baker.supersample = 2
-	baker.bake(rig)
+	baker.bake(rig, false, false) # le luci separate non entrano nell'HDRI
 	var img := baker.get_image()
 	img = HdriExport.apply_orientation(img, target, shift)
 	var err := HdriExport.save_exr(img, path, half)
+	# luci separate: un EXR planare ciascuna, accanto all'HDRI
+	_last_separate.clear()
+	for l in rig.separate_lights():
+		var lp := HdriExport.separate_path(path, l.name)
+		var limg := baker.bake_planar(l, 1024)
+		var lerr := HdriExport.save_exr(limg, lp, half)
+		if lerr == OK:
+			_last_separate.append({"light": l, "path": ProjectSettings.globalize_path(lp)})
+		else:
+			push_warning("Luce separata non scritta: %s (%s)" % [lp, error_string(lerr)])
 	# torna alla risoluzione di preview e riaggancia la texture
 	baker.supersample = 1
 	baker.set_resolution(PREVIEW_RES.x, PREVIEW_RES.y)
@@ -512,7 +524,37 @@ func _live_export() -> void:
 		link_panel.set_status("Errore export live: " + error_string(err))
 		return
 	link.notify_hdri(rig.live_export_path, export_panel.target())
-	_update_link_status("ultimo invio %s in %d ms" % [Time.get_time_string_from_system(), Time.get_ticks_msec() - t0])
+	link.broadcast(separate_message())
+	_update_link_status("ultimo invio %s in %d ms · %d luci separate" % [Time.get_time_string_from_system(), Time.get_ticks_msec() - t0, _last_separate.size()])
+
+
+## Messaggio per il plugin con le luci separate: direzione e basi già nelle coordinate del software
+## (X invertita per C4D salvo il preset "nativo", che specchia l'immagine invece degli assi),
+## distanza e dimensione fisica del rettangolo.
+func separate_message() -> Dictionary:
+	var target := export_panel.target()
+	var t: Dictionary = HdriExport.TARGETS.get(target, HdriExport.TARGETS["Godot / Blender"])
+	var mirror_x: bool = not t["flip"]
+	var shift: float = t["shift"] + export_panel.extra_shift()
+	var entries: Array = []
+	for e in _last_separate:
+		var l: RigLight = e["light"]
+		var lz := l.duplicate_light()
+		lz.azimuth = wrapf(l.azimuth + shift, -180.0, 180.0)
+		var fr := lz.frame()
+		var vecs: Array = []
+		for v in fr:
+			var c: Vector3 = v
+			if mirror_x:
+				c.x = -c.x
+			vecs.append([c.x, c.y, c.z])
+		var size := l.physical_size()
+		entries.append({
+			"name": l.name, "path": e["path"], "distance": l.distance,
+			"size": [size.x, size.y], "forward": vecs[0], "right": vecs[1], "up": vecs[2],
+			"azimuth": lz.azimuth, "elevation": l.elevation, "roll": l.roll,
+		})
+	return {"type": "separate_lights", "lights": entries, "target": target}
 
 
 func _on_link_message(msg: Dictionary, client_id: int) -> void:
@@ -520,9 +562,10 @@ func _on_link_message(msg: Dictionary, client_id: int) -> void:
 		"hello":
 			_link_hosts[client_id] = "%s %s" % [msg.get("host", "?"), msg.get("version", "")]
 			_update_link_status()
-			# il plugin appena collegato riceve subito l'HDRI corrente
+			# il plugin appena collegato riceve subito l'HDRI corrente e le luci separate
 			if rig.live_export_path != "" and FileAccess.file_exists(rig.live_export_path):
 				link.notify_hdri(rig.live_export_path, export_panel.target())
+				link.broadcast(separate_message())
 		"lightpaint":
 			_lightpaint_from_host(msg)
 

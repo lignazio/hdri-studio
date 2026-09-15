@@ -87,6 +87,8 @@ func refresh() -> void:
 			txt += "  (off)"
 		if l.solo:
 			txt += "  [solo]"
+		if l.separate:
+			txt += "  ⇗"
 		list.add_item(txt)
 	select(prev)
 	_update_buttons()
