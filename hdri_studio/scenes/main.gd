@@ -75,6 +75,7 @@ func _build_layout() -> void:
 	# colonna sinistra: tab Luci / Catalogo
 	var left := _column(root, 300)
 	root.add_child(rest)
+	root.split_offset = 360  # larghezza iniziale della colonna sinistra (assoluta: solo il secondo figlio espande)
 	var tabs := TabContainer.new()
 	tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	left.add_child(tabs)
@@ -108,7 +109,6 @@ func _build_layout() -> void:
 	vsplit.add_child(preview)
 	map_view = MapView.new()
 	map_view.custom_minimum_size.y = 220
-	map_view.size_flags_vertical = Control.SIZE_SHRINK_END
 	map_view.set_texture(tex_rd)
 	vsplit.add_child(map_view)
 	status = Label.new()
@@ -209,7 +209,6 @@ func _pick_model() -> void:
 func _column(parent: Container, width: float, scroll := false) -> VBoxContainer:
 	var panel := PanelContainer.new()
 	panel.custom_minimum_size.x = width * 0.8
-	panel.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	parent.add_child(panel)
 	var margin := MarginContainer.new()
 	for side in ["left", "right", "top", "bottom"]:
