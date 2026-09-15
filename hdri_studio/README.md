@@ -74,6 +74,12 @@ luci seguono; togliendo il flag la luce sparisce dalla scena.
 Da tarare al primo uso (costanti in cima al `.pyp`): il verso di emissione della luce modello
 (`LIGHT_EMITS_ALONG_Z`) e, con il furnace test, il rapporto fra la Power di Octane e la radianza.
 
+## Live link con Blender
+
+Add-on in `plugins/blender/hdri_studio_link/` — installazione e uso in `plugins/blender/README.md`.
+Stesso protocollo di C4D; luci separate come piani emissivi (strength 1 = radianza, verificato in
+Cycles), LightPaint con `ray_cast` e normali interpolate.
+
 ## Live link con Cinema 4D (Octane)
 
 Plugin in `plugins/c4d/hdri_studio_link/` — installazione e uso in `plugins/c4d/README.md`. In breve:
@@ -137,6 +143,6 @@ l'integrale numerico e con un render Cycles.
     export/    HdriExport (EXR half/float32, PNG di controllo)
     scenes/    main.tscn / main.gd — app
     livelink/  LiveLink (server TCP, JSON-lines)
-    plugins/   c4d/hdri_studio_link (plugin Cinema 4D), c4d/octane_reload_probe.py (sonda di Fase 0)
+    plugins/   c4d/hdri_studio_link (plugin Cinema 4D), blender/hdri_studio_link (add-on Blender)
     tools/     spike di Fase 0, verifica Blender, smoke test UI e link, test del drag & drop
     out/       output generati (ignorati da git)

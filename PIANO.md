@@ -7,7 +7,12 @@ area: progetto
 
 # HDRI Studio — Piano
 
-> [!success] Stato: v1.2 — 15 settembre 2026 — Fase 4 in prova in C4D, Fase 5 (Blender) pianificata
+> [!success] Stato: v1.3 — 15 settembre 2026 — Fase 5 (Blender) fatta e verificata in Cycles
+> Add-on Blender: reload, LightPaint con `ray_cast`, luci separate come piani emissivi. Verifica
+> fisica: piano emissivo vs stessa luce nell'HDRI → rapporto 1.002. Le cose che mancano rispetto al
+> piano iniziale sono in [[#10. Cosa manca rispetto al piano iniziale]].
+
+> [!success] Stato precedente: v1.2 — 15 settembre 2026 — Fase 4 in prova in C4D, Fase 5 (Blender) pianificata
 > Luci separate: flag per luce, EXR planare singolo, messaggio `separate_lights`, plugin che clona la
 > luce modello `HS_TEMPLATE`; posizione, dimensione e texture confermate automatiche, verso e
 > specchio regolabili dal pannello Live link, Power da tarare ([[#5.4 Fase 4 — test in C4D]]).
@@ -414,7 +419,14 @@ Passi:
 5. [ ] Opzioni: luce invisibile alla camera, esportare tutte le luci separate in blocco, verso della
    texture se risultasse specchiata.
 
-### Fase 5 — Live link per Blender (pianificata il 15/09/2026, da fare su richiesta)
+### Fase 5 — Live link per Blender — fatta il 15/09/2026
+
+Costruita e verificata headless sul Mac (Blender 5.1): collegamento, `hdri_updated` → `reload()`,
+`separate_lights` → piano emissivo a 1.5 m lungo +X con la faccia verso il centro e larghezza 1.092 m,
+LightPaint da Blender → az 0 / el 0 nell'app. **Verifica fisica in Cycles**: stessa luce nell'HDRI
+(0.5621) e come piano emissivo creato dall'add-on (0.5630) → rapporto 1.002. Scelta diversa da C4D: i
+piani emissivi con Emission strength 1 hanno la semantica della radianza, quindi niente calibrazione.
+Piano originale:
 
 Stesso protocollo di C4D (TCP 47820, JSON-lines, `hdri_updated` / `separate_lights` / `lightpaint`),
 un add-on Python al posto del plugin. Rispetto a C4D è più semplice su ogni fronte: Blender ricarica
@@ -512,6 +524,27 @@ Rispondi a quelle che sai, sul resto scelgo io e lo segno in [[#9. Decisioni]].
 9. ~~Altre feature~~ → rimandate a dopo la verifica di fattibilità; si procede per gradi.
 
 Nessuna domanda bloccante. Prossimo passo: Fase 0.
+
+## 10. Cosa manca rispetto al piano iniziale
+
+Confronto con la v0.3 (il piano approvato prima di scrivere codice) e con le voci aperte aggiunte poi.
+
+| Voce | Da dove viene | Stato |
+|---|---|---|
+| Radiance `.hdr` in export | Fase 1/2 | Non fatto. Poco utile finché EXR basta; ~60 righe quando serve |
+| Metadati nell'EXR (chromaticities Rec.709, JSON del rig dentro il file) | §4.5 | Non fatto: `Image.save_exr` di Godot non scrive attributi custom; servirebbe un writer EXR nostro |
+| ACEScg come spazio di output | §2, Fase 3 | Non fatto |
+| Libreria di preset di studio | Fase 3 | Non fatto (oggi: Salva/Apri rig) |
+| Preset di orientamento **Houdini** e plugin Houdini | §3, Fase 3 | Non misurato, non fatto |
+| Test 3 di §6 (diff pixel per pixel con un piano emissivo in Cycles) | §6 | Fatto in forma equivalente: furnace, singola luce, e ora piano emissivo vs HDRI (1.002) |
+| Catalogo: anteprima al passaggio del mouse, tag/preferiti | aggiunta Fase 3 | Non fatto |
+| Modalità fotometrica | Fase 3 | Fatta e validata |
+| Fase 4, calibrazione Power di Octane e verso/specchio texture | Fase 4 | In attesa del test sul PC (spunte nel pannello Live link) |
+| Fase 4 opzioni: luce invisibile alla camera, export in blocco | Fase 4 | Blender: fatto (visibilità); C4D: no |
+
+Tutto il resto del piano iniziale è fatto e verificato: bake fisico, sei forme (scrim compresa),
+sfondo gradiente/HDRI, export con preset, live link C4D+Octane e Blender, LightPaint da entrambi,
+luci Texture e catalogo, luci separate, app standalone.
 
 ## 9. Decisioni
 

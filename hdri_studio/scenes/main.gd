@@ -537,7 +537,7 @@ func _live_export() -> void:
 func separate_message() -> Dictionary:
 	var target := export_panel.target()
 	var t: Dictionary = HdriExport.TARGETS.get(target, HdriExport.TARGETS["Godot / Blender"])
-	var mirror_x: bool = not t["flip"]
+	var mirror_x: bool = t.get("mirror_x", false)
 	var shift: float = t["shift"] + export_panel.extra_shift()
 	var entries: Array = []
 	for e in _last_separate:
@@ -558,7 +558,8 @@ func separate_message() -> Dictionary:
 			"azimuth": lz.azimuth, "elevation": l.elevation, "roll": l.roll,
 		})
 	return {"type": "separate_lights", "lights": entries, "target": target,
-		"face_sign": -1 if link_panel.separate_flip_face() else 1}
+		"face_sign": -1 if link_panel.separate_flip_face() else 1,
+		"texture_flipped": link_panel.separate_flip_tex(), "unit_scale": 0.01}
 
 
 func _on_link_message(msg: Dictionary, client_id: int) -> void:
