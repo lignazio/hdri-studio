@@ -290,6 +290,81 @@ func _run(main: Node) -> void:
 	var fwd: Array = msg["lights"][0]["forward"]
 	ok = ok and _check(absf(fwd[2] - 1.0) < 1e-4, "forward verso +Z (az 0)")
 
+	# preset: salva, ricarica, aggiungi
+	main.presets.set_folder(ProjectSettings.globalize_path("res://out/presets"))
+	var np: int = main.rig.lights.size()
+	main._save_preset("Smoke preset")
+	var pp: String = main.presets.preset_path("Smoke preset")
+	ok = ok and _check(FileAccess.file_exists(pp) and FileAccess.file_exists(pp.get_basename() + ".png"), "preset salvato con miniatura")
+	main._merge_preset(pp)
+	ok = ok and _check(main.rig.lights.size() == np * 2, "aggiungi luci del preset → %d luci" % main.rig.lights.size())
+	main._load_preset(pp)
+	ok = ok and _check(main.rig.lights.size() == np, "carica preset → %d luci" % main.rig.lights.size())
+
+	# catalogo: preferiti e tag
+	main.catalog.set_favorite(tex_path, true)
+	main.catalog.set_tags(tex_path, ["softbox", "test"])
+	ok = ok and _check(main.catalog._buttons[tex_path].text.begins_with("★"), "preferito segnato nel nome")
+	main.catalog._fav_only.button_pressed = true
+	main.catalog._apply_filter()
+	var vis2 := 0
+	for path in main.catalog._buttons:
+		if main.catalog._buttons[path].visible:
+			vis2 += 1
+	ok = ok and _check(vis2 == 1, "filtro preferiti: %d visibile" % vis2)
+	main.catalog._fav_only.button_pressed = false
+	main.catalog._filter.text = "softbox"
+	main.catalog._apply_filter()
+	vis2 = 0
+	for path in main.catalog._buttons:
+		if main.catalog._buttons[path].visible:
+			vis2 += 1
+	ok = ok and _check(vis2 == 1, "filtro per tag nel testo: %d visibile" % vis2)
+	main.catalog._filter.text = ""
+	main.catalog._apply_filter()
+	ok = ok and _check(FileAccess.file_exists(CatalogPanel.META_PATH), "metadati del catalogo salvati")
+
+	# riconversione EXR via Blender (ZIP lossless → pixel identici)
+	if ExrConvert.find_blender() != "":
+		var src := ProjectSettings.globalize_path("res://out/smoke_export.exr")
+		var dst := ProjectSettings.globalize_path("res://out/smoke_export_zip.exr")
+		var pid := ExrConvert.start([src, dst], "ZIP", true)
+		ok = ok and _check(pid >= 0, "Blender avviato per la riconversione")
+		var waited2 := 0.0
+		while OS.is_process_running(pid) and waited2 < 60.0:
+			await create_timer(0.5).timeout
+			waited2 += 0.5
+		var a := Image.new()
+		a.load_exr_from_buffer(FileAccess.get_file_as_bytes(src))
+		var b := Image.new()
+		var lerr := b.load_exr_from_buffer(FileAccess.get_file_as_bytes(dst))
+		var same := lerr == OK and a.get_size() == b.get_size()
+		if same:
+			for i in 20:
+				var x := (i * 97) % a.get_width()
+				var y := (i * 53) % a.get_height()
+				if not a.get_pixel(x, y).is_equal_approx(b.get_pixel(x, y)):
+					same = false
+		ok = ok and _check(same, "ZIP via Blender: pixel identici (%.1f s)" % waited2)
+		# DWAA: Godot non lo legge → fallback di conversione in cache
+		var dwaa := ProjectSettings.globalize_path("res://out/smoke_export_dwaa.exr")
+		var pid2 := ExrConvert.start([src, dwaa], "DWAA", true)
+		waited2 = 0.0
+		while OS.is_process_running(pid2) and waited2 < 60.0:
+			await create_timer(0.5).timeout
+			waited2 += 0.5
+		var direct := Image.new()
+		var derr := direct.load_exr_from_buffer(FileAccess.get_file_as_bytes(dwaa))
+		ok = ok and _check(derr != OK or direct.is_empty(), "DWAA non leggibile direttamente da TinyEXR (come previsto)")
+		var via := HdriBaker.load_linear_image(dwaa)
+		ok = ok and _check(via != null and via.get_size() == a.get_size(), "DWAA caricato tramite conversione PIZ in cache")
+		if via != null:
+			var pa := a.get_pixel(a.get_width() / 4, a.get_height() / 2)
+			var pv := via.get_pixel(a.get_width() / 4, a.get_height() / 2)
+			ok = ok and _check(absf(pa.r - pv.r) < 0.05 * maxf(pa.r, 0.1) + 0.01, "DWAA: valori vicini (%.3f vs %.3f)" % [pa.r, pv.r])
+	else:
+		print("[smoke] (Blender non trovato: riconversione non testata)")
+
 	print("[smoke] %s" % ("TUTTO OK" if ok else "FALLITO"))
 	quit(0 if ok else 1)
 

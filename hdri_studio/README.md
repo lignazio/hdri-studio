@@ -28,6 +28,31 @@ preview (solo visualizzazione) · ⌘Z / ⇧⌘Z = undo/redo.
 Export: risoluzione 2k/4k/8k, half o float32, preset di orientamento per software (Cinema 4D = specchio
 orizzontale, misurato con la taratura), rotazione extra. Il rig si salva/apre come JSON.
 
+## Preset di studio
+
+Tab **Preset** nella colonna sinistra: *Salva preset…* scrive il rig corrente (`<nome>.json` + miniatura
+PNG dal preview) nella cartella della libreria (`user://presets` di default, cambiabile). *Carica*
+sostituisce il rig, *Aggiungi luci* appende le luci del preset a quello corrente, doppio click = carica.
+La libreria è una cartella di file JSON: si copia, si versiona, si condivide.
+
+## Preferiti, tag, anteprima
+
+Nel catalogo, tasto destro su una miniatura → *★ Preferito* / *Tag…* (separati da virgola). I preferiti
+hanno la stella nel nome; la spunta ★ mostra solo quelli; il menu dei tag filtra per tag; il campo di
+testo cerca in nomi e tag. I metadati stanno in `user://catalog_meta.json`, chiave = percorso relativo
+alla cartella del catalogo (la collezione non viene toccata). Passando il mouse su una miniatura compare
+un'anteprima più grande.
+
+## Codec EXR
+
+Godot scrive PIZ (lossless). Nel pannello Export, *Compressione* offre anche ZIP, ZIPS, RLE, NONE
+(lossless) e PXR24, B44, B44A, DWAA, DWAB (lossy): l'export scrive PIZ e poi **Blender** riconverte in
+background (rilevato nel percorso standard, o *Blender…* per indicarlo). Il live link resta PIZ.
+
+Nell'altra direzione, TinyEXR non decodifica DWAA/DWAB/B44/PXR24: gli EXR del catalogo o di base con
+quei codec vengono convertiti in PIZ da Blender una volta e messi in cache (`user://exr_piz_cache`).
+Senza Blender, quei file non si aprono.
+
 ## Modalità fotometrica
 
 Nel pannello proprietà, *Fotometrico (illuminamento al centro)*: invece della radianza si imposta
@@ -136,10 +161,10 @@ l'integrale numerico e con un render Cycles.
 
 ## Struttura
 
-    core/      RigLight, LightRig (modello dati, JSON), ColorTemp, UndoStack, AppSettings, ThumbnailCache
+    core/      RigLight, LightRig, ColorTemp, UndoStack, AppSettings, ThumbnailCache, ExrConvert
     bake/      bake.glsl (compute shader), HdriBaker (RenderingDevice, texture RGBA32F)
     preview/   Preview3D (viewport, sfere, LightPaint), shader della sfera cromata e della mappa 2D
-    ui/        ParamRow, LightListPanel, LightProperties, BackgroundPanel, ExportPanel, LiveLinkPanel, CatalogPanel, MapView
+    ui/        ParamRow, LightListPanel, LightProperties, BackgroundPanel, ExportPanel, LiveLinkPanel, CatalogPanel, PresetPanel, MapView
     export/    HdriExport (EXR half/float32, PNG di controllo)
     scenes/    main.tscn / main.gd — app
     livelink/  LiveLink (server TCP, JSON-lines)

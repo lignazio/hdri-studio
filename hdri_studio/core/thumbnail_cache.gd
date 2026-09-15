@@ -5,8 +5,8 @@ extends RefCounted
 
 signal ready(path: String, texture: ImageTexture, size: Vector2i)
 
-const SIZE := Vector2i(192, 96)
-const DIR := "user://thumbs"
+const SIZE := Vector2i(384, 192)
+const DIR := "user://thumbs_384"
 
 var _queue: Array[String] = []
 var _queued := {}

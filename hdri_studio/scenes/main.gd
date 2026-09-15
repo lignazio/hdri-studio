@@ -22,6 +22,10 @@ var export_panel: ExportPanel
 var link_panel: LiveLinkPanel
 var link: LiveLink
 var catalog: CatalogPanel
+var presets: PresetPanel
+var _hover: PanelContainer
+var _hover_tex: TextureRect
+var _hover_label: Label
 var status: Label
 
 var _dirty := true
@@ -36,6 +40,8 @@ var _link_hosts := {}
 var _model_label: Label
 ## Luci separate scritte dall'ultimo export (per il messaggio al plugin).
 var _last_separate: Array = []
+var _convert_pid := -1
+var _convert_files: Array = []
 
 
 func _ready() -> void:
@@ -113,6 +119,10 @@ func _build_layout() -> void:
 	catalog.name = "Catalogo"
 	tabs.add_child(catalog)
 	catalog.set_folder(AppSettings.get_value("catalog_folder", ""))
+	presets = PresetPanel.new()
+	presets.name = "Preset"
+	tabs.add_child(presets)
+	presets.set_folder(AppSettings.get_value("preset_folder", ""))
 
 	# centro
 	var center := VBoxContainer.new()
@@ -155,6 +165,27 @@ func _build_layout() -> void:
 	_file_dialog.use_native_dialog = true
 	add_child(_file_dialog)
 
+	# anteprima grande al passaggio del mouse sulle miniature del catalogo, sopra tutto
+	var hover_layer := CanvasLayer.new()
+	hover_layer.layer = 10
+	add_child(hover_layer)
+	_hover = PanelContainer.new()
+	_hover.visible = false
+	_hover.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var hv := VBoxContainer.new()
+	hv.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_hover.add_child(hv)
+	_hover_tex = TextureRect.new()
+	_hover_tex.custom_minimum_size = Vector2(384, 192)
+	_hover_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_hover_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_hover_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hv.add_child(_hover_tex)
+	_hover_label = Label.new()
+	_hover_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hv.add_child(_hover_label)
+	hover_layer.add_child(_hover)
+
 	# segnali
 	light_list.selection_changed.connect(_select)
 	light_list.structure_changed.connect(func() -> void: _on_light_changed(true))
@@ -169,6 +200,13 @@ func _build_layout() -> void:
 		else:
 			_add_texture_light(path, defaults, rad_to_deg(atan2(-dir.x, dir.z)), rad_to_deg(asin(clampf(dir.y, -1.0, 1.0)))))
 	catalog.folder_pick_requested.connect(_pick_catalog_folder)
+	catalog.hover_preview.connect(_show_hover)
+	catalog.hover_end.connect(func() -> void: _hover.visible = false)
+	presets.save_requested.connect(_save_preset)
+	presets.load_requested.connect(_load_preset)
+	presets.merge_requested.connect(_merge_preset)
+	presets.folder_pick_requested.connect(_pick_preset_folder)
+	export_panel.blender_pick_requested.connect(_pick_blender)
 	props.changed.connect(_on_light_changed)
 	props.light_renamed.connect(func() -> void: light_list.refresh(); map_view.refresh())
 	map_view.light_selected.connect(func(i: int) -> void: light_list.select(i); _select(i))
@@ -330,6 +368,10 @@ func _process(_delta: float) -> void:
 	if _live_dirty and Time.get_ticks_msec() >= _live_deadline:
 		_live_dirty = false
 		_live_export()
+	if _convert_pid >= 0 and not OS.is_process_running(_convert_pid):
+		var code := OS.get_process_exit_code(_convert_pid)
+		_convert_pid = -1
+		export_panel.set_status("Riconversione %s: %s (%d file)" % [export_panel.codec(), "fatta" if code == 0 else "fallita (codice %d)" % code, _convert_files.size()])
 	if _screenshot_frames >= 0:
 		_screenshot_frames -= 1
 		if _screenshot_frames == 0:
@@ -415,6 +457,65 @@ func _pick_texture_file(new_light: bool) -> void:
 			_on_light_changed(true))
 
 
+func _show_hover(tex: Texture2D, name: String, anchor: Rect2) -> void:
+	_hover_tex.texture = tex
+	_hover_label.text = name
+	_hover.visible = true
+	_hover.reset_size()
+	# a destra della miniatura, dentro la finestra
+	var size := Vector2(400, 230)
+	var pos := Vector2(anchor.end.x + 8, anchor.position.y)
+	var win := get_viewport().get_visible_rect().size
+	pos.y = clampf(pos.y, 0.0, win.y - size.y)
+	if pos.x + size.x > win.x:
+		pos.x = anchor.position.x - size.x - 8
+	_hover.position = pos
+
+
+func _pick_blender() -> void:
+	_dialog(FileDialog.FILE_MODE_OPEN_FILE, [], "Eseguibile di Blender", func(path: String) -> void:
+		AppSettings.set_value("blender_path", path)
+		export_panel.refresh_blender())
+
+
+func _pick_preset_folder() -> void:
+	_dialog(FileDialog.FILE_MODE_OPEN_DIR, [], "Cartella dei preset", func(path: String) -> void:
+		AppSettings.set_value("preset_folder", path)
+		presets.set_folder(path))
+
+
+## Salva il rig corrente come preset con miniatura dal preview.
+func _save_preset(name: String) -> void:
+	var path := presets.preset_path(name)
+	var err := rig.save_json(path)
+	if err != OK:
+		presets._status.text = "Errore: " + error_string(err)
+		return
+	var img := baker.get_image()
+	img.resize(256, 128, Image.INTERPOLATE_BILINEAR)
+	HdriExport.save_preview_png(img, path.get_basename() + ".png", 1.0)
+	presets.refresh()
+	presets._select(path)
+
+
+func _load_preset(path: String) -> void:
+	if load_rig_from(path):
+		_rig_path = "" # un preset caricato non è "il file del rig"
+		_update_status()
+
+
+func _merge_preset(path: String) -> void:
+	var r := LightRig.load_json(path)
+	if r == null:
+		return
+	for l in r.lights:
+		rig.lights.append(l)
+	light_list.refresh()
+	light_list.select(rig.lights.size() - 1)
+	_select(rig.lights.size() - 1)
+	_on_light_changed(true)
+
+
 func _pick_catalog_folder() -> void:
 	_dialog(FileDialog.FILE_MODE_OPEN_DIR, [], "Cartella del catalogo", func(path: String) -> void:
 		AppSettings.set_value("catalog_folder", path)
@@ -480,10 +581,31 @@ func export_to(path: String, opts := {}) -> Error:
 		export_panel.set_status("Esportato %s (%dx%d, %s, %s) in %.1f s" % [
 			path.get_file(), res.x, res.y, "half" if half else "float32",
 			target, (Time.get_ticks_msec() - t0) / 1000.0])
+		_start_conversion(path, half)
 	else:
 		export_panel.set_status("Errore export: " + error_string(err))
 	_update_status()
 	return err
+
+
+## Riconversione con un altro codec via Blender (solo export manuale, in background).
+func _start_conversion(path: String, half: bool) -> void:
+	var codec := export_panel.codec()
+	if codec == "PIZ":
+		return
+	var pairs: Array = []
+	var files: Array = [ProjectSettings.globalize_path(path)]
+	for e in _last_separate:
+		files.append(e["path"])
+	for f in files:
+		pairs.append(f)
+		pairs.append(f)
+	_convert_pid = ExrConvert.start(pairs, codec, half)
+	_convert_files = files
+	if _convert_pid < 0:
+		export_panel.set_status("Riconversione %s non avviata: Blender non trovato (pannello Export → Blender…)" % codec)
+	else:
+		export_panel.set_status("Esportato in PIZ, riconversione %s in corso con Blender…" % codec)
 
 
 # --- live link ----------------------------------------------------------------------------------

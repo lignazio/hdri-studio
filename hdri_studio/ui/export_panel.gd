@@ -14,6 +14,10 @@ var _half: CheckBox
 var _target: OptionButton
 var _shift: ParamRow
 var _status: Label
+var _codec: OptionButton
+var _blender_label: Label
+
+signal blender_pick_requested()
 
 
 func _init() -> void:
@@ -32,6 +36,25 @@ func _init() -> void:
 	_half.text = "EXR half (16 bit)"
 	_half.button_pressed = true
 	add_child(_half)
+	_codec = _option("Compressione", [])
+	for c in ExrConvert.CODECS:
+		_codec.add_item(c if c == "PIZ" else c + "  (via Blender)")
+	_codec.tooltip_text = "PIZ è nativo. Gli altri codec riconvertono il file con Blender in background dopo l'export.\nLossless: ZIP, ZIPS, RLE, NONE. Lossy: PXR24, B44, B44A, DWAA, DWAB."
+	var brow := HBoxContainer.new()
+	add_child(brow)
+	_blender_label = Label.new()
+	_blender_label.clip_text = true
+	_blender_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_blender_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_blender_label.modulate = Color(1, 1, 1, 0.6)
+	_blender_label.add_theme_font_size_override("font_size", 12)
+	brow.add_child(_blender_label)
+	var bb := Button.new()
+	bb.text = "Blender…"
+	bb.tooltip_text = "Eseguibile di Blender per la riconversione (rilevato automaticamente se installato nel percorso standard)"
+	bb.pressed.connect(func() -> void: blender_pick_requested.emit())
+	brow.add_child(bb)
+	refresh_blender()
 
 	var row := HBoxContainer.new()
 	add_child(row)
@@ -95,3 +118,13 @@ func extra_shift() -> float:
 
 func set_status(text: String) -> void:
 	_status.text = text
+
+
+func codec() -> String:
+	return ExrConvert.CODECS[_codec.selected]
+
+
+func refresh_blender() -> void:
+	var b := ExrConvert.find_blender()
+	_blender_label.text = ("Blender: " + b.get_file()) if b != "" else "Blender non trovato: solo PIZ"
+	_blender_label.tooltip_text = b

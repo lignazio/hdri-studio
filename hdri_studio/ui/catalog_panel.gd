@@ -8,6 +8,11 @@ extends VBoxContainer
 
 signal light_requested(path: String, defaults: Dictionary)
 signal folder_pick_requested()
+## Anteprima grande al passaggio del mouse (main la mostra sopra tutto).
+signal hover_preview(texture: Texture2D, name: String, anchor: Rect2)
+signal hover_end()
+
+const META_PATH := "user://catalog_meta.json"
 
 const EXTS := ["exr", "hdr"]
 const COLUMNS := 2
@@ -20,6 +25,13 @@ var _sections := {}      # sottocartella relativa → {"header": Label, "grid": 
 var _list: VBoxContainer
 var _subfolder: OptionButton
 var _filter: LineEdit
+var _meta := {}          # percorso relativo → {"fav": bool, "tags": [..]}
+var _fav_only: CheckBox
+var _tag_filter: OptionButton
+var _menu: PopupMenu
+var _menu_path := ""
+var _tag_dialog: ConfirmationDialog
+var _tag_edit: LineEdit
 var _path_label: Label
 var _status: Label
 
@@ -48,11 +60,36 @@ func _init() -> void:
 	_subfolder = OptionButton.new()
 	_subfolder.item_selected.connect(func(_i: int) -> void: _apply_filter())
 	add_child(_subfolder)
+	var frow := HBoxContainer.new()
+	add_child(frow)
 	_filter = LineEdit.new()
-	_filter.placeholder_text = "Filtra per nome…"
+	_filter.placeholder_text = "Filtra per nome o tag…"
 	_filter.clear_button_enabled = true
+	_filter.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_filter.text_changed.connect(func(_t: String) -> void: _apply_filter())
-	add_child(_filter)
+	frow.add_child(_filter)
+	_fav_only = CheckBox.new()
+	_fav_only.text = "★"
+	_fav_only.tooltip_text = "Solo preferiti"
+	_fav_only.toggled.connect(func(_v: bool) -> void: _apply_filter())
+	frow.add_child(_fav_only)
+	_tag_filter = OptionButton.new()
+	_tag_filter.item_selected.connect(func(_i: int) -> void: _apply_filter())
+	add_child(_tag_filter)
+	_menu = PopupMenu.new()
+	_menu.add_check_item("★ Preferito", 0)
+	_menu.add_item("Tag…", 1)
+	_menu.id_pressed.connect(_on_menu)
+	add_child(_menu)
+	_tag_dialog = ConfirmationDialog.new()
+	_tag_dialog.title = "Tag (separati da virgola)"
+	_tag_edit = LineEdit.new()
+	_tag_edit.placeholder_text = "softbox, caldo, grande"
+	_tag_edit.text_submitted.connect(func(_t: String) -> void: _tag_dialog.hide(); _on_tags_confirmed())
+	_tag_dialog.add_child(_tag_edit)
+	_tag_dialog.confirmed.connect(_on_tags_confirmed)
+	add_child(_tag_dialog)
+	_load_meta()
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -100,6 +137,7 @@ func set_folder(path: String) -> void:
 		_add_button(it)
 	for sub in _sections:
 		_subfolder.add_item(sub if sub != "" else "(radice)")
+	_rebuild_tag_filter()
 	_apply_filter()
 	_status.text = "%d immagini in %d cartelle" % [_items.size(), _sections.size()]
 
@@ -151,7 +189,7 @@ func _section_grid(sub: String) -> GridContainer:
 
 func _add_button(it: Dictionary) -> void:
 	var b := Button.new()
-	b.text = it["sidecar"].get("name", it["name"])
+	b.text = _label(it)
 	b.tooltip_text = it["path"]
 	b.clip_text = true
 	b.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -161,6 +199,17 @@ func _add_button(it: Dictionary) -> void:
 	b.custom_minimum_size = Vector2(120, 92)
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	b.pressed.connect(func() -> void: light_requested.emit(it["path"], _defaults(it)))
+	b.gui_input.connect(func(ev: InputEvent) -> void:
+		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_RIGHT:
+			_menu_path = it["path"]
+			_menu.set_item_checked(0, _meta_of(it["path"]).get("fav", false))
+			_menu.position = Vector2i(b.get_global_mouse_position()) + Vector2i(get_window().position)
+			_menu.popup())
+	b.mouse_entered.connect(func() -> void:
+		hover_end.emit()
+		if b.icon != null:
+			hover_preview.emit(b.icon, b.text, b.get_global_rect()))
+	b.mouse_exited.connect(func() -> void: hover_end.emit())
 	# trascinabile sulla mappa o sul preview 3D: il dato viaggia come Dictionary
 	b.set_drag_forwarding(func(_at: Vector2) -> Variant:
 		var preview := TextureRect.new()
@@ -205,14 +254,120 @@ func _apply_filter() -> void:
 	var all_folders := _subfolder.selected <= 0
 	if not all_folders:
 		only = _sections.keys()[_subfolder.selected - 1]
+	var tag_only := ""
+	if _tag_filter.selected > 0:
+		tag_only = _tag_filter.get_item_text(_tag_filter.selected)
 	var visible_per_section := {}
 	for path in _buttons:
 		var b: Button = _buttons[path]
 		var sub: String = b.get_meta("folder")
-		b.visible = (all_folders or sub == only) and (q == "" or b.text.to_lower().contains(q) or path.get_file().to_lower().contains(q))
+		var m := _meta_of(path)
+		var tags: Array = m.get("tags", [])
+		var tag_text := " ".join(tags).to_lower()
+		var text_ok: bool = q == "" or b.text.to_lower().contains(q) or path.get_file().to_lower().contains(q) or tag_text.contains(q)
+		var fav_ok: bool = not _fav_only.button_pressed or m.get("fav", false)
+		var tag_ok: bool = tag_only == "" or tags.has(tag_only)
+		b.visible = (all_folders or sub == only) and text_ok and fav_ok and tag_ok
 		if b.visible:
 			visible_per_section[sub] = true
 	for sub in _sections:
 		var show: bool = visible_per_section.has(sub)
 		_sections[sub]["header"].visible = show
 		_sections[sub]["grid"].visible = show
+
+
+# --- preferiti e tag (user://catalog_meta.json, chiave = percorso relativo alla cartella) ---------
+
+func _rel(path: String) -> String:
+	return path.trim_prefix(folder).trim_prefix("/").trim_prefix("\\")
+
+
+func _meta_of(path: String) -> Dictionary:
+	return _meta.get(_rel(path), {})
+
+
+func _set_meta(path: String, m: Dictionary) -> void:
+	_meta[_rel(path)] = m
+	_save_meta()
+	if _buttons.has(path):
+		var it := {"path": path, "name": path.get_file().get_basename(), "sidecar": _sidecar(path)}
+		_buttons[path].text = _label(it)
+	_rebuild_tag_filter()
+	_apply_filter()
+
+
+func _label(it: Dictionary) -> String:
+	var name: String = it["sidecar"].get("name", it["name"])
+	return ("★ " + name) if _meta_of(it["path"]).get("fav", false) else name
+
+
+func _load_meta() -> void:
+	var txt := FileAccess.get_file_as_string(META_PATH)
+	var d = JSON.parse_string(txt) if txt != "" else null
+	_meta = d if d is Dictionary else {}
+
+
+func _save_meta() -> void:
+	var f := FileAccess.open(META_PATH, FileAccess.WRITE)
+	if f != null:
+		f.store_string(JSON.stringify(_meta, "\t"))
+
+
+func _all_tags() -> Array:
+	var s := {}
+	for rel in _meta:
+		for tg in _meta[rel].get("tags", []):
+			s[tg] = true
+	var arr := s.keys()
+	arr.sort()
+	return arr
+
+
+func _rebuild_tag_filter() -> void:
+	var cur := _tag_filter.get_item_text(_tag_filter.selected) if _tag_filter.selected > 0 else ""
+	_tag_filter.clear()
+	_tag_filter.add_item("Tutti i tag")
+	var i := 1
+	for tg in _all_tags():
+		_tag_filter.add_item(tg)
+		if tg == cur:
+			_tag_filter.selected = i
+		i += 1
+
+
+func _on_menu(id: int) -> void:
+	if _menu_path == "":
+		return
+	var m := _meta_of(_menu_path).duplicate()
+	if id == 0:
+		m["fav"] = not m.get("fav", false)
+		_set_meta(_menu_path, m)
+	elif id == 1:
+		_tag_edit.text = ", ".join(m.get("tags", []))
+		_tag_dialog.popup_centered()
+		_tag_edit.grab_focus()
+
+
+func _on_tags_confirmed() -> void:
+	if _menu_path == "":
+		return
+	var m := _meta_of(_menu_path).duplicate()
+	var tags: Array = []
+	for part in _tag_edit.text.split(","):
+		var tg := part.strip_edges().to_lower()
+		if tg != "" and not tags.has(tg):
+			tags.append(tg)
+	m["tags"] = tags
+	_set_meta(_menu_path, m)
+
+
+func set_favorite(path: String, fav: bool) -> void:
+	var m := _meta_of(path).duplicate()
+	m["fav"] = fav
+	_set_meta(path, m)
+
+
+func set_tags(path: String, tags: Array) -> void:
+	var m := _meta_of(path).duplicate()
+	m["tags"] = tags
+	_set_meta(path, m)

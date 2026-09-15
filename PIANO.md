@@ -7,7 +7,12 @@ area: progetto
 
 # HDRI Studio — Piano
 
-> [!success] Stato: v1.3 — 15 settembre 2026 — Fase 5 (Blender) fatta e verificata in Cycles
+> [!success] Stato: v1.4 — 15 settembre 2026 — preset, tag/preferiti/anteprima, codec EXR
+> Libreria di preset con miniature; catalogo con preferiti, tag, filtri e anteprima al passaggio del
+> mouse; export in ZIP/DWAA/DWAB/… via Blender in background e lettura degli EXR DWAA/B44/PXR24 del
+> catalogo tramite conversione in cache. Cosa manca: [[#10. Cosa manca rispetto al piano iniziale]].
+
+> [!success] Stato precedente: v1.3 — 15 settembre 2026 — Fase 5 (Blender) fatta e verificata in Cycles
 > Add-on Blender: reload, LightPaint con `ray_cast`, luci separate come piani emissivi. Verifica
 > fisica: piano emissivo vs stessa luce nell'HDRI → rapporto 1.002. Le cose che mancano rispetto al
 > piano iniziale sono in [[#10. Cosa manca rispetto al piano iniziale]].
@@ -532,12 +537,13 @@ Confronto con la v0.3 (il piano approvato prima di scrivere codice) e con le voc
 | Voce | Da dove viene | Stato |
 |---|---|---|
 | Radiance `.hdr` in export | Fase 1/2 | Non fatto. Poco utile finché EXR basta; ~60 righe quando serve |
+| Codec EXR (ZIP, DWAA, DWAB…) | richiesta 15/09 | Fatto via Blender in background (Godot scrive solo PIZ, TinyEXR non ha DWA); in lettura, conversione in cache per i codec che TinyEXR non decodifica |
 | Metadati nell'EXR (chromaticities Rec.709, JSON del rig dentro il file) | §4.5 | Non fatto: `Image.save_exr` di Godot non scrive attributi custom; servirebbe un writer EXR nostro |
 | ACEScg come spazio di output | §2, Fase 3 | Non fatto |
-| Libreria di preset di studio | Fase 3 | Non fatto (oggi: Salva/Apri rig) |
+| Libreria di preset di studio | Fase 3 | Fatta: tab Preset, cartella di JSON + miniature, carica/aggiungi/elimina |
 | Preset di orientamento **Houdini** e plugin Houdini | §3, Fase 3 | Non misurato, non fatto |
 | Test 3 di §6 (diff pixel per pixel con un piano emissivo in Cycles) | §6 | Fatto in forma equivalente: furnace, singola luce, e ora piano emissivo vs HDRI (1.002) |
-| Catalogo: anteprima al passaggio del mouse, tag/preferiti | aggiunta Fase 3 | Non fatto |
+| Catalogo: anteprima al passaggio del mouse, tag/preferiti | aggiunta Fase 3 | Fatto: metadati in `user://catalog_meta.json`, filtri per preferiti e tag, anteprima 384×192 |
 | Modalità fotometrica | Fase 3 | Fatta e validata |
 | Fase 4, calibrazione Power di Octane e verso/specchio texture | Fase 4 | In attesa del test sul PC (spunte nel pannello Live link) |
 | Fase 4 opzioni: luce invisibile alla camera, export in blocco | Fase 4 | Blender: fatto (visibilità); C4D: no |
