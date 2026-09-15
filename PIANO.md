@@ -241,11 +241,11 @@ Lato software 3D:
 
 - **Cinema 4D + Octane** (primo target): plugin `MessageData` con `GetTimer` (polling ogni 200 ms) nel
   thread principale, C4D non ama i thread Python. L'HDRI in Octane sta in un oggetto *Octane
-  Environment* (o nel tag Environment) → shader *ImageTexture*. Octane tiene una cache delle texture:
-  cambiare il file su disco non basta, va forzato il reload (riassegnando il filename, o alternando fra
-  due path `rig_a.exr`/`rig_b.exr` se il primo non funziona) e poi `EventAdd()` per far ripartire il
-  Live Viewer. **Da verificare in Fase 0**: l'API Python del plugin Octane è poco documentata, quindi il
-  meccanismo di reload va provato a mano prima di costruirci sopra.
+  Environment* (o nel tag Environment) → shader *ImageTexture*. **Misurato (15/09)**: Octane tiene una
+  cache delle texture e né sovrascrivere il file, né riassegnarlo, né riavviare il Live Viewer la
+  invalidano; **solo il pulsante Reload** dell'ImageTexture funziona. Il plugin quindi: rileva il
+  cambiamento (socket o `mtime`), trova gli ImageTexture che puntano al file esportato, e preme Reload
+  con `node.Message(c4d.MSG_DESCRIPTION_COMMAND, {"id": DescID(pulsante)})`, poi `EventAdd()`.
 - **Cinema 4D + Redshift** (dopo): stessa struttura, il dome light rilegge il bitmap shader con
   `EventAdd()`.
 - **Blender**: add-on con `bpy.app.timers`, `image.reload()` sull'immagine dell'Environment Texture.
@@ -283,7 +283,7 @@ il valore atteso e con la luce nella direzione attesa.
 | Orientamento Blender | **Calibrato.** Rotazione pura (det +1): centro immagine = +X, u = 0,25 = +Y, alto = +Z. Nessun offset, nessun flip |
 | Viewer: sky + sfera cromata esatta + glossy + diffusa + mappa 2D | **Fatto.** `scenes/main.tscn` |
 | Orientamento C4D | **Misurato il punto bianco.** In **Octane** appare a destra come nel preview → nessun flip (preset "Cinema 4D + Octane", default). In **C4D nativo** appare a sinistra → specchio (preset "Cinema 4D nativo"). Da confermare quale asse è al centro |
-| Reload in Octane | **In corso.** Sonda `plugins/c4d/octane_reload_probe.py` da lanciare nello Script Manager; test: esportare dall'app sopra lo `studio.exr` caricato e vedere se il Live Viewer si aggiorna da solo / con Reload / riassegnando / con lo script |
+| Reload in Octane | **Misurato.** Sovrascrivere il file non basta; riassegnarlo non basta; riavviare il Live Viewer non basta. **Solo il pulsante Reload dell'ImageTexture** rilegge la texture. Il plugin lo premerà via `MSG_DESCRIPTION_COMMAND`; la sonda `plugins/c4d/octane_reload_probe.py` trova l'ID del pulsante |
 
 > [!todo] Test da fare in Cinema 4D + Octane
 > 1. **Orientamento.** Crea un Octane Environment (o tag Environment sulla Sky), ImageTexture →
