@@ -6,13 +6,18 @@ const HALF_MAX := 65504.0
 
 ## Preset di orientamento per software. flip = specchio orizzontale; shift = rotazione in gradi
 ## applicata prima della scrittura (positiva = la scena ruota verso destra sulla mappa).
-## Blender: misurato (rotazione pura, nessun flip). Cinema 4D: il punto bianco di taratura appare a
-## sinistra del centro → specchio. Houdini: da misurare, per ora come Blender.
+## Misurati con out/calibration.exr (punto bianco ad az +25°, cioè a destra del centro nel preview):
+##  - Blender: rotazione pura, nessun flip.
+##  - Cinema 4D + Octane: punto bianco a destra → come il preview, nessun flip.
+##  - Cinema 4D nativo (Standard/Physical): punto bianco a sinistra → specchio.
+##  - Houdini: da misurare, per ora come Blender.
 const TARGETS := {
+	"Cinema 4D + Octane": {"flip": false, "shift": 0.0},
+	"Cinema 4D nativo": {"flip": true, "shift": 0.0},
 	"Godot / Blender": {"flip": false, "shift": 0.0},
-	"Cinema 4D": {"flip": true, "shift": 0.0},
 	"Houdini": {"flip": false, "shift": 0.0},
 }
+const DEFAULT_TARGET := "Cinema 4D + Octane"
 
 
 ## Applica il preset (specchio + rotazione) e restituisce una nuova immagine.

@@ -87,9 +87,9 @@ func _run(main: Node) -> void:
 
 	# export con preset C4D (flip) a 2k
 	main.export_panel._res.selected = 0
-	main.export_panel._target.selected = 1
+	main.export_panel._target.selected = HdriExport.TARGETS.keys().find("Cinema 4D nativo")
 	var t0 := Time.get_ticks_msec()
-	ok = ok and _check(main.export_to("res://out/smoke_export.exr") == OK, "export EXR C4D 2k (%d ms)" % (Time.get_ticks_msec() - t0))
+	ok = ok and _check(main.export_to("res://out/smoke_export.exr") == OK, "export EXR C4D nativo 2k (%d ms)" % (Time.get_ticks_msec() - t0))
 	await process_frame
 	await process_frame
 	ok = ok and _check(main.tex_rd.texture_rd_rid.is_valid(), "texture di preview riagganciata")
@@ -100,7 +100,7 @@ func _run(main: Node) -> void:
 	var uv := MapView.light_uv(l0)
 	var pr := exp.get_pixel(int((1.0 - uv.x) * exp.get_width()), int(uv.y * exp.get_height()))
 	var pl := exp.get_pixel(int(uv.x * exp.get_width()), int(uv.y * exp.get_height()))
-	ok = ok and _check(pr.r > 1.0 and pl.r < 1.0, "flip C4D: luce a u=%.2f nel file (%.2f vs %.2f)" % [1.0 - uv.x, pr.r, pl.r])
+	ok = ok and _check(pr.r > 1.0 and pl.r < 1.0, "flip C4D nativo: luce a u=%.2f nel file (%.2f vs %.2f)" % [1.0 - uv.x, pr.r, pl.r])
 
 	print("[smoke] %s" % ("TUTTO OK" if ok else "FALLITO"))
 	quit(0 if ok else 1)

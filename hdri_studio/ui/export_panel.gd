@@ -25,6 +25,7 @@ func _init() -> void:
 	_res = _option("Risoluzione", ["2k × 1k", "4k × 2k", "8k × 4k"])
 	_res.item_selected.connect(func(i: int) -> void: resolution_changed.emit(RESOLUTIONS[i]))
 	_target = _option("Software", HdriExport.TARGETS.keys())
+	_target.selected = HdriExport.TARGETS.keys().find(HdriExport.DEFAULT_TARGET)
 	_shift = ParamRow.new("Rotazione", -180.0, 180.0, 1.0)
 	add_child(_shift)
 	_half = CheckBox.new()

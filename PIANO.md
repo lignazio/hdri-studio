@@ -282,7 +282,7 @@ il valore atteso e con la luce nella direzione attesa.
 | Singola luce: EXR vs integrale vs Cycles | **Passato.** E/π = 0.5632 (EXR) = 0.5632 (integrale indipendente) ≈ 0.5691 (Cycles, +1%, rumore) |
 | Orientamento Blender | **Calibrato.** Rotazione pura (det +1): centro immagine = +X, u = 0,25 = +Y, alto = +Z. Nessun offset, nessun flip |
 | Viewer: sky + sfera cromata esatta + glossy + diffusa + mappa 2D | **Fatto.** `scenes/main.tscn` |
-| Orientamento C4D | **Parziale.** Il punto bianco appare a sinistra del centro in C4D nativo → la mappa è specchiata rispetto al preview: il preset "Cinema 4D" fa il flip orizzontale. Da confermare quale asse è al centro |
+| Orientamento C4D | **Misurato il punto bianco.** In **Octane** appare a destra come nel preview → nessun flip (preset "Cinema 4D + Octane", default). In **C4D nativo** appare a sinistra → specchio (preset "Cinema 4D nativo"). Da confermare quale asse è al centro |
 | Reload in Octane | **Da fare a mano** (sotto) |
 
 > [!todo] Test da fare in Cinema 4D + Octane
@@ -384,8 +384,9 @@ Nessuna domanda bloccante. Prossimo passo: Fase 0.
   tool: luce da studio, spesso partendo da un'HDRI esistente da aumentare.
 - 15/09/2026 — Risoluzione di default 4096×2048 half. 8k e `.hdr` rimandati a Fase 2.
 - 15/09/2026 — Intensità lineare + EV, tre sfere di preview, nessuna feature extra prima del prototipo.
-- 15/09/2026 — Orientamento **Cinema 4D**: punto bianco a sinistra del centro → specchio orizzontale
-  nel preset di export. Octane assunto uguale a C4D nativo finché non viene misurato.
+- 15/09/2026 — Orientamento **Cinema 4D**: C4D nativo mostra il punto bianco a sinistra → preset
+  "Cinema 4D nativo" con specchio; **Octane** lo mostra a destra, come il preview → preset
+  "Cinema 4D + Octane" senza specchio, che è il default. I due renderer non concordano fra loro.
 - 15/09/2026 — Orientamento **Blender** misurato: centro immagine = +X, u = 0,25 = +Y, alto = +Z,
   nessuno specchio. L'EXR va in Blender così com'è.
 - 15/09/2026 — Convenzione interna dell'equirettangolare: Y in alto, centro immagine = +Z, u = 0,25 = +X
