@@ -183,6 +183,7 @@ func _build_layout() -> void:
 	link_panel.toggled_link.connect(_set_link_enabled)
 	link_panel.pick_path_requested.connect(_pick_live_path)
 	link_panel.push_now_requested.connect(func() -> void: _live_export())
+	link_panel.separate_options_changed.connect(func() -> void: _live_export())
 	_update_status()
 	_update_link_status()
 
@@ -459,8 +460,7 @@ func export_to(path: String, opts := {}) -> Error:
 	for l in rig.separate_lights():
 		var lp := HdriExport.separate_path(path, l.name)
 		var limg := baker.bake_planar(l, 1024)
-		var tgt: Dictionary = HdriExport.TARGETS.get(target, {})
-		if tgt.get("separate_flip_u", false):
+		if link_panel.separate_flip_tex():
 			limg.flip_x()
 		var lerr := HdriExport.save_exr(limg, lp, half)
 		if lerr == OK:
@@ -557,7 +557,8 @@ func separate_message() -> Dictionary:
 			"size": [size.x, size.y], "forward": vecs[0], "right": vecs[1], "up": vecs[2],
 			"azimuth": lz.azimuth, "elevation": l.elevation, "roll": l.roll,
 		})
-	return {"type": "separate_lights", "lights": entries, "target": target}
+	return {"type": "separate_lights", "lights": entries, "target": target,
+		"face_sign": -1 if link_panel.separate_flip_face() else 1}
 
 
 func _on_link_message(msg: Dictionary, client_id: int) -> void:

@@ -38,9 +38,10 @@ nell'app, sotto il null `HDRI Studio Lights`: direzione, distanza, dimensione fi
 texture sono automatiche e seguono l'app. Il null si può spostare sul soggetto.
 
 Calibrazione della Power (una volta): la stessa luce prima nell'HDRI, poi separata; una sfera diffusa
-al centro; il rapporto fra i due pixel è la Power da mettere nel template. Le costanti in cima al `.pyp`
-(`LIGHT_EMITS_ALONG_Z`) e in `export/hdri_export.gd` (`separate_flip_u`) regolano verso e specchio
-della texture, misurati con Octane.
+al centro; il rapporto fra i due pixel è la Power da mettere nel template. Verso di emissione e
+specchio della texture si regolano dall'app, pannello Live link → *Luci separate* (*Inverti verso*,
+*Specchia texture*), senza riavviare nulla. All'avvio la console stampa la versione del plugin caricata
+e da quale cartella: serve a capire se un `git pull` è arrivato davvero al plugin.
 
 Se l'app non è aperta o non è collegata, il plugin controlla comunque ogni secondo la data di modifica
 dei file immagine usati nella scena e ricarica quelli cambiati.

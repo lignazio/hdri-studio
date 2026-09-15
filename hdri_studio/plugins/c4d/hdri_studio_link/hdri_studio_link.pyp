@@ -32,6 +32,7 @@ import link_core  # noqa: E402
 # ID unici del plugin: valori alti fuori dagli intervalli usati dai moduli di Cinema 4D
 # (1065932 collideva con C4d_objects). Per una distribuzione pubblica andrebbero richiesti su
 # https://developers.maxon.net/forum/pid
+PLUGIN_VERSION = "0.4 (verso Z dal messaggio)"
 PLUGIN_ID_LINK = 1099780031
 PLUGIN_ID_RELOAD = 1099780032
 PLUGIN_ID_PAINT = 1099780033
@@ -142,9 +143,9 @@ def reload_all(doc):
 LIGHTS_NULL = "HDRI Studio Lights"
 TEMPLATE_NAME = "HS_TEMPLATE"
 LIGHT_PREFIX = "HS: "
-# Verso di emissione della luce modello lungo il suo asse Z locale. Misurato il 15/09/2026 con Octane:
-# le area light emettono verso +Z, quindi la luce guarda il centro con la faccia +Z. Se una luce
-# modello di altro tipo illuminasse dalla parte sbagliata, cambia questo segno.
+# Verso di emissione della luce modello lungo il suo asse Z locale (+1 = la luce guarda il centro con
+# la faccia +Z). L'app può invertirlo dal pannello Live link ("Inverti verso"): il messaggio porta
+# face_sign, che moltiplica questo default.
 LIGHT_EMITS_ALONG_Z = +1
 
 
@@ -218,6 +219,7 @@ def sync_separate_lights(doc, msg):
     existing = {c.GetName(): c for c in _children(root)}
     wanted = set()
     touched = 0
+    face = LIGHT_EMITS_ALONG_Z * int(msg.get("face_sign", 1))
     for e in entries:
         name = LIGHT_PREFIX + e["name"]
         wanted.add(name)
@@ -235,7 +237,7 @@ def sync_separate_lights(doc, msg):
         # e la stessa cosa va fatta all'asse X della luce
         if (R.Cross(U) - F).GetLength() > 1e-3:
             R = -R
-        if LIGHT_EMITS_ALONG_Z < 0:
+        if face < 0:
             mat = c4d.Matrix(F * d, R, U, F)          # -Z guarda il centro, X = destra vista dal centro
         else:
             mat = c4d.Matrix(F * d, -R, U, -F)        # +Z guarda il centro
@@ -480,4 +482,4 @@ if __name__ == "__main__":
     c4d.plugins.RegisterToolPlugin(id=PLUGIN_ID_PAINT, str="HDRI Studio LightPaint", info=0, icon=None,
                                    help="Click sul modello: la luce selezionata in HDRI Studio si sposta sul riflesso",
                                    dat=LightPaintTool())
-    print("[hdri-studio] plugin caricato (porta %d)" % link_core.DEFAULT_PORT)
+    print("[hdri-studio] plugin %s caricato da %s (porta %d)" % (PLUGIN_VERSION, os.path.dirname(__file__), link_core.DEFAULT_PORT))

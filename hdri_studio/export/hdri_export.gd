@@ -11,14 +11,12 @@ const HALF_MAX := 65504.0
 ##  - Cinema 4D + Octane: punto bianco a destra → come il preview, nessun flip.
 ##  - Cinema 4D nativo (Standard/Physical): punto bianco a sinistra → specchio.
 ##  - Houdini: da misurare, per ora come Blender.
-## separate_flip_u: specchia orizzontalmente l'EXR planare delle luci separate. Con la luce che guarda
-## il centro con la faccia +Z (Octane) la texture, vista dal centro, risulterebbe specchiata: la
-## specchiamo in export. Da confermare al primo test con una luce asimmetrica.
+## (Il verso e lo specchio della texture delle luci separate sono opzioni del pannello Live link.)
 const TARGETS := {
-	"Cinema 4D + Octane": {"flip": false, "shift": 0.0, "separate_flip_u": true},
-	"Cinema 4D nativo": {"flip": true, "shift": 0.0, "separate_flip_u": true},
-	"Godot / Blender": {"flip": false, "shift": 0.0, "separate_flip_u": false},
-	"Houdini": {"flip": false, "shift": 0.0, "separate_flip_u": false},
+	"Cinema 4D + Octane": {"flip": false, "shift": 0.0},
+	"Cinema 4D nativo": {"flip": true, "shift": 0.0},
+	"Godot / Blender": {"flip": false, "shift": 0.0},
+	"Houdini": {"flip": false, "shift": 0.0},
 }
 const DEFAULT_TARGET := "Cinema 4D + Octane"
 
