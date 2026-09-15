@@ -283,7 +283,7 @@ il valore atteso e con la luce nella direzione attesa.
 | Orientamento Blender | **Calibrato.** Rotazione pura (det +1): centro immagine = +X, u = 0,25 = +Y, alto = +Z. Nessun offset, nessun flip |
 | Viewer: sky + sfera cromata esatta + glossy + diffusa + mappa 2D | **Fatto.** `scenes/main.tscn` |
 | Orientamento C4D | **Misurato il punto bianco.** In **Octane** appare a destra come nel preview → nessun flip (preset "Cinema 4D + Octane", default). In **C4D nativo** appare a sinistra → specchio (preset "Cinema 4D nativo"). Da confermare quale asse è al centro |
-| Reload in Octane | **Da fare a mano** (sotto) |
+| Reload in Octane | **In corso.** Sonda `plugins/c4d/octane_reload_probe.py` da lanciare nello Script Manager; test: esportare dall'app sopra lo `studio.exr` caricato e vedere se il Live Viewer si aggiorna da solo / con Reload / riassegnando / con lo script |
 
 > [!todo] Test da fare in Cinema 4D + Octane
 > 1. **Orientamento.** Crea un Octane Environment (o tag Environment sulla Sky), ImageTexture →
@@ -387,6 +387,9 @@ Nessuna domanda bloccante. Prossimo passo: Fase 0.
 - 15/09/2026 — Orientamento **Cinema 4D**: C4D nativo mostra il punto bianco a sinistra → preset
   "Cinema 4D nativo" con specchio; **Octane** lo mostra a destra, come il preview → preset
   "Cinema 4D + Octane" senza specchio, che è il default. I due renderer non concordano fra loro.
+- 15/09/2026 — Assi in **Octane**: da dentro la sfera si vede esattamente il preview; le etichette
+  degli assi differiscono solo su X perché C4D è left-handed (rosso = +X interno finisce su −X di C4D,
+  Y e Z allineati). Conversione coordinate C4D → interne per LightPaint (Fase 3): `(x, y, z) → (−x, y, z)`.
 - 15/09/2026 — Orientamento **Blender** misurato: centro immagine = +X, u = 0,25 = +Y, alto = +Z,
   nessuno specchio. L'EXR va in Blender così com'è.
 - 15/09/2026 — Convenzione interna dell'equirettangolare: Y in alto, centro immagine = +Z, u = 0,25 = +X
