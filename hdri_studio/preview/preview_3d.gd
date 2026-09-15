@@ -20,6 +20,8 @@ var viewport: SubViewport
 var camera: Camera3D
 var env: Environment
 var model_path := ""
+var _sky_mats: Array[PanoramaSkyMaterial] = []
+var _sky_flip := 0
 var _chrome: ShaderMaterial
 var _glossy: StandardMaterial3D
 var _diffuse: StandardMaterial3D
@@ -50,12 +52,15 @@ func setup(tex: Texture2D) -> void:
 	env = Environment.new()
 	env.background_mode = Environment.BG_SKY
 	var sky := Sky.new()
-	var mat := PanoramaSkyMaterial.new()
-	mat.panorama = tex
-	mat.filter = true
-	sky.sky_material = mat
-	# radianza a 1024 (riflessi glossy nitidi): in modalità incrementale il cielo viene rigenerato
-	# solo quando il materiale segnala un cambiamento → notify_sky_changed() dopo ogni bake
+	# Due materiali identici alternati a ogni bake: il cielo rigenera la mappa di radianza (riflessi
+	# glossy e luce diffusa) solo quando gli viene assegnato un materiale, non quando cambia il
+	# contenuto della texture sul GPU.
+	for i in 2:
+		var mat := PanoramaSkyMaterial.new()
+		mat.panorama = tex
+		mat.filter = true
+		_sky_mats.append(mat)
+	sky.sky_material = _sky_mats[0]
 	sky.radiance_size = Sky.RADIANCE_SIZE_1024
 	sky.process_mode = Sky.PROCESS_MODE_INCREMENTAL
 	env.sky = sky
@@ -99,13 +104,16 @@ func setup(tex: Texture2D) -> void:
 
 
 func set_texture(tex: Texture2D) -> void:
-	(env.sky.sky_material as PanoramaSkyMaterial).panorama = tex
+	for m in _sky_mats:
+		m.panorama = tex
 	_chrome.set_shader_parameter("panorama", tex)
+	notify_sky_changed()
 
 
 ## La texture del cielo è cambiata sul GPU (nuovo bake): fa rigenerare la mappa di radianza.
 func notify_sky_changed() -> void:
-	env.sky.sky_material.emit_changed()
+	_sky_flip = 1 - _sky_flip
+	env.sky.sky_material = _sky_mats[_sky_flip]
 
 
 func set_exposure(k: float) -> void:
