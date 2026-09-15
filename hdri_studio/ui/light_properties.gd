@@ -5,6 +5,8 @@ extends ScrollContainer
 ## commit = true quando il valore è definitivo (fine drag, spinbox, opzioni): momento dello snapshot di undo.
 signal changed(commit: bool)
 signal light_renamed()
+## L'utente vuole cambiare l'immagine della luce Texture (main apre la dialog).
+signal texture_pick_requested()
 
 var light: RigLight
 var _box: VBoxContainer
@@ -21,6 +23,8 @@ var _tint: ColorPickerButton
 var _scrim_rows: Array = []
 var _ring_rows: Array = []
 var _gradient_rows: Array = []
+var _texture_row: HBoxContainer
+var _texture_label: Label
 
 
 func _init() -> void:
@@ -68,6 +72,23 @@ func _init() -> void:
 	_ring_rows.append(_row("ring_inner", "Raggio interno", 0.0, 0.98, 0.01))
 	_falloff = _option("Caduta", ["Lineare", "Morbida", "Gaussiana"], func(i: int) -> void: _set_prop("falloff", i, true))
 	_gradient_rows.append(_falloff.get_parent())
+
+	_texture_row = HBoxContainer.new()
+	_box.add_child(_texture_row)
+	var tl0 := Label.new()
+	tl0.text = "Immagine"
+	tl0.custom_minimum_size.x = 96
+	_texture_row.add_child(tl0)
+	_texture_label = Label.new()
+	_texture_label.text = "—"
+	_texture_label.clip_text = true
+	_texture_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_texture_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_texture_row.add_child(_texture_label)
+	var tb := Button.new()
+	tb.text = "Cambia…"
+	tb.pressed.connect(func() -> void: texture_pick_requested.emit())
+	_texture_row.add_child(tb)
 
 	_section("Scrim")
 	_scrim_rows.append(_row("scrim_offset_x", "Sorgente X", -1.0, 1.0, 0.01))
@@ -174,6 +195,8 @@ func set_light(l: RigLight) -> void:
 	_falloff.selected = l.falloff
 	_blend.selected = l.blend
 	_tint.color = l.tint
+	_texture_label.text = l.texture_path.get_file() if l.texture_path != "" else "—"
+	_texture_label.tooltip_text = l.texture_path
 	_syncing = false
 	_update_visibility()
 
@@ -193,4 +216,5 @@ func _update_visibility() -> void:
 		r.visible = light.shape == RigLight.Shape.RING
 	for r in _gradient_rows:
 		r.visible = light.shape == RigLight.Shape.GRADIENT
+	_texture_row.visible = light.shape == RigLight.Shape.TEXTURE
 	_rows["softness"].visible = light.shape != RigLight.Shape.GRADIENT

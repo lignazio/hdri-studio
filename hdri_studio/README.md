@@ -35,6 +35,23 @@ pannello **Live link** → *File di export…* → *Attivo*; carica lo stesso fi
 ogni modifica riscrive il file e il plugin preme Reload sui nodi che lo usano. Protocollo JSON-lines su
 TCP 127.0.0.1:47820, con fallback sulla data di modifica del file se l'app non è collegata.
 
+## Luci Texture e catalogo
+
+Una luce **Texture** proietta un'immagine EXR/HDR lineare (una "HDRI light": softbox fotografata, lampada,
+finestra) sul proprio rettangolo angolare; intensità, EV, Kelvin e tinta la moltiplicano, la sfumatura fa
+da maschera. Si crea da *+ Aggiungi → Texture* (scegli un file) o dal **Catalogo** (tab nella colonna
+sinistra): punta una tua cartella (ricorsiva, ricordata in `user://settings.json`), le miniature vengono
+generate in un thread e messe in cache in `user://thumbs/`, click su una miniatura → la luce entra nel rig.
+
+Il rig salva **solo il percorso** del file. Accanto a un'immagine puoi mettere un sidecar `nome.json`
+(o `nome.exr.json`) con i valori di default che il catalogo userà:
+
+    {"name": "Softbox 60x90", "width": 25, "height": 37, "intensity": 3, "ev": 0, "kelvin": 5600, "softness": 0.5, "roll": 0}
+
+Senza sidecar: 30° di larghezza, altezza dall'aspetto dell'immagine. Sul GPU le immagini vivono in un
+texture array 2048×1024 × 12 strati (RGBA16F, ~200 MB): oltre 12 luci Texture diverse contemporaneamente
+le meno usate vengono ricaricate al bisogno.
+
 LightPaint da C4D: tool "HDRI Studio LightPaint" nel plugin (vedi il README del plugin). Nel preview
 dell'app si può caricare un GLB (pannello *Modello nel preview*) al posto della sfera centrale, con
 materiale originale/cromato/glossy/diffuso: Shift+trascina sul modello funziona come sulle sfere.
@@ -66,10 +83,10 @@ l'integrale numerico e con un render Cycles.
 
 ## Struttura
 
-    core/      RigLight, LightRig (modello dati, JSON), ColorTemp (Kelvin → Rec.709 lineare), UndoStack
+    core/      RigLight, LightRig (modello dati, JSON), ColorTemp, UndoStack, AppSettings, ThumbnailCache
     bake/      bake.glsl (compute shader), HdriBaker (RenderingDevice, texture RGBA32F)
     preview/   Preview3D (viewport, sfere, LightPaint), shader della sfera cromata e della mappa 2D
-    ui/        ParamRow, LightListPanel, LightProperties, BackgroundPanel, ExportPanel, LiveLinkPanel, MapView
+    ui/        ParamRow, LightListPanel, LightProperties, BackgroundPanel, ExportPanel, LiveLinkPanel, CatalogPanel, MapView
     export/    HdriExport (EXR half/float32, PNG di controllo)
     scenes/    main.tscn / main.gd — app
     livelink/  LiveLink (server TCP, JSON-lines)

@@ -7,11 +7,11 @@ area: progetto
 
 # HDRI Studio — Piano
 
-> [!success] Stato: v0.7 — 15 settembre 2026 — live link confermato in C4D/Octane, LightPaint da C4D da provare
-> Fase 2 verificata sul PC ("funziona perfettamente"). Fase 3 iniziata: tool LightPaint in Cinema 4D
-> (picking sul modello → la luce selezionata va sul riflesso) e modello GLB nel preview dell'app.
-> Test da fare: [[#5.3 Fase 3 — stato e test in C4D]]. Progetto in `hdri_studio/`, repository
-> privato: https://github.com/lignazio/hdri-studio. Ambiente rilevato sulla macchina: macOS 15.7 su M1 Pro,
+> [!success] Stato: v0.8 — 15 settembre 2026 — luci Texture e catalogo
+> Fase 2 verificata sul PC. Fase 3: LightPaint da C4D (da provare, [[#5.3 Fase 3 — stato e test in C4D]]),
+> modello GLB nel preview, **luci Texture** (HDRI lights proiettate sul rettangolo della luce) e
+> **catalogo** di una cartella locale con miniature e sidecar JSON. Progetto in `hdri_studio/`,
+> repository privato: https://github.com/lignazio/hdri-studio. Ambiente rilevato sulla macchina: macOS 15.7 su M1 Pro,
 > Godot 4.7.1, Blender 5.1.1, Cinema 4D 2025/2026, Houdini 20.0 e 21.0.
 
 ## 1. Cosa stiamo costruendo
@@ -347,8 +347,16 @@ Sul Mac: smoke test con un client Python che simula il plugin → hello, `hdri_u
       comprese) → punto, normale di faccia e direzione di vista → messaggio `lightpaint` → l'app
       calcola `reflect(V, N)` (con X invertita per il sistema left-handed) e sposta la luce selezionata.
       Marker giallo nel viewport sull'ultimo punto colpito. **Da provare sul PC.**
+- [x] **Luci Texture** (15/09): sesta forma, immagine EXR/HDR lineare mappata sul rettangolo angolare
+      (texture array 2048×1024 × 12 strati RGBA16F nel compute shader, cache LRU per percorso).
+      Intensità/EV/Kelvin/tinta moltiplicano l'immagine, la sfumatura fa da maschera.
+- [x] **Catalogo** (15/09): tab nella colonna sinistra, cartella locale ricorsiva salvata nelle
+      preferenze, miniature generate in un thread (esposizione automatica) e cache PNG in
+      `user://thumbs/`, filtro per nome, click → luce nel rig. Il rig salva solo il percorso del file;
+      sidecar `nome.json` opzionale con i default (dimensione, intensità, Kelvin…).
 - [ ] Normali interpolate (phong) nel picking, se il salto di faccia in faccia disturba.
 - [ ] LightPaint che crea una luce nuova se nessuna è selezionata.
+- [ ] Catalogo: anteprima al passaggio del mouse, tag/preferiti, drag & drop sulla mappa.
 
 ### 5.3 Fase 3 — stato e test in C4D
 
@@ -426,6 +434,9 @@ Nessuna domanda bloccante. Prossimo passo: Fase 0.
 - 15/09/2026 — Assi in **Octane**: da dentro la sfera si vede esattamente il preview; le etichette
   degli assi differiscono solo su X perché C4D è left-handed (rosso = +X interno finisce su −X di C4D,
   Y e Z allineati). Conversione coordinate C4D → interne per LightPaint (Fase 3): `(x, y, z) → (−x, y, z)`.
+- 15/09/2026 — Catalogo: solo riferimenti ai file originali (percorso nel rig), niente copie né
+  database; i metadati opzionali stanno in un sidecar JSON accanto all'immagine, così la collezione
+  resta leggibile e modificabile a mano.
 - 15/09/2026 — Orientamento **Blender** misurato: centro immagine = +X, u = 0,25 = +Y, alto = +Z,
   nessuno specchio. L'EXR va in Blender così com'è.
 - 15/09/2026 — Convenzione interna dell'equirettangolare: Y in alto, centro immagine = +Z, u = 0,25 = +X

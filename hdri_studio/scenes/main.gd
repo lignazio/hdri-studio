@@ -21,6 +21,7 @@ var bg_panel: BackgroundPanel
 var export_panel: ExportPanel
 var link_panel: LiveLinkPanel
 var link: LiveLink
+var catalog: CatalogPanel
 var status: Label
 
 var _dirty := true
@@ -69,15 +70,26 @@ func _build_layout() -> void:
 	root.add_theme_constant_override("separation", 0)
 	add_child(root)
 
-	# colonna sinistra
+	# colonna sinistra: tab Luci / Catalogo
 	var left := _column(root, 300)
+	var tabs := TabContainer.new()
+	tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	left.add_child(tabs)
+	var lights_tab := VBoxContainer.new()
+	lights_tab.name = "Luci"
+	lights_tab.add_theme_constant_override("separation", 6)
+	tabs.add_child(lights_tab)
 	light_list = LightListPanel.new()
 	light_list.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	light_list.custom_minimum_size.y = 220
-	left.add_child(light_list)
-	left.add_child(HSeparator.new())
+	lights_tab.add_child(light_list)
+	lights_tab.add_child(HSeparator.new())
 	props = LightProperties.new()
-	left.add_child(props)
+	lights_tab.add_child(props)
+	catalog = CatalogPanel.new()
+	catalog.name = "Catalogo"
+	tabs.add_child(catalog)
+	catalog.set_folder(AppSettings.get_value("catalog_folder", ""))
 
 	# centro
 	var center := VBoxContainer.new()
@@ -118,7 +130,11 @@ func _build_layout() -> void:
 
 	# segnali
 	light_list.selection_changed.connect(_select)
-	light_list.structure_changed.connect(func() -> void: _commit())
+	light_list.structure_changed.connect(func() -> void: _on_light_changed(true))
+	light_list.texture_light_requested.connect(func() -> void: _pick_texture_file(true))
+	props.texture_pick_requested.connect(func() -> void: _pick_texture_file(false))
+	catalog.light_requested.connect(_add_texture_light)
+	catalog.folder_pick_requested.connect(_pick_catalog_folder)
 	props.changed.connect(_on_light_changed)
 	props.light_renamed.connect(func() -> void: light_list.refresh(); map_view.refresh())
 	map_view.light_selected.connect(func(i: int) -> void: light_list.select(i); _select(i))
@@ -310,8 +326,54 @@ func _dialog(mode: FileDialog.FileMode, filters: PackedStringArray, title: Strin
 	_file_dialog.title = title
 	for c in _file_dialog.file_selected.get_connections():
 		_file_dialog.file_selected.disconnect(c["callable"])
-	_file_dialog.file_selected.connect(on_file, CONNECT_ONE_SHOT)
+	for c in _file_dialog.dir_selected.get_connections():
+		_file_dialog.dir_selected.disconnect(c["callable"])
+	if mode == FileDialog.FILE_MODE_OPEN_DIR:
+		_file_dialog.dir_selected.connect(on_file, CONNECT_ONE_SHOT)
+	else:
+		_file_dialog.file_selected.connect(on_file, CONNECT_ONE_SHOT)
 	_file_dialog.popup_centered_ratio(0.6)
+
+
+## Nuova luce Texture dal catalogo (o da file): defaults dal sidecar o dall'aspetto dell'immagine.
+func _add_texture_light(path: String, defaults: Dictionary) -> void:
+	var l := RigLight.new()
+	l.shape = RigLight.Shape.TEXTURE
+	l.texture_path = path
+	l.name = defaults.get("name", path.get_file().get_basename())
+	l.width = float(defaults.get("width", 30.0))
+	l.height = float(defaults.get("height", 30.0))
+	l.intensity = float(defaults.get("intensity", 1.0))
+	l.ev = float(defaults.get("ev", 0.0))
+	l.kelvin = float(defaults.get("kelvin", 6500.0))
+	l.softness = float(defaults.get("softness", 0.5))
+	l.roll = float(defaults.get("roll", 0.0))
+	l.elevation = 30.0
+	if baker.texture_layer(path) < 0:
+		export_panel.set_status("Immagine non leggibile: " + path.get_file())
+		return
+	light_list.add_and_select(l)
+
+
+## Scegli un EXR/HDR: new_light = true crea una luce Texture, altrimenti cambia l'immagine della selezionata.
+func _pick_texture_file(new_light: bool) -> void:
+	_dialog(FileDialog.FILE_MODE_OPEN_FILE, ["*.exr ; OpenEXR", "*.hdr ; Radiance HDR"], "Immagine della luce", func(path: String) -> void:
+		if new_light:
+			_add_texture_light(path, {})
+		elif _selected >= 0:
+			var l: RigLight = rig.lights[_selected]
+			if baker.texture_layer(path) < 0:
+				export_panel.set_status("Immagine non leggibile: " + path.get_file())
+				return
+			l.texture_path = path
+			props.sync_values()
+			_on_light_changed(true))
+
+
+func _pick_catalog_folder() -> void:
+	_dialog(FileDialog.FILE_MODE_OPEN_DIR, [], "Cartella del catalogo", func(path: String) -> void:
+		AppSettings.set_value("catalog_folder", path)
+		catalog.set_folder(path))
 
 
 func _pick_base_hdri() -> void:

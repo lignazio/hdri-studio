@@ -5,6 +5,8 @@ extends VBoxContainer
 signal selection_changed(index: int)
 ## La struttura del rig è cambiata (luce aggiunta/rimossa/duplicata).
 signal structure_changed()
+## L'utente ha scelto "Texture" dal menu: serve un file (main apre la dialog).
+signal texture_light_requested()
 
 var rig: LightRig
 var list: ItemList
@@ -12,7 +14,7 @@ var _add_menu: MenuButton
 var _btn_dup: Button
 var _btn_del: Button
 
-const SHAPE_LABELS := ["Rettangolo", "Ellisse", "Anello", "Gradiente", "Scrim"]
+const SHAPE_LABELS := ["Rettangolo", "Ellisse", "Anello", "Gradiente", "Scrim", "Texture"]
 
 
 func _init() -> void:
@@ -77,6 +79,9 @@ func refresh() -> void:
 
 
 func _on_add(shape_id: int) -> void:
+	if shape_id == RigLight.Shape.TEXTURE:
+		texture_light_requested.emit()
+		return
 	var l := RigLight.new()
 	l.shape = shape_id as RigLight.Shape
 	l.name = "%s %d" % [SHAPE_LABELS[shape_id], rig.lights.size() + 1]
@@ -96,6 +101,11 @@ func _on_add(shape_id: int) -> void:
 		_:
 			l.intensity = 4.0
 	l.elevation = 30.0
+	add_and_select(l)
+
+
+## Aggiunge una luce già configurata (dal catalogo o da file) e la seleziona.
+func add_and_select(l: RigLight) -> void:
 	rig.add_light(l)
 	refresh()
 	select(rig.lights.size() - 1)

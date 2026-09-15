@@ -121,6 +121,45 @@ func _run(main: Node) -> void:
 		main.preview.clear_model()
 		ok = ok and _check(not main.preview.has_model(), "modello rimosso")
 
+	# luce Texture: furnace.exr (uniforme 1.0) come immagine → contributo = intensità
+	var tex_path := ProjectSettings.globalize_path("res://out/furnace.exr")
+	if FileAccess.file_exists(tex_path):
+		main.rig.background = LightRig.Background.BLACK
+		for l in main.rig.lights:
+			l.enabled = false
+		main._add_texture_light(tex_path, {"width": 40.0, "height": 30.0, "intensity": 2.0})
+		var tl: RigLight = main.rig.lights[main.rig.lights.size() - 1]
+		ok = ok and _check(tl.shape == RigLight.Shape.TEXTURE and tl.texture_path == tex_path, "luce Texture aggiunta dal file")
+		tl.azimuth = 0.0
+		tl.elevation = 0.0
+		main._dirty = true
+		await process_frame
+		await process_frame
+		var img: Image = main.baker.get_image()
+		var c := img.get_pixel(img.get_width() / 2, img.get_height() / 2)
+		ok = ok and _check(absf(c.r - 2.0) < 0.01, "pixel al centro della luce Texture = 2.0 (%.3f)" % c.r)
+		var outside := img.get_pixel(int(img.get_width() * 0.75), img.get_height() / 2)
+		ok = ok and _check(outside.r < 0.001, "fuori dalla luce Texture = 0 (%.4f)" % outside.r)
+
+	# catalogo: la cartella out/ contiene gli EXR dello spike
+	main.catalog.set_folder(ProjectSettings.globalize_path("res://out"))
+	ok = ok and _check(main.catalog._items.size() >= 5, "catalogo: %d immagini trovate" % main.catalog._items.size())
+	var waited := 0.0
+	var with_icon := 0
+	while waited < 20.0:
+		await create_timer(0.5).timeout
+		waited += 0.5
+		with_icon = 0
+		for path in main.catalog._buttons:
+			if main.catalog._buttons[path].icon != null:
+				with_icon += 1
+		if with_icon == main.catalog._items.size():
+			break
+	ok = ok and _check(with_icon == main.catalog._items.size(), "miniature generate: %d/%d in %.1f s" % [with_icon, main.catalog._items.size(), waited])
+	var n_before: int = main.rig.lights.size()
+	main.catalog.light_requested.emit(tex_path, main.catalog._defaults({"path": tex_path, "name": "furnace", "sidecar": {}}))
+	ok = ok and _check(main.rig.lights.size() == n_before + 1, "click sul catalogo aggiunge una luce")
+
 	print("[smoke] %s" % ("TUTTO OK" if ok else "FALLITO"))
 	quit(0 if ok else 1)
 

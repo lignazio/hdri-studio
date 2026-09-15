@@ -14,6 +14,7 @@ layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 layout(set = 0, binding = 0, rgba32f) restrict writeonly uniform image2D out_img;
 layout(set = 0, binding = 1, std430) restrict readonly buffer Lights { vec4 data[]; } lights;
 layout(set = 0, binding = 2) uniform sampler2D base_hdri;
+layout(set = 0, binding = 3) uniform sampler2DArray light_textures;
 
 layout(push_constant, std430) uniform Params {
 	vec4 size;       // width, height, light_count, supersample
@@ -74,7 +75,8 @@ float falloff_curve(float t, float type) {
 	return (exp(-4.0 * r * r) - k) / (1.0 - k);
 }
 
-// Peso in [0, 1] della luce i nella direzione d.
+// Peso in [0, 1] della luce i nella direzione d. Per le luci Texture il peso è la maschera del
+// rettangolo; il colore dell'immagine viene campionato a parte in light_texture().
 float light_weight(int i, vec3 d) {
 	vec4 a = lights.data[i * STRIDE + 0]; // shape, az, el, roll
 	vec4 b = lights.data[i * STRIDE + 1]; // w, h, softness, falloff
@@ -108,6 +110,10 @@ float light_weight(int i, vec3 d) {
 		float r = length(vec2(ax / hw, ay / hh));
 		return falloff_curve(1.0 - r, b.w);
 	}
+	if (shape == 5) { // texture: maschera rettangolare, il contenuto arriva dall'immagine
+		float ed = min(hw - abs(ax), hh - abs(ay));
+		return soft_edge(ed, b.z);
+	}
 	// scrim: telo rettangolare illuminato da dietro da una sorgente a distanza `depth`,
 	// spostata di `offset`. Irradianza sul telo: E = depth / (|q|^2 + depth^2)^(3/2)
 	// (coseno + inverso del quadrato), normalizzata a picco 1. Una sorgente estesa è
@@ -121,6 +127,21 @@ float light_weight(int i, vec3 d) {
 	float deff = sqrt(deff2);
 	float prof = deff * deff2 / pow(dot(q, q) + deff2, 1.5);
 	return mask * prof;
+}
+
+// Colore dell'immagine della luce Texture i nella direzione d (1 se la luce non ha immagine).
+vec3 light_texture(int i, vec3 d) {
+	vec4 a = lights.data[i * STRIDE + 0];
+	vec4 b = lights.data[i * STRIDE + 1];
+	vec4 e = lights.data[i * STRIDE + 4];
+	if (e.z < 0.0) return vec3(1.0);
+	vec3 F, R, U;
+	light_frame(a.y, a.z, a.w, F, R, U);
+	float df = dot(d, F);
+	float ax = atan(dot(d, R), df);
+	float ay = atan(dot(d, U), df);
+	vec2 uv = vec2(0.5 + 0.5 * ax / (b.x * 0.5), 0.5 - 0.5 * ay / (b.y * 0.5));
+	return texture(light_textures, vec3(clamp(uv, 0.0, 1.0), e.z)).rgb;
 }
 
 // --- layer di base ------------------------------------------------------------------------
@@ -171,10 +192,12 @@ vec3 shade(vec3 d, int n) {
 		float w = light_weight(i, d);
 		if (w <= 0.0) continue;
 		vec4 c = lights.data[i * STRIDE + 2]; // radianza rgb, blend
+		vec3 rgb = c.rgb;
+		if (int(lights.data[i * STRIDE + 0].x + 0.5) == 5) rgb *= light_texture(i, d);
 		int blend = int(c.w + 0.5);
-		if (blend == 0) col += c.rgb * w;
-		else if (blend == 1) col = max(col, c.rgb * w);
-		else col *= mix(vec3(1.0), c.rgb, w);
+		if (blend == 0) col += rgb * w;
+		else if (blend == 1) col = max(col, rgb * w);
+		else col *= mix(vec3(1.0), rgb, w);
 	}
 	return col;
 }

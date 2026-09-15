@@ -7,6 +7,9 @@ extends RefCounted
 const SHADER_PATH := "res://bake/bake.glsl"
 const MAX_LIGHTS := 64
 const PUSH_CONSTANT_FLOATS := 20
+## Texture array delle luci Texture: ogni immagine viene ricampionata a questa dimensione.
+const TEX_LAYER_SIZE := Vector2i(2048, 1024)
+const TEX_LAYERS := 12
 
 var rd: RenderingDevice
 var width := 4096
@@ -22,6 +25,9 @@ var _base_tex := RID()
 var _sampler := RID()
 var _uniform_set := RID()
 var _base_is_placeholder := true
+var _tex_array := RID()
+var _tex_layers := {}   # percorso → strato
+var _tex_lru: Array[String] = []
 
 
 func _init(local_device := false) -> void:
@@ -39,6 +45,7 @@ func _init(local_device := false) -> void:
 	zero.resize(MAX_LIGHTS * RigLight.STRIDE * 16)
 	_lights_buf = rd.storage_buffer_create(zero.size(), zero)
 	_set_base_placeholder()
+	_create_texture_array()
 	set_resolution(width, height)
 
 
@@ -86,14 +93,9 @@ func _set_base_placeholder() -> void:
 
 ## Carica l'HDRI di base (EXR o .hdr). Restituisce false se il file non si legge.
 func set_base_image_from_file(path: String) -> bool:
-	var img := Image.new()
-	var err: Error
-	if path.get_extension().to_lower() == "exr":
-		err = img.load_exr_from_buffer(FileAccess.get_file_as_bytes(path))
-	else:
-		err = img.load(path)
-	if err != OK or img.is_empty():
-		push_warning("Impossibile caricare l'HDRI di base: %s (%s)" % [path, error_string(err)])
+	var img := load_linear_image(path)
+	if img == null:
+		push_warning("Impossibile caricare l'HDRI di base: " + path)
 		return false
 	set_base_image(img)
 	return true
@@ -124,6 +126,73 @@ func has_base_image() -> bool:
 	return not _base_is_placeholder
 
 
+# --- texture delle luci --------------------------------------------------------------------------
+
+func _create_texture_array() -> void:
+	var fmt := RDTextureFormat.new()
+	fmt.texture_type = RenderingDevice.TEXTURE_TYPE_2D_ARRAY
+	fmt.width = TEX_LAYER_SIZE.x
+	fmt.height = TEX_LAYER_SIZE.y
+	fmt.array_layers = TEX_LAYERS
+	fmt.format = RenderingDevice.DATA_FORMAT_R16G16B16A16_SFLOAT
+	fmt.usage_bits = RenderingDevice.TEXTURE_USAGE_SAMPLING_BIT | RenderingDevice.TEXTURE_USAGE_CAN_UPDATE_BIT
+	var zero := PackedByteArray()
+	zero.resize(TEX_LAYER_SIZE.x * TEX_LAYER_SIZE.y * 8)
+	var layers: Array[PackedByteArray] = []
+	for i in TEX_LAYERS:
+		layers.append(zero)
+	_tex_array = rd.texture_create(fmt, RDTextureView.new(), layers)
+
+
+## Carica un'immagine lineare (EXR o .hdr) dal disco; null se non leggibile.
+static func load_linear_image(path: String) -> Image:
+	var img := Image.new()
+	var err: Error
+	if path.get_extension().to_lower() == "exr":
+		err = img.load_exr_from_buffer(FileAccess.get_file_as_bytes(path))
+	else:
+		err = img.load(path)
+	if err != OK or img.is_empty():
+		return null
+	if img.is_compressed():
+		img.decompress()
+	return img
+
+
+## Strato del texture array per il file (caricandolo se serve), -1 se non leggibile.
+func texture_layer(path: String) -> int:
+	if path == "":
+		return -1
+	if _tex_layers.has(path):
+		_tex_lru.erase(path)
+		_tex_lru.append(path)
+		return _tex_layers[path]
+	var img := load_linear_image(path)
+	if img == null:
+		push_warning("Immagine della luce non leggibile: " + path)
+		return -1
+	img.resize(TEX_LAYER_SIZE.x, TEX_LAYER_SIZE.y, Image.INTERPOLATE_LANCZOS)
+	img.convert(Image.FORMAT_RGBAH)
+	var layer: int
+	if _tex_layers.size() < TEX_LAYERS:
+		layer = _tex_layers.size()
+	else:
+		var evict: String = _tex_lru.pop_front()
+		layer = _tex_layers[evict]
+		_tex_layers.erase(evict)
+	rd.texture_update(_tex_array, layer, img.get_data())
+	_tex_layers[path] = layer
+	_tex_lru.append(path)
+	return layer
+
+
+## Dimenticare un file (per esempio se è stato modificato su disco).
+func forget_texture(path: String) -> void:
+	if _tex_layers.has(path):
+		_tex_layers.erase(path)
+		_tex_lru.erase(path)
+
+
 func _ensure_uniform_set() -> void:
 	if _uniform_set.is_valid():
 		return
@@ -140,7 +209,12 @@ func _ensure_uniform_set() -> void:
 	u2.binding = 2
 	u2.add_id(_sampler)
 	u2.add_id(_base_tex)
-	_uniform_set = rd.uniform_set_create([u0, u1, u2], _shader, 0)
+	var u3 := RDUniform.new()
+	u3.uniform_type = RenderingDevice.UNIFORM_TYPE_SAMPLER_WITH_TEXTURE
+	u3.binding = 3
+	u3.add_id(_sampler)
+	u3.add_id(_tex_array)
+	_uniform_set = rd.uniform_set_create([u0, u1, u2, u3], _shader, 0)
 
 
 ## Esegue il bake del rig nella texture. Con calibration = true ignora le luci e disegna i marker degli assi.
@@ -153,7 +227,10 @@ func bake(rig: LightRig, calibration := false) -> void:
 		if count >= MAX_LIGHTS:
 			push_warning("Più di %d luci: le altre vengono ignorate" % MAX_LIGHTS)
 			break
-		l.pack(data)
+		var layer := -1
+		if l.shape == RigLight.Shape.TEXTURE:
+			layer = texture_layer(l.texture_path)
+		l.pack(data, layer)
 		count += 1
 	if count > 0:
 		var bytes := data.to_byte_array()
@@ -189,7 +266,7 @@ func get_image() -> Image:
 
 
 func free_resources() -> void:
-	for rid in [_uniform_set, texture, _base_tex, _lights_buf, _sampler, _pipeline, _shader]:
+	for rid in [_uniform_set, texture, _base_tex, _tex_array, _lights_buf, _sampler, _pipeline, _shader]:
 		if rid.is_valid():
 			rd.free_rid(rid)
 	_uniform_set = RID()

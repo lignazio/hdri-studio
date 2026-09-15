@@ -2,7 +2,7 @@ class_name RigLight
 extends Resource
 ## Una luce parametrica sulla sfera. Tutti gli angoli in gradi, la radianza in unità lineari.
 
-enum Shape { RECT, ELLIPSE, RING, GRADIENT, SCRIM }
+enum Shape { RECT, ELLIPSE, RING, GRADIENT, SCRIM, TEXTURE }
 enum Falloff { LINEAR, SMOOTH, GAUSSIAN }
 enum Blend { ADD, MAX, MULTIPLY }
 
@@ -34,6 +34,9 @@ const STRIDE := 5
 @export_range(0.05, 10.0) var scrim_depth := 0.6
 ## Scrim: raggio della sorgente nelle stesse unità (0 = puntiforme).
 @export_range(0.0, 5.0) var scrim_source_size := 0.0
+## Texture: immagine EXR/HDR lineare mappata sul rettangolo della luce (solo il percorso: il rig
+## non contiene mai i pixel).
+@export var texture_path := ""
 
 
 func duplicate_light() -> RigLight:
@@ -51,14 +54,15 @@ func radiance_rgb() -> Color:
 
 
 ## Aggiunge STRIDE vec4 all'array che diventa il buffer del compute shader.
-func pack(out: PackedFloat32Array) -> void:
+## tex_layer: strato del texture array per le luci Texture (-1 = nessuna immagine caricata).
+func pack(out: PackedFloat32Array, tex_layer := -1) -> void:
 	var rgb := radiance_rgb()
 	out.append_array(PackedFloat32Array([
 		float(shape), deg_to_rad(azimuth), deg_to_rad(elevation), deg_to_rad(roll),
 		deg_to_rad(width), deg_to_rad(height), deg_to_rad(softness), float(falloff),
 		rgb.r, rgb.g, rgb.b, float(blend),
 		scrim_offset.x, scrim_offset.y, scrim_depth, scrim_source_size,
-		ring_inner, 1.0 if enabled else 0.0, 0.0, 0.0,
+		ring_inner, 1.0 if enabled else 0.0, float(tex_layer), 0.0,
 	]))
 
 
@@ -73,6 +77,7 @@ func to_dict() -> Dictionary:
 		"ring_inner": ring_inner,
 		"scrim_offset": [scrim_offset.x, scrim_offset.y],
 		"scrim_depth": scrim_depth, "scrim_source_size": scrim_source_size,
+		"texture_path": texture_path,
 	}
 
 
@@ -100,4 +105,5 @@ static func from_dict(d: Dictionary) -> RigLight:
 	l.scrim_offset = Vector2(so[0], so[1])
 	l.scrim_depth = d.get("scrim_depth", l.scrim_depth)
 	l.scrim_source_size = d.get("scrim_source_size", l.scrim_source_size)
+	l.texture_path = d.get("texture_path", "")
 	return l
