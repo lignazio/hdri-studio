@@ -8,6 +8,8 @@ signal paint(direction: Vector3, commit: bool)
 ## Una voce del catalogo è stata lasciata sul preview: direction è il riflesso nel punto colpito,
 ## oppure Vector3.ZERO se non ha colpito nulla.
 signal light_dropped(path: String, defaults: Dictionary, direction: Vector3)
+## Click (senza trascinare) su una sfera o sul modello: direzione riflessa, per selezionare la luce.
+signal pick(direction: Vector3)
 
 const SPHERE_R := 1.0
 const SPHERE_POS := [Vector3(-2.6, 0, 0), Vector3(0, 0, 0), Vector3(2.6, 0, 0)]
@@ -34,6 +36,12 @@ var _pitch := 0.18
 var _dist := 7.0
 var _orbiting := false
 var _painting := false
+var _tumbling := false
+var _press_pos := Vector2.ZERO
+var _moved := false
+var _model_yaw := 0.0
+var _model_pitch := 0.0
+var _model_scale := 1.0
 
 
 func _init() -> void:
@@ -120,6 +128,19 @@ func set_exposure(k: float) -> void:
 	env.tonemap_exposure = k
 
 
+func set_fov(deg: float) -> void:
+	camera.fov = deg
+
+
+func set_model_scale(s: float) -> void:
+	_model_scale = s
+	_apply_model_transform()
+
+
+func _apply_model_transform() -> void:
+	_model_root.transform = Transform3D(Basis.from_euler(Vector3(_model_pitch, _model_yaw, 0.0)).scaled(Vector3.ONE * _model_scale), Vector3.ZERO)
+
+
 # --- modello -------------------------------------------------------------------------------------
 
 ## Carica un GLB/GLTF al posto della sfera centrale, lo centra e lo scala dentro MODEL_R,
@@ -203,6 +224,8 @@ func _gui_input(event: InputEvent) -> void:
 		match event.button_index:
 			MOUSE_BUTTON_LEFT:
 				if event.pressed:
+					_press_pos = event.position
+					_moved = false
 					if event.shift_pressed and _try_paint(event.position, false):
 						_painting = true
 					else:
@@ -210,8 +233,15 @@ func _gui_input(event: InputEvent) -> void:
 				else:
 					if _painting:
 						_try_paint(event.position, true)
+					elif _orbiting and not _moved:
+						var r := _hit_reflection(event.position)
+						if r != Vector3.ZERO:
+							pick.emit(r)
 					_painting = false
 					_orbiting = false
+				accept_event()
+			MOUSE_BUTTON_RIGHT:
+				_tumbling = event.pressed and has_model()
 				accept_event()
 			MOUSE_BUTTON_WHEEL_UP:
 				_dist = maxf(2.5, _dist * 0.9)
@@ -222,13 +252,20 @@ func _gui_input(event: InputEvent) -> void:
 				_update_camera()
 				accept_event()
 	elif event is InputEventMouseMotion:
+		if event.position.distance_to(_press_pos) > 4.0:
+			_moved = true
 		if _painting:
 			_try_paint(event.position, false)
 			accept_event()
-		elif _orbiting:
+		elif _orbiting and _moved:
 			_yaw -= event.relative.x * 0.005
 			_pitch = clampf(_pitch + event.relative.y * 0.005, -1.4, 1.4)
 			_update_camera()
+			accept_event()
+		elif _tumbling:
+			_model_yaw += event.relative.x * 0.01
+			_model_pitch = clampf(_model_pitch + event.relative.y * 0.01, -PI, PI)
+			_apply_model_transform()
 			accept_event()
 
 

@@ -6,12 +6,16 @@ signal light_selected(index: int)
 signal light_moved(index: int, azimuth: float, elevation: float, commit: bool)
 ## Una voce del catalogo è stata lasciata sulla mappa in questa posizione.
 signal light_dropped(path: String, defaults: Dictionary, azimuth: float, elevation: float)
+## Il cursore è sopra la mappa in (azimut, elevazione); Vector2(INF, INF) quando esce.
+signal hover_changed(azimuth: float, elevation: float)
 
 const HANDLE_R := 7.0
 const PICK_R := 14.0
 
 var rig: LightRig
 var selected := -1
+## Indici di tutte le luci selezionate (la primaria è `selected`).
+var selection: Array = []
 var _tex_rect: TextureRect
 var _overlay: Control
 var _dragging := -1
@@ -50,8 +54,9 @@ func set_rig(r: LightRig) -> void:
 	refresh()
 
 
-func set_selected(i: int) -> void:
+func set_selected(i: int, all: Array = []) -> void:
 	selected = i
+	selection = all.duplicate() if not all.is_empty() else ([i] if i >= 0 else [])
 	refresh()
 
 
@@ -84,19 +89,56 @@ static func light_uv(l: RigLight) -> Vector2:
 	return Vector2(l.azimuth / 360.0 + 0.5, 0.5 - l.elevation / 180.0)
 
 
+static func dir_uv(d: Vector3) -> Vector2:
+	return Vector2(atan2(-d.x, d.z) / TAU + 0.5, 0.5 - asin(clampf(d.y, -1.0, 1.0)) / PI)
+
+
+## Disegna un contorno (lista di direzioni) spezzandolo dove attraversa il bordo della mappa.
+func _draw_loop(pts: Array, col: Color, width: float) -> void:
+	var seg := PackedVector2Array()
+	var prev_uv := Vector2.INF
+	for k in pts.size() + 1:
+		var uv := dir_uv(pts[k % pts.size()])
+		if prev_uv != Vector2.INF and absf(uv.x - prev_uv.x) > 0.5:
+			if seg.size() >= 2:
+				_overlay.draw_polyline(seg, col, width)
+			seg = PackedVector2Array()
+		seg.append(_uv_to_pos(uv))
+		prev_uv = uv
+	if seg.size() >= 2:
+		_overlay.draw_polyline(seg, col, width)
+
+
 func _draw_overlay() -> void:
 	if rig == null:
 		return
 	var r := _map_rect()
 	_overlay.draw_rect(r, Color(1, 1, 1, 0.25), false, 1.0)
-	# meridiano e orizzonte
-	_overlay.draw_line(r.position + Vector2(r.size.x * 0.5, 0), r.position + Vector2(r.size.x * 0.5, r.size.y), Color(1, 1, 1, 0.12))
-	_overlay.draw_line(r.position + Vector2(0, r.size.y * 0.5), r.position + Vector2(r.size.x, r.size.y * 0.5), Color(1, 1, 1, 0.12))
 	var font := get_theme_default_font()
+	# griglia: azimut ogni 30°, elevazione ogni 30°, con i gradi
+	for k in range(1, 12):
+		var x := r.position.x + r.size.x * k / 12.0
+		var strong := k == 6
+		_overlay.draw_line(Vector2(x, r.position.y), Vector2(x, r.end.y), Color(1, 1, 1, 0.18 if strong else 0.07))
+		_overlay.draw_string(font, Vector2(x + 2, r.end.y - 3), "%d°" % (k * 30 - 180), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1, 1, 1, 0.35))
+	for k in range(1, 6):
+		var y := r.position.y + r.size.y * k / 6.0
+		var strong := k == 3
+		_overlay.draw_line(Vector2(r.position.x, y), Vector2(r.end.x, y), Color(1, 1, 1, 0.18 if strong else 0.07))
+		_overlay.draw_string(font, Vector2(r.position.x + 2, y - 2), "%d°" % (90 - k * 30), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1, 1, 1, 0.35))
+	# contorni: tutte le luci in trasparenza, le selezionate in evidenza
+	for i in rig.lights.size():
+		var l: RigLight = rig.lights[i]
+		if not l.enabled:
+			continue
+		var sel := i in selection
+		var lc := Color(1.0, 0.8, 0.2, 0.9) if sel else Color(1, 1, 1, 0.2)
+		for loop in l.outline():
+			_draw_loop(loop, lc, 1.5 if sel else 1.0)
 	for i in rig.lights.size():
 		var l: RigLight = rig.lights[i]
 		var p := _uv_to_pos(light_uv(l))
-		var col := Color(1.0, 0.8, 0.2) if i == selected else Color(1, 1, 1, 0.85)
+		var col := Color(1.0, 0.8, 0.2) if i in selection else Color(1, 1, 1, 0.85)
 		if not l.enabled:
 			col.a = 0.35
 		_overlay.draw_circle(p, HANDLE_R + 1.5, Color(0, 0, 0, 0.6))
@@ -142,9 +184,20 @@ func _gui_input(event: InputEvent) -> void:
 			_move_to(event.position, true)
 			_dragging = -1
 			accept_event()
-	elif event is InputEventMouseMotion and _dragging >= 0:
-		_move_to(event.position, false)
-		accept_event()
+	elif event is InputEventMouseMotion:
+		if _dragging >= 0:
+			_move_to(event.position, false)
+			accept_event()
+		if _map_rect().has_point(event.position):
+			var uv := _pos_to_uv(event.position)
+			hover_changed.emit((uv.x - 0.5) * 360.0, (0.5 - uv.y) * 180.0)
+		else:
+			hover_changed.emit(INF, INF)
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_MOUSE_EXIT:
+		hover_changed.emit(INF, INF)
 
 
 func _can_drop_data(at_position: Vector2, data: Variant) -> bool:

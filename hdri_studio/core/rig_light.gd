@@ -92,6 +92,72 @@ func frame() -> Array[Vector3]:
 	return [F, R2, U2]
 
 
+## Direzione dal punto (ax, ay) in coordinate angolari nel frame della luce (come nello shader).
+func dir_from_local(ax: float, ay: float) -> Vector3:
+	var fr := frame()
+	return (tan(ax) * fr[1] + tan(ay) * fr[2] + fr[0]).normalized()
+
+
+## Coordinate angolari locali (ax, ay) di una direzione; z = d·F (negativo = dietro la luce).
+func local_of(d: Vector3) -> Vector3:
+	var fr := frame()
+	var df := d.dot(fr[0])
+	return Vector3(atan2(d.dot(fr[1]), df), atan2(d.dot(fr[2]), df), df)
+
+
+## La direzione cade dentro la forma (copertura > 0, sfumatura esclusa)?
+func contains(d: Vector3) -> bool:
+	var l := local_of(d)
+	if l.z <= 0.0:
+		return false
+	var hw := deg_to_rad(width) * 0.5
+	var hh := deg_to_rad(height) * 0.5
+	var ax := l.x
+	var ay := l.y
+	match shape:
+		Shape.ELLIPSE:
+			return (ax / hw) * (ax / hw) + (ay / hh) * (ay / hh) < 1.0
+		Shape.RING:
+			var r := sqrt(ax * ax + ay * ay)
+			return r < hw and r > hw * ring_inner
+		Shape.GRADIENT:
+			if gradient_shape == GradientShape.CIRCULAR:
+				return (ax / hw) * (ax / hw) + (ay / hh) * (ay / hh) < 1.0
+			return absf(ax) < hw and absf(ay) < hh
+		_:
+			return absf(ax) < hw and absf(ay) < hh
+
+
+## Contorno della forma come lista di direzioni (per disegnarla sulla mappa). Più liste per l'anello.
+func outline() -> Array:
+	var hw := deg_to_rad(minf(width, 178.0)) * 0.5
+	var hh := deg_to_rad(minf(height, 178.0)) * 0.5
+	var loops: Array = []
+	var circular := shape == Shape.ELLIPSE or shape == Shape.RING \
+		or (shape == Shape.GRADIENT and gradient_shape == GradientShape.CIRCULAR)
+	if circular:
+		var radii: Array = [Vector2(hw, hh)]
+		if shape == Shape.RING:
+			radii = [Vector2(hw, hw), Vector2(hw * ring_inner, hw * ring_inner)]
+		for rr in radii:
+			var pts: Array = []
+			for i in 64:
+				var t := TAU * i / 64.0
+				pts.append(dir_from_local(rr.x * cos(t), rr.y * sin(t)))
+			loops.append(pts)
+	else:
+		var pts: Array = []
+		var corners := [Vector2(-hw, -hh), Vector2(hw, -hh), Vector2(hw, hh), Vector2(-hw, hh)]
+		for k in 4:
+			var a: Vector2 = corners[k]
+			var b: Vector2 = corners[(k + 1) % 4]
+			for i in 16:
+				var p := a.lerp(b, i / 16.0)
+				pts.append(dir_from_local(p.x, p.y))
+		loops.append(pts)
+	return loops
+
+
 ## Dimensione fisica del rettangolo che sottende (width × height) a distanza `distance`.
 func physical_size() -> Vector2:
 	return Vector2(2.0 * distance * tan(deg_to_rad(width) * 0.5), 2.0 * distance * tan(deg_to_rad(height) * 0.5))

@@ -368,6 +368,40 @@ func _run(main: Node) -> void:
 	else:
 		print("[smoke] (Blender non trovato: riconversione non testata)")
 
+	# geometria: contains / outline / pick per riflesso
+	var gl := RigLight.new()
+	gl.azimuth = 40.0
+	gl.elevation = 10.0
+	gl.width = 30.0
+	gl.height = 20.0
+	var center_dir := gl.dir_from_local(0.0, 0.0)
+	_check(gl.contains(center_dir), "contains: centro della luce")
+	_check(gl.contains(gl.dir_from_local(deg_to_rad(14.0), 0.0)) and not gl.contains(gl.dir_from_local(deg_to_rad(16.0), 0.0)), "contains: bordo a ±15°")
+	_check(gl.outline().size() == 1 and gl.outline()[0].size() == 64, "outline: 64 punti")
+	main.rig.lights.clear()
+	main.rig.add_light(gl)
+	main.light_list.refresh()
+	main._select(-1)
+	main._pick_light_by_reflection(center_dir)
+	_check(main._selected == 0, "click sul riflesso seleziona la luce")
+	# frecce: sposta la selezione
+	main._nudge(10.0, -5.0, true)
+	_check(is_equal_approx(gl.azimuth, 50.0) and is_equal_approx(gl.elevation, 5.0), "nudge → az 50 el 5")
+	# multi-selezione: duplica ed elimina in blocco
+	main.light_list._on_duplicate()
+	main.light_list.select_many([0, 1])
+	main._selection = [0, 1]
+	main.light_list._on_delete()
+	_check(main.rig.lights.is_empty(), "elimina in blocco → 0 luci")
+	main.rig.add_light(gl)
+	main.light_list.refresh()
+	# lettura del valore sotto il cursore
+	main._dirty = true
+	await process_frame
+	await process_frame
+	var v: Color = main._map_value(gl.azimuth, gl.elevation)
+	_check(v.r > 0.5, "valore sotto il cursore al centro della luce: %.2f" % v.r)
+
 	ok = ok and _all_ok
 	print("[smoke] %s" % ("TUTTO OK" if ok else "FALLITO"))
 	quit(0 if ok else 1)

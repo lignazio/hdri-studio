@@ -31,6 +31,13 @@ var status: Label
 var _dirty := true
 var _preview_ev := 0.0
 var _selected := -1
+var _selection: Array = []
+var _map_cpu: Image
+var _map_cpu_dirty := true
+var _map_cpu_ms := 0
+var _hover_az := INF
+var _hover_el := INF
+var _ev_row: ParamRow
 var _rig_path := ""
 var _screenshot_frames := -1
 var _file_dialog: FileDialog
@@ -188,6 +195,14 @@ func _build_layout() -> void:
 
 	# segnali
 	light_list.selection_changed.connect(_select)
+	light_list.multi_selection_changed.connect(func(idx: Array) -> void:
+		_selection = idx.duplicate()
+		map_view.set_selected(_selected, _selection))
+	preview.pick.connect(_pick_light_by_reflection)
+	map_view.hover_changed.connect(func(az: float, el: float) -> void:
+		_hover_az = az
+		_hover_el = el
+		_update_status())
 	light_list.structure_changed.connect(func() -> void: _on_light_changed(true))
 	light_list.texture_light_requested.connect(func() -> void: _pick_texture_file(true))
 	props.texture_pick_requested.connect(func() -> void: _pick_texture_file(false))
@@ -227,6 +242,28 @@ func _build_layout() -> void:
 
 
 func _build_model_panel(parent: Container) -> void:
+	var ptitle := Label.new()
+	ptitle.text = "Preview"
+	ptitle.add_theme_font_size_override("font_size", 15)
+	parent.add_child(ptitle)
+	_ev_row = ParamRow.new("Esposizione EV", -8.0, 8.0, 0.1)
+	_ev_row.value_changed.connect(func(v: float) -> void:
+		_preview_ev = v
+		_apply_preview_exposure())
+	parent.add_child(_ev_row)
+	var fov_row := ParamRow.new("FOV °", 10.0, 120.0, 1.0)
+	fov_row.set_value_silent(35.0)
+	fov_row.value_changed.connect(func(v: float) -> void: preview.set_fov(v))
+	parent.add_child(fov_row)
+	var scale_row := ParamRow.new("Scala modello", 0.1, 5.0, 0.01, true)
+	scale_row.set_value_silent(1.0)
+	scale_row.value_changed.connect(func(v: float) -> void: preview.set_model_scale(v))
+	parent.add_child(scale_row)
+	var hint := Label.new()
+	hint.text = "tasto destro sul preview: ruota il modello"
+	hint.add_theme_font_size_override("font_size", 11)
+	hint.modulate = Color(1, 1, 1, 0.5)
+	parent.add_child(hint)
 	var title := Label.new()
 	title.text = "Modello nel preview"
 	title.add_theme_font_size_override("font_size", 15)
@@ -308,8 +345,33 @@ func _bind_rig() -> void:
 
 func _select(i: int) -> void:
 	_selected = i if i >= 0 and i < rig.lights.size() else -1
+	if not (_selected in _selection):
+		_selection = [_selected] if _selected >= 0 else []
 	props.set_light(rig.lights[_selected] if _selected >= 0 else null)
-	map_view.set_selected(_selected)
+	map_view.set_selected(_selected, _selection)
+
+
+## Click su un riflesso nel preview: seleziona la luce (l'ultima nell'elenco) che lo produce.
+func _pick_light_by_reflection(dir: Vector3) -> void:
+	for i in range(rig.lights.size() - 1, -1, -1):
+		var l: RigLight = rig.lights[i]
+		if l.enabled and l.contains(dir):
+			light_list.select(i)
+			_selection = [i]
+			_select(i)
+			return
+
+
+## Sposta tutte le luci selezionate di (daz, del) gradi.
+func _nudge(daz: float, del: float, commit: bool) -> void:
+	if _selection.is_empty():
+		return
+	for i in _selection:
+		var l: RigLight = rig.lights[i]
+		l.azimuth = wrapf(l.azimuth + daz, -180.0, 180.0)
+		l.elevation = clampf(l.elevation + del, -90.0, 90.0)
+	props.sync_values()
+	_on_light_changed(commit)
 
 
 func _on_light_changed(commit: bool) -> void:
@@ -323,8 +385,17 @@ func _on_light_changed(commit: bool) -> void:
 
 func _on_map_move(i: int, az: float, el: float, commit: bool) -> void:
 	var l: RigLight = rig.lights[i]
-	l.azimuth = az
-	l.elevation = el
+	var daz := wrapf(az - l.azimuth, -180.0, 180.0)
+	var del := el - l.elevation
+	if i in _selection and _selection.size() > 1:
+		# trascinare una luce del gruppo sposta tutto il gruppo
+		for j in _selection:
+			var o: RigLight = rig.lights[j]
+			o.azimuth = wrapf(o.azimuth + daz, -180.0, 180.0)
+			o.elevation = clampf(o.elevation + del, -90.0, 90.0)
+	else:
+		l.azimuth = az
+		l.elevation = el
 	props.sync_values()
 	_on_light_changed(commit)
 
@@ -364,6 +435,9 @@ func _process(_delta: float) -> void:
 		baker.bake(rig)
 		preview.notify_sky_changed()
 		_dirty = false
+		_map_cpu_dirty = true
+		if _hover_az != INF:
+			_update_status()
 		if _selected >= 0 and rig.lights[_selected].photometric:
 			props.sync_values()
 	if _live_dirty and Time.get_ticks_msec() >= _live_deadline:
@@ -385,23 +459,79 @@ func _process(_delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed:
+		var step := 10.0 if event.shift_pressed else 1.0
+		match event.keycode:
+			KEY_LEFT:
+				_nudge(-step, 0.0, false)
+				accept_event()
+				return
+			KEY_RIGHT:
+				_nudge(step, 0.0, false)
+				accept_event()
+				return
+			KEY_UP:
+				_nudge(0.0, step, false)
+				accept_event()
+				return
+			KEY_DOWN:
+				_nudge(0.0, -step, false)
+				accept_event()
+				return
+	if event is InputEventKey and not event.pressed and event.keycode in [KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN]:
+		_commit() # fine di una sequenza di frecce: uno snapshot di undo
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.is_command_or_control_pressed() and event.keycode == KEY_Z:
 			_restore(undo.redo() if event.shift_pressed else undo.undo())
 			accept_event()
+		elif event.is_command_or_control_pressed() and event.keycode == KEY_D:
+			light_list._on_duplicate()
+			accept_event()
+		elif event.keycode == KEY_DELETE or event.keycode == KEY_BACKSPACE:
+			light_list._on_delete()
+			accept_event()
+		elif event.keycode == KEY_H:
+			light_list.toggle_selected_enabled()
+			_on_light_changed(true)
+			accept_event()
 		elif event.keycode == KEY_Q or event.keycode == KEY_E:
 			_preview_ev += PREVIEW_EV_STEP if event.keycode == KEY_E else -PREVIEW_EV_STEP
-			var k := pow(2.0, _preview_ev)
-			preview.set_exposure(k)
-			map_view.set_exposure(k)
-			_update_status()
+			_ev_row.set_value_silent(_preview_ev)
+			_apply_preview_exposure()
 			accept_event()
+
+
+func _apply_preview_exposure() -> void:
+	var k := pow(2.0, _preview_ev)
+	preview.set_exposure(k)
+	map_view.set_exposure(k)
+	_update_status()
 
 
 func _update_status() -> void:
 	var name := _rig_path.get_file() if _rig_path != "" else "rig senza nome"
-	status.text = "  %s · %d luci · preview %dx%d · export %dx%d · esposizione preview %+.1f EV   |   trascina: orbita · rotella: zoom · Shift+trascina su una sfera: LightPaint · Q/E: esposizione · ⌘Z / ⇧⌘Z: undo/redo" % [
-		name, rig.lights.size(), PREVIEW_RES.x, PREVIEW_RES.y, rig.resolution.x, rig.resolution.y, _preview_ev]
+	var hover := ""
+	if _hover_az != INF:
+		hover = "   |   az %.1f° el %.1f°" % [_hover_az, _hover_el]
+		var c := _map_value(_hover_az, _hover_el)
+		if c != Color.TRANSPARENT:
+			hover += " · RGB %.3f %.3f %.3f" % [c.r, c.g, c.b]
+	status.text = "  %s · %d luci · export %dx%d · preview %+.1f EV%s   |   click su un riflesso: seleziona · Shift+trascina: LightPaint · frecce: sposta (Shift 10°) · H: on/off · ⌘D duplica · Canc elimina · ⌘Z undo" % [
+		name, rig.lights.size(), rig.resolution.x, rig.resolution.y, _preview_ev, hover]
+
+
+## Valore del bake in (az, el), da una copia CPU aggiornata al massimo ogni 300 ms.
+func _map_value(az: float, el: float) -> Color:
+	var now := Time.get_ticks_msec()
+	if _map_cpu == null or (_map_cpu_dirty and now - _map_cpu_ms > 300):
+		_map_cpu = baker.get_image()
+		_map_cpu_dirty = false
+		_map_cpu_ms = now
+	if _map_cpu == null:
+		return Color.TRANSPARENT
+	var x := int(fposmod(az / 360.0 + 0.5, 1.0) * _map_cpu.get_width())
+	var y := int(clampf(0.5 - el / 180.0, 0.0, 0.9999) * _map_cpu.get_height())
+	return _map_cpu.get_pixel(x, y)
 
 
 # --- file ----------------------------------------------------------------------------------------

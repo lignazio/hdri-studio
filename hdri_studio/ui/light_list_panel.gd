@@ -3,6 +3,8 @@ extends VBoxContainer
 ## Lista delle luci con aggiungi / duplica / elimina.
 
 signal selection_changed(index: int)
+## Tutte le luci selezionate (la primaria è quella passata a selection_changed).
+signal multi_selection_changed(indices: Array)
 ## La struttura del rig è cambiata (luce aggiunta/rimossa/duplicata).
 signal structure_changed()
 ## L'utente ha scelto "Texture" dal menu: serve un file (main apre la dialog).
@@ -27,8 +29,11 @@ func _init() -> void:
 	list = ItemList.new()
 	list.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	list.custom_minimum_size.y = 160
-	list.item_selected.connect(func(i: int) -> void:
-		selection_changed.emit(i)
+	list.select_mode = ItemList.SELECT_MULTI
+	list.multi_selected.connect(func(i: int, sel: bool) -> void:
+		var primary := i if sel else selected_index()
+		selection_changed.emit(primary)
+		multi_selection_changed.emit(selected_indices())
 		_update_buttons())
 	add_child(list)
 	var row := HBoxContainer.new()
@@ -70,16 +75,32 @@ func selected_index() -> int:
 	return sel[0] if sel.size() > 0 else -1
 
 
+func selected_indices() -> Array:
+	var out: Array = []
+	for i in list.get_selected_items():
+		out.append(i)
+	out.sort()
+	return out
+
+
 func select(index: int) -> void:
 	if index >= 0 and index < list.item_count:
-		list.select(index)
+		list.select(index, true)
 	else:
 		list.deselect_all()
 	_update_buttons()
 
 
+func select_many(indices: Array) -> void:
+	list.deselect_all()
+	for i in indices:
+		if i >= 0 and i < list.item_count:
+			list.select(i, false)
+	_update_buttons()
+
+
 func refresh() -> void:
-	var prev := selected_index()
+	var prev_all := selected_indices()
 	list.clear()
 	for l in rig.lights:
 		var txt := l.name
@@ -90,7 +111,7 @@ func refresh() -> void:
 		if l.separate:
 			txt += "  ⇗"
 		list.add_item(txt)
-	select(prev)
+	select_many(prev_all)
 	_update_buttons()
 
 
@@ -155,26 +176,48 @@ func _move(delta: int) -> void:
 
 
 func _on_duplicate() -> void:
-	var i := selected_index()
-	if i < 0:
+	var sel := selected_indices()
+	if sel.is_empty():
 		return
-	var copy := rig.lights[i].duplicate_light()
-	copy.name += " copia"
-	copy.azimuth = wrapf(copy.azimuth + 10.0, -180.0, 180.0)
-	rig.lights.insert(i + 1, copy)
+	var copies: Array = []
+	for i in sel:
+		var copy: RigLight = rig.lights[i].duplicate_light()
+		copy.name += " copia"
+		copy.azimuth = wrapf(copy.azimuth + 10.0, -180.0, 180.0)
+		copies.append(copy)
+	var at: int = sel[sel.size() - 1] + 1
+	var new_idx: Array = []
+	for k in copies.size():
+		rig.lights.insert(at + k, copies[k])
+		new_idx.append(at + k)
 	refresh()
-	select(i + 1)
+	select_many(new_idx)
 	structure_changed.emit()
-	selection_changed.emit(i + 1)
+	selection_changed.emit(new_idx[0])
+	multi_selection_changed.emit(new_idx)
 
 
 func _on_delete() -> void:
-	var i := selected_index()
-	if i < 0:
+	var sel := selected_indices()
+	if sel.is_empty():
 		return
-	rig.lights.remove_at(i)
+	sel.reverse()
+	for i in sel:
+		rig.lights.remove_at(i)
 	refresh()
-	var ni: int = mini(i, rig.lights.size() - 1)
+	var ni: int = mini(sel[sel.size() - 1], rig.lights.size() - 1)
 	select(ni)
 	structure_changed.emit()
 	selection_changed.emit(ni)
+	multi_selection_changed.emit([ni] if ni >= 0 else [])
+
+
+## Accende/spegne tutte le selezionate (in blocco, verso lo stato opposto della primaria).
+func toggle_selected_enabled() -> void:
+	var sel := selected_indices()
+	if sel.is_empty():
+		return
+	var target: bool = not rig.lights[selected_index()].enabled
+	for i in sel:
+		rig.lights[i].enabled = target
+	refresh()
