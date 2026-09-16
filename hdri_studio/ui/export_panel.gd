@@ -69,6 +69,7 @@ func _init() -> void:
 	of.pressed.connect(func() -> void: open_folder_requested.emit())
 	row.add_child(of)
 	var sep := HSeparator.new()
+	sep.add_theme_constant_override("separation", 12)
 	add_child(sep)
 	var row2 := HBoxContainer.new()
 	add_child(row2)

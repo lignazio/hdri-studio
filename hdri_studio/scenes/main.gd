@@ -135,13 +135,13 @@ func _build_layout() -> void:
 	left.add_child(tabs)
 	var lights_tab := VBoxContainer.new()
 	lights_tab.name = "Luci"
-	lights_tab.add_theme_constant_override("separation", 6)
+	lights_tab.add_theme_constant_override("separation", 8)
 	tabs.add_child(lights_tab)
 	light_list = LightListPanel.new()
 	light_list.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	light_list.custom_minimum_size.y = 220
 	lights_tab.add_child(light_list)
-	lights_tab.add_child(HSeparator.new())
+	lights_tab.add_child(_separator())
 	props = LightProperties.new()
 	lights_tab.add_child(props)
 	catalog = CatalogPanel.new()
@@ -180,13 +180,13 @@ func _build_layout() -> void:
 	var right := _column(rest, 300, true)
 	bg_panel = BackgroundPanel.new()
 	right.add_child(bg_panel)
-	right.add_child(HSeparator.new())
+	right.add_child(_separator())
 	export_panel = ExportPanel.new()
 	right.add_child(export_panel)
-	right.add_child(HSeparator.new())
+	right.add_child(_separator())
 	link_panel = LiveLinkPanel.new()
 	right.add_child(link_panel)
-	right.add_child(HSeparator.new())
+	right.add_child(_separator())
 	_build_model_panel(right)
 
 	_file_dialog = FileDialog.new()
@@ -278,6 +278,7 @@ func _build_model_panel(parent: Container) -> void:
 	ptitle.text = "Preview"
 	ptitle.add_theme_font_size_override("font_size", 15)
 	parent.add_child(ptitle)
+	parent.add_child(_spacer(2))
 	_ev_row = ParamRow.new("Esposizione EV", -8.0, 8.0, 0.1)
 	_ev_row.value_changed.connect(func(v: float) -> void:
 		_preview_ev = v
@@ -317,6 +318,7 @@ func _build_model_panel(parent: Container) -> void:
 	parent.add_child(_link_camera)
 
 	# esposimetro
+	parent.add_child(_spacer(6))
 	var mtitle := Label.new()
 	mtitle.text = "Esposimetro"
 	mtitle.add_theme_font_size_override("font_size", 15)
@@ -344,6 +346,7 @@ func _build_model_panel(parent: Container) -> void:
 	_meter_label = Label.new()
 	_meter_label.tooltip_text = "E = ∫ L·cosθ dω su tutta l'HDRI per una superficie al centro rivolta nella direzione scelta.\nEV100 = log2(E / 2.5): con radianze in unità fotometriche coerenti è l'EV di un esposimetro a luce incidente."
 	parent.add_child(_meter_label)
+	parent.add_child(_spacer(6))
 	var title := Label.new()
 	title.text = "Modello nel preview"
 	title.add_theme_font_size_override("font_size", 15)
@@ -393,16 +396,29 @@ func _pick_model() -> void:
 			_model_label.text = "Impossibile caricare " + path.get_file())
 
 
+static func _spacer(h: float) -> Control:
+	var c := Control.new()
+	c.custom_minimum_size.y = h
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return c
+
+
+func _separator() -> HSeparator:
+	var s := HSeparator.new()
+	s.add_theme_constant_override("separation", 16)
+	return s
+
+
 func _column(parent: Container, width: float, scroll := false) -> VBoxContainer:
 	var panel := PanelContainer.new()
 	panel.custom_minimum_size.x = width * 0.8
 	parent.add_child(panel)
 	var margin := MarginContainer.new()
 	for side in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_" + side, 8)
+		margin.add_theme_constant_override("margin_" + side, 10)
 	panel.add_child(margin)
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 6)
+	box.add_theme_constant_override("separation", 8)
 	if scroll:
 		var sc := ScrollContainer.new()
 		sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED

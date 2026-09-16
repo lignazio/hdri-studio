@@ -38,6 +38,9 @@ func _init() -> void:
 		rot.set_value_silent(0.0))
 	add_child(rot)
 
+	var sep0 := HSeparator.new()
+	sep0.add_theme_constant_override("separation", 14)
+	add_child(sep0)
 	var title := Label.new()
 	title.text = "Sfondo"
 	title.add_theme_font_size_override("font_size", 15)
@@ -61,6 +64,7 @@ func _init() -> void:
 	_nadir = _color_row("Nadir", func(c: Color) -> void: rig.bg_nadir = c)
 
 	var sep := HSeparator.new()
+	sep.add_theme_constant_override("separation", 14)
 	add_child(sep)
 	var t2 := Label.new()
 	t2.text = "HDRI di base"

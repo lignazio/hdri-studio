@@ -44,6 +44,7 @@ func _init() -> void:
 	size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_box = VBoxContainer.new()
 	_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_box.add_theme_constant_override("separation", 6)
 	add_child(_box)
 
 	var title := Label.new()
@@ -89,7 +90,7 @@ func _init() -> void:
 	_corner_row = _row("corner_radius", "Angoli °", 0.0, 45.0, 0.1)
 	_ring_rows.append(_row("ring_inner", "Raggio interno", 0.0, 0.98, 0.01))
 
-	_section("Gradiente")
+	_gradient_rows.append_array(_section("Gradiente"))
 	_grad_type = _option("Tipo", ["Radiale", "Lineare"], func(i: int) -> void:
 		_set_prop("gradient_type", i, true)
 		_update_visibility())
@@ -145,7 +146,7 @@ func _init() -> void:
 	sd.pressed.connect(func() -> void: sidecar_save_requested.emit())
 	_texture_tools.add_child(sd)
 
-	_section("Scrim")
+	_scrim_rows.append_array(_section("Scrim"))
 	_scrim_rows.append(_row("scrim_offset_x", "Sorgente X", -1.0, 1.0, 0.01))
 	_scrim_rows.append(_row("scrim_offset_y", "Sorgente Y", -1.0, 1.0, 0.01))
 	_scrim_rows.append(_row("scrim_depth", "Profondità", 0.05, 5.0, 0.01))
@@ -222,11 +223,18 @@ func _init() -> void:
 	set_light(null)
 
 
-func _section(text: String) -> void:
+## Sottotitolo di sezione con un po' d'aria sopra. Restituisce [spaziatore, etichetta] per poterli
+## nascondere insieme alle righe della sezione.
+func _section(text: String) -> Array:
+	var sp := Control.new()
+	sp.custom_minimum_size.y = 8
+	sp.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_box.add_child(sp)
 	var l := Label.new()
 	l.text = text
 	l.modulate = Color(1, 1, 1, 0.6)
 	_box.add_child(l)
+	return [sp, l]
 
 
 func _row(prop: String, label: String, min_v: float, max_v: float, step: float, exp_edit := false) -> ParamRow:

@@ -59,6 +59,9 @@ func _init() -> void:
 	_res.selected = 1
 	rrow.add_child(_res)
 
+	var spc := Control.new()
+	spc.custom_minimum_size.y = 6
+	add_child(spc)
 	var sl := Label.new()
 	sl.text = "Luci separate"
 	sl.modulate = Color(1, 1, 1, 0.6)
