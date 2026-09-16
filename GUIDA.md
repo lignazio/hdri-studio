@@ -1,0 +1,121 @@
+# HDRI Studio — guida rapida per chi prova
+
+HDRI Studio è un'app che costruisce **HDRI da studio** a partire da luci parametriche disposte su una
+sfera a 360°: le luci si spostano in tempo reale, il risultato si vede su tre sfere di prova (cromata,
+glossy, diffusa) e si esporta come EXR lineare fisicamente corretto. Con il **live link** l'HDRI si
+aggiorna dentro Cinema 4D (Octane) o Blender mentre lavori, e con il **LightPaint** clicchi sul modello
+nel software 3D e la luce va dove serve per produrre quel riflesso.
+
+## 1. Installazione
+
+**Serve Godot 4.7.1** (godotengine.org → Download → versione *Standard*, non .NET; un singolo
+eseguibile, niente installazione) e il repository `hdri-studio`.
+
+1. Scarica o clona il repository, apri Godot → *Import* → scegli `hdri_studio/project.godot`.
+2. Il primo avvio rigenera la cache (qualche secondo). Premi **Play (F5)**.
+
+In alternativa, se hai ricevuto l'app già esportata (`HDRI Studio.app` o `HDRI Studio.exe`), basta
+aprirla. Se all'avvio vedi tutto nero, lancia `HDRI Studio.console.exe` (Windows) e riporta le righe
+che iniziano con `Baker:` o `ERROR`.
+
+**Blender** è opzionale: serve solo per i codec EXR diversi da PIZ e per leggere EXR compressi in
+DWAA/DWAB (comuni nelle collezioni commerciali di HDRI light).
+
+## 2. La finestra
+
+Tre colonne, ridimensionabili trascinando i bordi.
+
+| Sinistra | Centro | Destra |
+|---|---|---|
+| **Luci**: elenco, aggiungi / duplica / elimina / ⇋ specchia / ▲▼, pannello proprietà della luce selezionata | **Preview 3D**: tre sfere (o il tuo modello GLB) illuminate dall'HDRI · sotto, la **mappa** equirettangolare con le maniglie delle luci | **Set** (ruota tutto) · **Sfondo** · **Export** · **Live link** · **Preview** (esposizione, clipping, esposimetro) · **Modello nel preview** |
+| **Catalogo**: la tua cartella di HDRI light con miniature, tag, preferiti | | |
+| **Preset**: rig salvati come libreria | | |
+
+La barra in basso mostra az/el e il valore RGB del pixel sotto il cursore sulla mappa.
+
+## 3. Primi cinque minuti
+
+1. All'avvio c'è un set di prova (key scrim, fill, rim, top ring). Seleziona **Key scrim** nell'elenco
+   e trascina la sua maniglia sulla mappa: le sfere seguono in tempo reale.
+2. Nel pannello proprietà prova *Larghezza*, *Sfumatura*, *Angoli*, *Kelvin* (o i pulsanti 3200 / 5600),
+   *Intensità*. Ogni parametro si applica al volo.
+3. **Shift + trascina sulla sfera cromata**: la luce selezionata si sposta dove serve per riflettersi
+   sotto il cursore (LightPaint). **Click** semplice su un riflesso: seleziona la luce che lo produce.
+4. *+ Aggiungi* → scegli una forma: **Rettangolo**, **Ellisse**, **Anello**, **Gradiente** (radiale o
+   lineare, con tacche colorate), **Scrim** (telo con la sorgente dietro: hotspot fisico), **Texture**
+   (un'immagine EXR/HDR di una luce vera).
+5. **Esporta EXR…** nel pannello Export: 4k×2k, half, preset *Cinema 4D + Octane* (o *Godot / Blender*).
+   Il file è radianza lineare, primari Rec.709, e porta dentro il rig: *Apri rig…* lo rilegge da lì.
+
+## 4. Le cose da sapere
+
+- **Fusione**: *Somma* è quella fisica. *Normale* fa coprire la luce (con le sue parti scure) a quello
+  che c'è sotto: per pannelli con un corpo dietro e per le HDRI light con il proprio fondo. Con Normale
+  l'ordine dell'elenco conta (chi sta sotto copre): riordina trascinando o con ▲▼.
+- **Fotometrico**: spunta *Fotometrico* e la luce è definita dall'illuminamento al centro invece che
+  dalla radianza: allargandola diventa più morbida, non più forte. L'**esposimetro** (pannello Preview)
+  dice quanto illumina tutto il set in una direzione, in E e EV100.
+- **Sfondo**: nero / colore / gradiente, oppure un'HDRI esistente da "aumentare" con le luci
+  (rotazione, EV, *Sfocatura* per tenere solo la dominante).
+- **Catalogo**: *Cartella…* → la tua collezione. Click su una miniatura inserisce la luce; trascinala
+  sulla mappa (nasce lì) o sul preview (nasce sul riflesso). Tasto destro: ★ preferito, tag. Sidecar
+  `nome.json` accanto a un'immagine = default della luce; *Salva default* lo scrive dalla luce corrente.
+- **Luci separate** (⇗): escluse dall'HDRI, esportate come EXR planare e ricreate nel software 3D come
+  area light alla distanza scelta. In C4D serve una luce modello `HS_TEMPLATE` (Octane Area Light con
+  un ImageTexture); in Blender diventano piani emissivi.
+- **Undo** ⌘Z / ⇧⌘Z. L'app riapre l'ultimo rig e fa un autosave al minuto.
+
+## 5. Live link con Cinema 4D (Octane)
+
+1. C4D → *Edit → Preferences → Plugins → Add Folder…* → `hdri_studio/plugins/c4d` → riavvia. In
+   console: `[hdri-studio] plugin … caricato`.
+2. Nell'app: pannello **Live link** → *File di export…* (un `.exr` nella cartella `tex/` del progetto) →
+   *Attivo*. Lo stato deve dire "1 client (c4d …)".
+3. In C4D carica quello stesso file nell'ImageTexture dell'Octane Environment. Da qui ogni modifica
+   nell'app aggiorna il Live Viewer da sola (il plugin preme *Reload* per te).
+4. **LightPaint da C4D**: tool *HDRI Studio LightPaint* (menu Extensions, o Shift+C) → click o trascina
+   sul modello. **Camera dal live link** (pannello Preview): il preview segue l'inquadratura di C4D.
+
+## 6. Live link con Blender
+
+*Edit → Preferences → Add-ons → Install…* → zip della cartella `hdri_studio/plugins/blender/hdri_studio_link`
+→ attiva. Sidebar N → tab *HDRI Studio*: stato, LightPaint, Ricarica. Nell'app scegli *Godot / Blender*
+come software di export. Il reload è automatico, le luci separate diventano piani emissivi
+(calibrazione zero: strength 1 = valore del pixel).
+
+## 7. Tastiera
+
+| Tasto | Azione |
+|---|---|
+| Frecce / Shift+frecce | sposta le luci selezionate di 1° / 10° |
+| H | accende/spegne le selezionate |
+| ⌘D · Canc | duplica · elimina |
+| Q / E | esposizione del preview (solo visualizzazione) |
+| ⌘Z · ⇧⌘Z | undo · redo |
+| Shift + trascina (3D) | LightPaint |
+| Tasto destro (3D) | ruota il modello caricato |
+| Rotella (3D) | zoom |
+
+## 8. Cosa ci interessa sapere da te
+
+Segnala per favore, anche in due righe ciascuna:
+
+1. **Prima impressione**: cosa non hai capito senza leggere questa guida?
+2. **Fisica**: metti la stessa luce una volta nell'HDRI e una volta come luce separata: illumina uguale?
+   L'esposimetro ti torna con il render?
+3. **Live link**: si aggiorna sempre? Con che ritardo? Ti è mai rimasto indietro o bloccato?
+4. **LightPaint**: il riflesso finisce dove clicchi? Su mesh poco suddivise salta?
+5. **Catalogo**: la tua collezione si apre tutta? Le miniature sono leggibili (prova *Miniature EV*)?
+6. **Cosa manca** per usarla su un lavoro vero, e cosa faresti diversamente rispetto a HDR Light Studio.
+
+Per ogni problema: sistema operativo, cosa stavi facendo, cosa ti aspettavi, e se possibile il rig
+(*Salva rig…*) o l'EXR esportato (contiene il rig). Le righe della console di C4D o di Blender che
+iniziano con `[hdri-studio]` sono d'oro.
+
+## 9. Limiti noti
+
+- Gli EXR compressi DWAA/DWAB/B44/PXR24 si aprono solo se Blender è installato (conversione in cache).
+- Il preset di orientamento **Houdini** non è ancora misurato.
+- In C4D la Power delle luci separate va tarata una volta nella luce modello (*Surface brightness* on,
+  furnace test); in Blender no.
+- La modalità ACEScg in export non c'è: l'output è Rec.709 lineare.
