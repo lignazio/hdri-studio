@@ -40,9 +40,16 @@ for os in macOS Windows; do
 done
 
 echo "== self-test del build macOS"
-( "$STAGE/macOS/HDRI Studio.app/Contents/MacOS/HDRI Studio" -- --selftest > "$OUT/selftest.log" 2>&1 & )
-sleep 12; pkill -f "HDRI Studio.app/Contents/MacOS/HDRI Studio" 2>/dev/null || true
-if grep -q "\[selftest\].*OK" "$OUT/selftest.log"; then echo "   OK"; else echo "   FALLITO:"; cat "$OUT/selftest.log"; exit 1; fi
+# il primo avvio di un binario nuovo è lento (scansione di macOS): attende il risultato fino a 90 s
+"$STAGE/macOS/HDRI Studio.app/Contents/MacOS/HDRI Studio" -- --selftest > "$OUT/selftest.log" 2>&1 &
+APP_PID=$!
+for i in $(seq 1 90); do
+  grep -q "\[selftest\]" "$OUT/selftest.log" 2>/dev/null && break
+  kill -0 "$APP_PID" 2>/dev/null || break
+  sleep 1
+done
+kill "$APP_PID" 2>/dev/null || true
+if grep -q "\[selftest\].*OK" "$OUT/selftest.log"; then echo "   OK ($i s)"; else echo "   FALLITO:"; cat "$OUT/selftest.log"; exit 1; fi
 
 if [[ $PUBLISH -eq 1 ]]; then
   echo "== release v$VERSION su GitHub"
