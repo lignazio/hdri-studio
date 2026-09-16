@@ -507,6 +507,34 @@ func _run(main: Node) -> void:
 	_check(main.map_view._map_mat.get_shader_parameter("clip_threshold") > 0.0, "clipping attivo sulla mappa")
 	main._clip_check.button_pressed = false
 
+	# Radiance .hdr e metadati EXR
+	main.rig.lights.clear()
+	main.rig.background = LightRig.Background.BLACK
+	var hl := RigLight.new()
+	hl.name = "hdr test"
+	hl.width = 30.0
+	hl.height = 20.0
+	hl.softness = 0.0
+	hl.intensity = 7.5
+	main.rig.add_light(hl)
+	main.light_list.refresh()
+	main.export_panel._res.selected = 0
+	main.export_panel._codec.selected = 0
+	_check(main.export_to("res://out/smoke_meta.hdr") == OK, "export .hdr")
+	var hdr := Image.new()
+	var herr := hdr.load(ProjectSettings.globalize_path("res://out/smoke_meta.hdr"))
+	var hc := hdr.get_pixel(hdr.get_width() / 2, hdr.get_height() / 2) if herr == OK else Color.BLACK
+	_check(herr == OK and hdr.get_width() == 2048 and absf(hc.r - 7.5) < 0.08, ".hdr riletto da Godot: %dx%d, centro %.3f (RGBE)" % [hdr.get_width(), hdr.get_height(), hc.r])
+	_check(main.export_to("res://out/smoke_meta.exr") == OK, "export EXR con metadati")
+	await process_frame
+	var js := HdriExport.read_string_attribute("res://out/smoke_meta.exr", HdriExport.RIG_ATTR)
+	_check(js != "" and (JSON.parse_string(js) as Dictionary).get("lights", []).size() == 1, "attributo hdristudio_rig letto dall'EXR")
+	var back := Image.new()
+	var berr := back.load_exr_from_buffer(FileAccess.get_file_as_bytes("res://out/smoke_meta.exr"))
+	_check(berr == OK and absf(back.get_pixel(back.get_width() / 2, back.get_height() / 2).r - 7.5) < 0.01, "EXR con metadati ancora leggibile (TinyEXR), centro %.2f" % (back.get_pixel(back.get_width() / 2, back.get_height() / 2).r if berr == OK else -1.0))
+	main.rig.lights.clear()
+	_check(main.load_rig_from(ProjectSettings.globalize_path("res://out/smoke_meta.exr")) and main.rig.lights.size() == 1 and main.rig.lights[0].name == "hdr test", "rig riaperto dall'EXR")
+
 	ok = ok and _all_ok
 	print("[smoke] %s" % ("TUTTO OK" if ok else "FALLITO"))
 	quit(0 if ok else 1)

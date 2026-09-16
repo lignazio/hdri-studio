@@ -539,6 +539,11 @@ func _process(_delta: float) -> void:
 	if _convert_pid >= 0 and not OS.is_process_running(_convert_pid):
 		var code := OS.get_process_exit_code(_convert_pid)
 		_convert_pid = -1
+		if code == 0:
+			# Blender riscrive l'header: i metadati vanno reiniettati
+			var rig_json := JSON.stringify(rig.to_dict())
+			for f in _convert_files:
+				HdriExport.inject_metadata(f, rig_json)
 		export_panel.set_status("Riconversione %s: %s (%d file)" % [export_panel.codec(), "fatta" if code == 0 else "fallita (codice %d)" % code, _convert_files.size()])
 	if _screenshot_frames >= 0:
 		_screenshot_frames -= 1
@@ -799,7 +804,7 @@ func _export_exr() -> void:
 	if dir != "" and DirAccess.dir_exists_absolute(dir):
 		_file_dialog.current_dir = dir
 	_file_dialog.current_file = (_rig_path.get_file().get_basename() if _rig_path != "" else "hdri") + ".exr"
-	_dialog(FileDialog.FILE_MODE_SAVE_FILE, ["*.exr ; OpenEXR"], "Esporta HDRI", export_to)
+	_dialog(FileDialog.FILE_MODE_SAVE_FILE, ["*.exr ; OpenEXR", "*.hdr ; Radiance HDR"], "Esporta HDRI (EXR o HDR)", export_to)
 
 
 ## Autosave di sicurezza: user://autosave/<data-ora>.json, ne tiene 10.
@@ -847,8 +852,11 @@ func _save_sidecar() -> void:
 ## Bake a piena risoluzione con supersampling, preset di orientamento, scrittura EXR.
 ## opts: "resolution" (Vector2i), "half" (bool), "target" (String), "shift" (float), "quiet" (bool).
 func export_to(path: String, opts := {}) -> Error:
-	if path.get_extension().to_lower() != "exr":
+	var ext := path.get_extension().to_lower()
+	if ext != "exr" and ext != "hdr":
 		path += ".exr"
+		ext = "exr"
+	var as_hdr := ext == "hdr"
 	var t0 := Time.get_ticks_msec()
 	var res: Vector2i = opts.get("resolution", export_panel.resolution())
 	var half: bool = opts.get("half", export_panel.half())
@@ -862,15 +870,16 @@ func export_to(path: String, opts := {}) -> Error:
 	baker.bake(rig, false, false) # le luci separate non entrano nell'HDRI
 	var img := baker.get_image()
 	img = HdriExport.apply_orientation(img, target, shift)
-	var err := HdriExport.save_exr(img, path, half)
-	# luci separate: un EXR planare ciascuna, accanto all'HDRI
+	var rig_json := JSON.stringify(rig.to_dict())
+	var err := _write_image(img, path, half, as_hdr, rig_json)
+	# luci separate: un file planare ciascuna, accanto all'HDRI
 	_last_separate.clear()
 	for l in rig.separate_lights():
 		var lp := HdriExport.separate_path(path, l.name)
 		var limg := baker.bake_planar(l, 1024)
 		if link_panel.separate_flip_tex():
 			limg.flip_x()
-		var lerr := HdriExport.save_exr(limg, lp, half)
+		var lerr := _write_image(limg, lp, half, as_hdr, rig_json)
 		if lerr == OK:
 			_last_separate.append({"light": l, "path": ProjectSettings.globalize_path(lp)})
 		else:
@@ -888,12 +897,25 @@ func export_to(path: String, opts := {}) -> Error:
 		_last_export_path = ProjectSettings.globalize_path(path)
 		AppSettings.set_value("export_dir", _last_export_path.get_base_dir())
 		export_panel.set_status("Esportato %s (%dx%d, %s, %s) in %.1f s" % [
-			path.get_file(), res.x, res.y, "half" if half else "float32",
+			path.get_file(), res.x, res.y, "RGBE" if as_hdr else ("half" if half else "float32"),
 			target, (Time.get_ticks_msec() - t0) / 1000.0])
-		_start_conversion(path, half)
+		if not as_hdr:
+			_start_conversion(path, half)
 	else:
 		export_panel.set_status("Errore export: " + error_string(err))
 	_update_status()
+	return err
+
+
+## Scrive EXR (con i metadati: chromaticities Rec.709 e rig JSON) oppure Radiance .hdr.
+func _write_image(img: Image, path: String, half: bool, as_hdr: bool, rig_json: String) -> Error:
+	if as_hdr:
+		return HdriExport.save_hdr(path, img.get_width(), img.get_height(), baker.rgbe_bytes(img))
+	var err := HdriExport.save_exr(img, path, half)
+	if err == OK:
+		var merr := HdriExport.inject_metadata(path, rig_json)
+		if merr != OK:
+			push_warning("Metadati EXR non scritti in %s (%s)" % [path.get_file(), error_string(merr)])
 	return err
 
 
@@ -1088,11 +1110,18 @@ func save_rig_to(path: String) -> Error:
 
 
 func _load_rig() -> void:
-	_dialog(FileDialog.FILE_MODE_OPEN_FILE, ["*.json ; Rig HDRI Studio"], "Apri rig", load_rig_from)
+	_dialog(FileDialog.FILE_MODE_OPEN_FILE, ["*.json ; Rig HDRI Studio", "*.exr ; EXR esportato da HDRI Studio"], "Apri rig (JSON o EXR con metadati)", load_rig_from)
 
 
 func load_rig_from(path: String) -> bool:
-	var r := LightRig.load_json(path)
+	var r: LightRig = null
+	if path.get_extension().to_lower() == "exr":
+		var js := HdriExport.read_string_attribute(path, HdriExport.RIG_ATTR)
+		var d = JSON.parse_string(js) if js != "" else null
+		if d is Dictionary:
+			r = LightRig.from_dict(d)
+	else:
+		r = LightRig.load_json(path)
 	if r == null:
 		export_panel.set_status("Rig non valido: " + path.get_file())
 		return false

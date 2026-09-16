@@ -23,6 +23,138 @@ const TARGETS := {
 const DEFAULT_TARGET := "Cinema 4D + Octane"
 
 
+## Radiance .hdr (RGBE, non compresso: lo leggono tutti). rgbe: 4 byte per pixel dal baker.
+static func save_hdr(path: String, width: int, height: int, rgbe: PackedByteArray) -> Error:
+	if rgbe.size() != width * height * 4:
+		return ERR_INVALID_DATA
+	var dest := ProjectSettings.globalize_path(path)
+	var tmp := dest + ".tmp.hdr"
+	var f := FileAccess.open(tmp, FileAccess.WRITE)
+	if f == null:
+		return FileAccess.get_open_error()
+	f.store_string("#?RADIANCE\nFORMAT=32-bit_rle_rgbe\nSOFTWARE=HDRI Studio\n\n-Y %d +X %d\n" % [height, width])
+	f.store_buffer(rgbe)
+	f.close()
+	if FileAccess.file_exists(dest):
+		DirAccess.remove_absolute(dest)
+	return DirAccess.rename_absolute(tmp, dest)
+
+
+# --- metadati EXR --------------------------------------------------------------------------------
+# Godot scrive l'EXR senza attributi custom: li iniettiamo nell'header dopo la scrittura. L'header è
+# una lista di attributi (nome\0 tipo\0 int32 size valore) chiusa da un byte 0, seguita dalla tabella
+# degli offset assoluti dei blocchi di scanline: inserire byte nell'header impone di sommare lo
+# spostamento a ogni offset.
+
+const REC709 := [0.64, 0.33, 0.30, 0.60, 0.15, 0.06, 0.3127, 0.3290]
+const RIG_ATTR := "hdristudio_rig"
+const LINES_PER_CHUNK := {0: 1, 1: 1, 2: 1, 3: 16, 4: 32, 5: 16, 6: 32, 7: 32, 8: 32, 9: 256}
+
+
+static func _attr(name: String, type: String, value: PackedByteArray) -> PackedByteArray:
+	var out := PackedByteArray()
+	out.append_array(name.to_ascii_buffer())
+	out.append(0)
+	out.append_array(type.to_ascii_buffer())
+	out.append(0)
+	var size := PackedByteArray()
+	size.resize(4)
+	size.encode_s32(0, value.size())
+	out.append_array(size)
+	out.append_array(value)
+	return out
+
+
+## Inietta chromaticities Rec.709, un commento e il rig (JSON) nell'EXR. Rimuove eventuali copie
+## precedenti degli stessi attributi. Restituisce OK o l'errore.
+static func inject_metadata(path: String, rig_json: String) -> Error:
+	var abs := ProjectSettings.globalize_path(path)
+	var data := FileAccess.get_file_as_bytes(abs)
+	if data.size() < 8 or data[0] != 0x76 or data[1] != 0x2f or data[2] != 0x31 or data[3] != 0x01:
+		return ERR_FILE_UNRECOGNIZED
+	var version := data.decode_u32(4)
+	if version & 0x200 or version & 0x1000 or version & 0x800:
+		return ERR_UNAVAILABLE # tiled, multipart o deep: non gestiti
+	# scorre gli attributi, ricostruendo l'header senza i nostri e leggendo compressione e dataWindow
+	var i := 8
+	var header := PackedByteArray()
+	var compression := 3
+	var height := 0
+	var ours := ["chromaticities", "comments", RIG_ATTR]
+	while i < data.size():
+		if data[i] == 0:
+			i += 1
+			break
+		var name_end := data.find(0, i)
+		var type_end := data.find(0, name_end + 1)
+		var size := data.decode_s32(type_end + 1)
+		var value_at := type_end + 5
+		var name := data.slice(i, name_end).get_string_from_ascii()
+		var next := value_at + size
+		if name == "compression":
+			compression = data[value_at]
+		elif name == "dataWindow":
+			height = data.decode_s32(value_at + 12) - data.decode_s32(value_at + 4) + 1
+		if not (name in ours):
+			header.append_array(data.slice(i, next))
+		i = next
+	var old_header_end := i # inizio della tabella degli offset nel file originale
+	var rig_bytes := rig_json.to_utf8_buffer()
+	var chroma := PackedByteArray()
+	chroma.resize(32)
+	for k in 8:
+		chroma.encode_float(k * 4, REC709[k])
+	header.append_array(_attr("chromaticities", "chromaticities", chroma))
+	header.append_array(_attr("comments", "string", "HDRI Studio — radianza lineare, primari Rec.709".to_utf8_buffer()))
+	header.append_array(_attr(RIG_ATTR, "string", rig_bytes))
+	header.append(0)
+	var new_header_end := 8 + header.size()
+	var delta := new_header_end - old_header_end
+	var lines: int = LINES_PER_CHUNK.get(compression, 1)
+	@warning_ignore("integer_division")
+	var chunks := (height + lines - 1) / lines
+	var table := data.slice(old_header_end, old_header_end + chunks * 8)
+	for c in chunks:
+		table.encode_u64(c * 8, table.decode_u64(c * 8) + delta)
+	var out := PackedByteArray()
+	out.append_array(data.slice(0, 8))
+	out.append_array(header)
+	out.append_array(table)
+	out.append_array(data.slice(old_header_end + chunks * 8))
+	var tmp := abs + ".tmp.exr"
+	var f := FileAccess.open(tmp, FileAccess.WRITE)
+	if f == null:
+		return FileAccess.get_open_error()
+	f.store_buffer(out)
+	f.close()
+	DirAccess.remove_absolute(abs)
+	return DirAccess.rename_absolute(tmp, abs)
+
+
+## Legge un attributo stringa dall'header di un EXR ("" se assente).
+static func read_string_attribute(path: String, attr: String) -> String:
+	var f := FileAccess.open(ProjectSettings.globalize_path(path), FileAccess.READ)
+	if f == null:
+		return ""
+	var head := f.get_buffer(mini(f.get_length(), 4 << 20))
+	if head.size() < 8 or head[0] != 0x76:
+		return ""
+	var i := 8
+	while i < head.size():
+		if head[i] == 0:
+			return ""
+		var name_end := head.find(0, i)
+		var type_end := head.find(0, name_end + 1)
+		if name_end < 0 or type_end < 0:
+			return ""
+		var size := head.decode_s32(type_end + 1)
+		var value_at := type_end + 5
+		if head.slice(i, name_end).get_string_from_ascii() == attr:
+			return head.slice(value_at, value_at + size).get_string_from_utf8()
+		i = value_at + size
+	return ""
+
+
 ## Percorso dell'EXR singolo di una luce separata, accanto all'HDRI principale: <base>_<nome>.exr
 static func separate_path(base_path: String, light_name: String) -> String:
 	var slug := ""
@@ -31,7 +163,8 @@ static func separate_path(base_path: String, light_name: String) -> String:
 	slug = slug.strip_edges().trim_prefix("_").trim_suffix("_")
 	if slug == "":
 		slug = "luce"
-	return base_path.get_basename() + "_" + slug + ".exr"
+	var ext := base_path.get_extension().to_lower()
+	return base_path.get_basename() + "_" + slug + "." + (ext if ext in ["exr", "hdr"] else "exr")
 
 
 ## Applica il preset (specchio + rotazione) e restituisce una nuova immagine.

@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://dlmis40iv8nne"
+path="res://.godot/imported/rgbe.glsl-4dbc14afbd3b566b6ad6175363a18a77.res"
+
+[deps]
+
+source_file="res://bake/rgbe.glsl"
+dest_files=["res://.godot/imported/rgbe.glsl-4dbc14afbd3b566b6ad6175363a18a77.res"]
+
+[params]
+

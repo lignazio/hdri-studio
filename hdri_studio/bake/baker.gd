@@ -5,6 +5,7 @@ extends RefCounted
 ## con un device locale (spike, test) serve submit()/sync() prima di leggere i dati.
 
 const SHADER_PATH := "res://bake/bake.glsl"
+const RGBE_SHADER_PATH := "res://bake/rgbe.glsl"
 const MAX_LIGHTS := 64
 const PUSH_CONSTANT_FLOATS := 24
 ## Texture array delle luci Texture: ogni immagine viene ricampionata a questa dimensione.
@@ -22,6 +23,8 @@ var texture := RID()
 var _local := false
 var _shader := RID()
 var _pipeline := RID()
+var _rgbe_shader := RID()
+var _rgbe_pipeline := RID()
 var _lights_buf := RID()
 var _grads_buf := RID()
 var _base_tex := RID()
@@ -91,6 +94,66 @@ func _compile() -> void:
 	if not _pipeline.is_valid():
 		push_error("bake.glsl: pipeline non creata (%s)" % how)
 	print("Baker: shader da %s" % how)
+
+
+## Byte RGBE (4 per pixel, riga per riga) di un'immagine lineare, codificati sul GPU.
+func rgbe_bytes(img: Image) -> PackedByteArray:
+	if not _rgbe_pipeline.is_valid():
+		var spirv: RDShaderSPIRV = null
+		if OS.has_feature("editor") and FileAccess.file_exists(RGBE_SHADER_PATH):
+			spirv = _compile_source(FileAccess.get_file_as_string(RGBE_SHADER_PATH).replace("#[compute]", ""))
+		if spirv == null:
+			var sf := load(RGBE_SHADER_PATH) as RDShaderFile
+			if sf != null:
+				spirv = sf.get_spirv()
+				if spirv != null and spirv.bytecode_compute.is_empty():
+					spirv = null
+		if spirv == null:
+			spirv = _compile_source(BakeGlslSource.RGBE_SOURCE)
+		if spirv == null:
+			push_error("rgbe.glsl non compilabile")
+			return PackedByteArray()
+		_rgbe_shader = rd.shader_create_from_spirv(spirv)
+		_rgbe_pipeline = rd.compute_pipeline_create(_rgbe_shader)
+	var src := img.duplicate() as Image
+	src.convert(Image.FORMAT_RGBAF)
+	var w := src.get_width()
+	var h := src.get_height()
+	var fmt_in := RDTextureFormat.new()
+	fmt_in.width = w
+	fmt_in.height = h
+	fmt_in.format = RenderingDevice.DATA_FORMAT_R32G32B32A32_SFLOAT
+	fmt_in.usage_bits = RenderingDevice.TEXTURE_USAGE_STORAGE_BIT | RenderingDevice.TEXTURE_USAGE_CAN_UPDATE_BIT
+	var tin := rd.texture_create(fmt_in, RDTextureView.new(), [src.get_data()])
+	var fmt_out := RDTextureFormat.new()
+	fmt_out.width = w
+	fmt_out.height = h
+	fmt_out.format = RenderingDevice.DATA_FORMAT_R8G8B8A8_UINT
+	fmt_out.usage_bits = RenderingDevice.TEXTURE_USAGE_STORAGE_BIT | RenderingDevice.TEXTURE_USAGE_CAN_COPY_FROM_BIT
+	var tout := rd.texture_create(fmt_out, RDTextureView.new())
+	var u0 := RDUniform.new()
+	u0.uniform_type = RenderingDevice.UNIFORM_TYPE_IMAGE
+	u0.binding = 0
+	u0.add_id(tin)
+	var u1 := RDUniform.new()
+	u1.uniform_type = RenderingDevice.UNIFORM_TYPE_IMAGE
+	u1.binding = 1
+	u1.add_id(tout)
+	var uset := rd.uniform_set_create([u0, u1], _rgbe_shader, 0)
+	var cl := rd.compute_list_begin()
+	rd.compute_list_bind_compute_pipeline(cl, _rgbe_pipeline)
+	rd.compute_list_bind_uniform_set(cl, uset, 0)
+	@warning_ignore("integer_division")
+	rd.compute_list_dispatch(cl, (w + 7) / 8, (h + 7) / 8, 1)
+	rd.compute_list_end()
+	if _local:
+		rd.submit()
+		rd.sync()
+	var bytes := rd.texture_get_data(tout, 0)
+	rd.free_rid(uset)
+	rd.free_rid(tin)
+	rd.free_rid(tout)
+	return bytes
 
 
 func _compile_source(src: String) -> RDShaderSPIRV:
@@ -524,7 +587,7 @@ func get_image() -> Image:
 
 
 func free_resources() -> void:
-	for rid in [_uniform_set, _measure_set, texture, _measure_tex, _base_tex, _tex_array, _lights_buf, _grads_buf, _sampler, _pipeline, _shader]:
+	for rid in [_uniform_set, _measure_set, texture, _measure_tex, _base_tex, _tex_array, _lights_buf, _grads_buf, _sampler, _pipeline, _shader, _rgbe_pipeline, _rgbe_shader]:
 		if rid.is_valid():
 			rd.free_rid(rid)
 	_uniform_set = RID()

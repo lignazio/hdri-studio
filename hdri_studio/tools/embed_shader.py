@@ -7,15 +7,20 @@ Da rilanciare quando cambia bake.glsl (lo smoke test controlla che sia aggiornat
 import os
 
 here = os.path.dirname(os.path.abspath(__file__))
-src_path = os.path.join(here, "..", "bake", "bake.glsl")
 dst_path = os.path.join(here, "..", "bake", "bake_glsl_source.gd")
-src = open(src_path, encoding="utf-8").read().replace("#[compute]", "")
-escaped = src.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def embed(name):
+    src = open(os.path.join(here, "..", "bake", name), encoding="utf-8").read().replace("#[compute]", "")
+    return src.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+
+
 out = (
     "class_name BakeGlslSource\n"
     "extends RefCounted\n"
-    "## GENERATO da tools/embed_shader.py: sorgente di bake/bake.glsl per l'app esportata. Non modificare a mano.\n\n"
-    'const SOURCE := "' + escaped.replace("\n", "\\n") + '"\n'
+    "## GENERATO da tools/embed_shader.py: sorgenti GLSL per l'app esportata. Non modificare a mano.\n\n"
+    'const SOURCE := "' + embed("bake.glsl") + '"\n'
+    'const RGBE_SOURCE := "' + embed("rgbe.glsl") + '"\n'
 )
 open(dst_path, "w", encoding="utf-8").write(out)
-print("scritto", os.path.relpath(dst_path), len(src), "byte")
+print("scritto", os.path.relpath(dst_path))
