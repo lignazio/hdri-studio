@@ -13,9 +13,10 @@ la luce selezionata dove serve per riflettersi in quel punto.
 
 Luci separate (Fase 4): il messaggio "separate_lights" elenca le luci del rig marcate come separate,
 con direzione, distanza, dimensione fisica e il loro EXR planare. Il plugin le ricrea sotto un null
-"HDRI Studio Lights" clonando una luce modello chiamata "HS_TEMPLATE" (un'Octane Area Light con un
-ImageTexture nel suo slot texture: la prepari una volta, il plugin la clona, la posiziona, la scala e
-le assegna l'EXR). Il null si può spostare sul soggetto: le luci lo seguono.
+"HDRI Studio Lights". Se nella scena c'è una luce modello "HS_TEMPLATE" la clona; altrimenti crea da
+solo un'Octane Area Light di default (C4D Area Light + tag Octane Light scoperto per nome, ImageTexture
+nello slot texture, Surface brightness attivo, Power 1) e ci carica l'EXR. Il null si può spostare sul
+soggetto: le luci lo seguono. "HDRI Studio: diagnostica Octane" stampa i plugin e i parametri trovati.
 
 Installazione: Edit > Preferences > Plugins > aggiungi la cartella `plugins/c4d` (quella che contiene
 `hdri_studio_link/`), riavvia Cinema 4D. Nel menu Extensions compare "HDRI Studio: ricarica texture".
@@ -33,10 +34,11 @@ import link_core  # noqa: E402
 # ID unici del plugin: valori alti fuori dagli intervalli usati dai moduli di Cinema 4D
 # (1065932 collideva con C4d_objects). Per una distribuzione pubblica andrebbero richiesti su
 # https://developers.maxon.net/forum/pid
-PLUGIN_VERSION = "0.4 (verso Z dal messaggio)"
+PLUGIN_VERSION = "0.5 (luce di default Octane)"
 PLUGIN_ID_LINK = 1099780031
 PLUGIN_ID_RELOAD = 1099780032
 PLUGIN_ID_PAINT = 1099780033
+PLUGIN_ID_DIAG = 1099780034
 EXTS = (".exr", ".hdr")
 TIMER_MS = 200
 MTIME_SCAN_S = 1.0
@@ -183,7 +185,9 @@ def _nodes_of(obj):
 
 
 def _set_image_path(obj, path):
-    """Assegna `path` al primo parametro immagine trovato nella luce (tag Octane / shader) e preme Reload."""
+    """Assegna `path` al primo parametro immagine trovato nella luce (tag Octane / shader) e preme Reload.
+    Prima cerca un parametro che già contiene un .exr/.hdr; se non c'è (ImageTexture appena creato),
+    cerca un parametro di tipo filename negli shader."""
     for node in _nodes_of(obj):
         bc = node.GetDataInstance()
         if bc is None:
@@ -199,7 +203,97 @@ def _set_image_path(obj, path):
                         val.SetString(pid2, path)
                         press_reload(node)
                         return True
+    for node in _nodes_of(obj):
+        if not node.IsInstanceOf(c4d.Xbase):
+            continue
+        pid = _param_by_name(node, [], dtype=c4d.DTYPE_FILENAME)
+        if pid is not None:
+            node[pid] = path
+            press_reload(node)
+            return True
     return False
+
+
+# --- luce di default (senza HS_TEMPLATE) --------------------------------------------------------------
+
+def _find_plugin(ptype, words):
+    """ID del primo plugin del tipo dato il cui nome contiene tutte le parole (senza spazi, minuscolo)."""
+    for p in c4d.plugins.FilterPluginList(ptype, True):
+        n = p.GetName().lower().replace(" ", "")
+        if all(w in n for w in words):
+            return p.GetID()
+    return None
+
+
+def _param_by_name(node, words, dtype=None, exclude=()):
+    """DescID del primo parametro della descrizione il cui nome contiene tutte le parole."""
+    desc = node.GetDescription(c4d.DESCFLAGS_DESC_NONE)
+    if desc is None:
+        return None
+    for bc, pid, _gid in desc:
+        try:
+            name = bc.GetString(c4d.DESC_NAME).lower()
+            if not all(w in name for w in words) or any(x in name for x in exclude):
+                continue
+            if dtype is not None and pid[0].dtype != dtype:
+                continue
+            return pid
+        except Exception:
+            continue
+    return None
+
+
+def _create_default_light(doc, root):
+    """Octane Area Light di default: C4D Area Light rettangolare + tag Octane Light (scoperto per nome)
+    con un ImageTexture nello slot texture, Surface brightness attivo, Power 1. Se il plugin Octane non
+    si trova, resta una luce area nativa. Restituisce (oggetto, nota per la console)."""
+    light = c4d.BaseObject(c4d.Olight)
+    light[c4d.LIGHT_TYPE] = c4d.LIGHT_TYPE_AREA
+    light[c4d.LIGHT_AREADETAILS_SHAPE] = c4d.LIGHT_AREADETAILS_SHAPE_RECTANGLE
+    light.InsertUnder(root)
+    tag_id = _find_plugin(c4d.PLUGINTYPE_TAG, ["octane", "light"])
+    if tag_id is None:
+        return light, "tag 'Octane Light' non trovato fra i plugin: luce area nativa senza texture"
+    tag = light.MakeTag(tag_id)
+    notes = []
+    sh_id = _find_plugin(c4d.PLUGINTYPE_SHADER, ["imagetexture"]) or _find_plugin(c4d.PLUGINTYPE_SHADER, ["octane", "image"])
+    tex_pid = _param_by_name(tag, ["texture"], dtype=c4d.DTYPE_BASELISTLINK, exclude=("distribution", "opacity", "projection"))
+    if sh_id is not None and tex_pid is not None:
+        sh = c4d.BaseShader(sh_id)
+        tag.InsertShader(sh)
+        tag[tex_pid] = sh
+    else:
+        notes.append("slot texture o shader ImageTexture non trovati (shader=%s, slot=%s)" % (sh_id, tex_pid))
+    sb = _param_by_name(tag, ["surface", "brightness"], dtype=c4d.DTYPE_BOOL)
+    if sb is not None:
+        tag[sb] = True
+    else:
+        notes.append("'Surface brightness' non trovato")
+    pw = _param_by_name(tag, ["power"], dtype=c4d.DTYPE_REAL, exclude=("normalize",))
+    if pw is not None:
+        tag[pw] = 1.0
+    return light, ("Octane Area Light di default" + ("; " + "; ".join(notes) if notes else ""))
+
+
+def octane_diagnostics(doc):
+    """Stampa in console cosa il plugin trova di Octane: serve a fissare la luce di default se nasce male."""
+    print("[hdri-studio] --- diagnostica Octane ---")
+    for ptype, label in ((c4d.PLUGINTYPE_TAG, "tag"), (c4d.PLUGINTYPE_SHADER, "shader"), (c4d.PLUGINTYPE_OBJECT, "oggetto")):
+        for p in c4d.plugins.FilterPluginList(ptype, True):
+            if "octane" in p.GetName().lower() or "imagetexture" in p.GetName().lower().replace(" ", ""):
+                print("[hdri-studio] %-8s %-40s id=%d" % (label, p.GetName(), p.GetID()))
+    tag_id = _find_plugin(c4d.PLUGINTYPE_TAG, ["octane", "light"])
+    if tag_id is not None:
+        tmp = c4d.BaseObject(c4d.Olight)
+        tag = tmp.MakeTag(tag_id)
+        desc = tag.GetDescription(c4d.DESCFLAGS_DESC_NONE)
+        if desc is not None:
+            for bc, pid, _g in desc:
+                try:
+                    print("[hdri-studio]   param id=%-6d dtype=%-8d %s" % (pid[0].id, pid[0].dtype, bc.GetString(c4d.DESC_NAME)))
+                except Exception:
+                    pass
+    print("[hdri-studio] --- fine diagnostica ---")
 
 
 def _vec(a):
@@ -226,12 +320,13 @@ def sync_separate_lights(doc, msg):
         wanted.add(name)
         obj = existing.get(name)
         if obj is None:
-            if template is None:
-                print("[hdri-studio] luce separata '%s': manca la luce modello '%s' nella scena" % (e["name"], TEMPLATE_NAME))
-                continue
-            obj = template.GetClone(c4d.COPYFLAGS_NONE)
+            if template is not None:
+                obj = template.GetClone(c4d.COPYFLAGS_NONE)
+                obj.InsertUnder(root)
+            else:
+                obj, note = _create_default_light(doc, root)
+                print("[hdri-studio] luce separata '%s': nessun '%s' nella scena → %s" % (e["name"], TEMPLATE_NAME, note))
             obj.SetName(name)
-            obj.InsertUnder(root)
         F, R, U = _vec(e["forward"]), _vec(e["right"]), _vec(e["up"])
         d = float(e["distance"])
         # base propria (nessuno specchio sull'oggetto): se R×U = -F, il preset ha specchiato l'immagine
@@ -509,6 +604,13 @@ class HdriStudioLink(c4d.plugins.MessageData):
                 print("[hdri-studio] %s modificato su disco → %d nodi ricaricati" % (os.path.basename(p), n))
 
 
+class DiagCommand(c4d.plugins.CommandData):
+    def Execute(self, doc):
+        octane_diagnostics(doc)
+        c4d.gui.MessageDialog("HDRI Studio: diagnostica stampata nella console (Extensions > Console).")
+        return True
+
+
 class ReloadCommand(c4d.plugins.CommandData):
     def Execute(self, doc):
         n = reload_all(doc)
@@ -521,6 +623,9 @@ if __name__ == "__main__":
     c4d.plugins.RegisterCommandPlugin(id=PLUGIN_ID_RELOAD, str="HDRI Studio: ricarica texture",
                                       info=0, icon=None, help="Preme Reload su tutti i nodi con texture EXR/HDR",
                                       dat=ReloadCommand())
+    c4d.plugins.RegisterCommandPlugin(id=PLUGIN_ID_DIAG, str="HDRI Studio: diagnostica Octane",
+                                      info=0, icon=None, help="Stampa in console i plugin e i parametri Octane trovati",
+                                      dat=DiagCommand())
     c4d.plugins.RegisterToolPlugin(id=PLUGIN_ID_PAINT, str="HDRI Studio LightPaint", info=0, icon=None,
                                    help="Click sul modello: la luce selezionata in HDRI Studio si sposta sul riflesso",
                                    dat=LightPaintTool())

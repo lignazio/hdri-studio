@@ -35,8 +35,12 @@ continuo.
 
 ## Luci separate
 
-Nella scena crea una **Octane Area Light**, mettile un ImageTexture nello slot texture dell'emissione e
-chiamala `HS_TEMPLATE`. Nell'emissione attiva **Surface brightness** (l'emissione diventa per unità di
+Senza fare nulla, il plugin crea da solo per ogni luce separata una **Octane Area Light di default**
+(area light rettangolare con tag Octane Light, ImageTexture nello slot texture, *Surface brightness*
+attivo, Power 1) e ci carica l'EXR. Se preferisci controllare tu il tipo di luce e le sue impostazioni,
+crea una **Octane Area Light**, mettile un ImageTexture nello slot texture dell'emissione e chiamala
+`HS_TEMPLATE`: il plugin la clona al posto della luce di default. Se la luce di default nasce senza
+texture o senza tag, lancia *Extensions → HDRI Studio: diagnostica Octane* e manda l'output della console. Nell'emissione attiva **Surface brightness** (l'emissione diventa per unità di
 area, come la radianza dell'HDRI: una luce grande e una piccola con la stessa texture hanno la stessa
 luminosità superficiale) e lascia Power = 1. Il plugin clona questa luce per ogni luce marcata *Separata*
 nell'app, sotto il null `HDRI Studio Lights`: direzione, distanza, dimensione fisica (`Size X/Y`) e
