@@ -32,7 +32,7 @@ Tre colonne, ridimensionabili trascinando i bordi.
 
 | Sinistra | Centro | Destra |
 |---|---|---|
-| **Luci**: elenco, aggiungi / duplica / elimina / ⇋ specchia / ▲▼, pannello proprietà della luce selezionata | **Preview 3D**: tre sfere (o il tuo modello GLB) illuminate dall'HDRI · sotto, la **mappa** equirettangolare con le maniglie delle luci | **Set** (ruota tutto) · **Sfondo** · **Export** · **Live link** · **Preview** (esposizione, clipping, esposimetro) · **Modello nel preview** |
+| **Luci**: elenco con le icone di stato per riga (occhio = visibile, pallino = solo, lucchetto = bloccata; bianca = attiva, grigia = off), aggiungi / duplica / elimina / ⇋ specchia / ▲▼ o drag & drop per riordinare, pannello proprietà della luce selezionata | **Preview 3D**: tre sfere (o il tuo modello GLB) illuminate dall'HDRI · sotto, la **mappa** equirettangolare con le maniglie delle luci | **Set** (ruota tutto) · **Sfondo** · **Export** · **Live link** · **Preview** (esposizione, clipping, esposimetro) · **Modello nel preview** |
 | **Catalogo**: la tua cartella di HDRI light con miniature, tag, preferiti | | |
 | **Preset**: rig salvati come libreria | | |
 

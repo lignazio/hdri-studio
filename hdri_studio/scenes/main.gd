@@ -235,6 +235,9 @@ func _build_layout() -> void:
 		_hover_el = el
 		_update_status())
 	light_list.structure_changed.connect(func() -> void: _on_light_changed(true))
+	light_list.state_changed.connect(func() -> void:
+		props.sync_values()
+		_on_light_changed(true))
 	light_list.texture_light_requested.connect(func() -> void: _pick_texture_file(true))
 	props.texture_pick_requested.connect(func() -> void: _pick_texture_file(false))
 	catalog.light_requested.connect(_add_texture_light)

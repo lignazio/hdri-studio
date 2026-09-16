@@ -1,17 +1,29 @@
 class_name LightListPanel
 extends VBoxContainer
-## Lista delle luci con aggiungi / duplica / elimina.
+## Lista delle luci (Tree): icone per riga — occhio = visibile, pallino = solo, lucchetto = bloccata
+## (bianca = attiva, grigia = off) — multi-selezione, riordino con drag & drop, aggiungi / duplica /
+## elimina / specchia / ▲▼.
+
+const BTN_ENABLED := 0
+const BTN_SOLO := 1
+const BTN_LOCKED := 2
+const COL_ON := Color(1, 1, 1, 0.95)
+const COL_OFF := Color(1, 1, 1, 0.28)
 
 signal selection_changed(index: int)
 ## Tutte le luci selezionate (la primaria è quella passata a selection_changed).
 signal multi_selection_changed(indices: Array)
 ## La struttura del rig è cambiata (luce aggiunta/rimossa/duplicata).
 signal structure_changed()
+## Uno stato (visibile / solo / bloccata) è cambiato da un'icona della lista.
+signal state_changed()
 ## L'utente ha scelto "Texture" dal menu: serve un file (main apre la dialog).
 signal texture_light_requested()
 
 var rig: LightRig
-var list: ItemList
+var list: Tree
+var _root: TreeItem
+var _syncing := false
 var _add_menu: MenuButton
 var _btn_dup: Button
 var _btn_del: Button
@@ -26,19 +38,28 @@ func _init() -> void:
 	title.text = "Luci"
 	title.add_theme_font_size_override("font_size", 15)
 	add_child(title)
-	list = ItemList.new()
+	list = Tree.new()
 	list.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	list.custom_minimum_size.y = 160
-	list.select_mode = ItemList.SELECT_MULTI
+	list.hide_root = true
+	list.columns = 1
+	list.select_mode = Tree.SELECT_MULTI
+	list.allow_reselect = true
+	list.drop_mode_flags = Tree.DROP_MODE_INBETWEEN
 	# riordino trascinando: il dato viaggia come Dictionary, il rilascio sposta la voce (o il gruppo
 	# selezionato) prima o dopo la voce sotto il cursore
 	list.set_drag_forwarding(_drag_data, _can_drop, _drop)
-	list.multi_selected.connect(func(i: int, sel: bool) -> void:
+	list.multi_selected.connect(func(item: TreeItem, _col: int, sel: bool) -> void:
+		if _syncing:
+			return
+		var i: int = item.get_metadata(0)
 		var primary := i if sel else selected_index()
 		selection_changed.emit(primary)
 		multi_selection_changed.emit(selected_indices())
 		_update_buttons())
+	list.button_clicked.connect(_on_button)
 	add_child(list)
+	_root = list.create_item()
 	var row := HBoxContainer.new()
 	add_child(row)
 	_add_menu = MenuButton.new()
@@ -78,51 +99,93 @@ func set_rig(r: LightRig) -> void:
 	refresh()
 
 
-func selected_index() -> int:
-	var sel := list.get_selected_items()
-	return sel[0] if sel.size() > 0 else -1
+func _items() -> Array:
+	return _root.get_children() if _root != null else []
+
+
+func _item(index: int) -> TreeItem:
+	var items := _items()
+	return items[index] if index >= 0 and index < items.size() else null
+
+
+## Rettangolo (in coordinate del Tree) della voce index — usato dai test.
+func item_rect(index: int) -> Rect2:
+	var it := _item(index)
+	return list.get_item_area_rect(it) if it != null else Rect2()
 
 
 func selected_indices() -> Array:
 	var out: Array = []
-	for i in list.get_selected_items():
-		out.append(i)
+	var it := list.get_next_selected(null)
+	while it != null:
+		out.append(it.get_metadata(0))
+		it = list.get_next_selected(it)
 	out.sort()
 	return out
 
 
+func selected_index() -> int:
+	var sel := selected_indices()
+	return sel[0] if sel.size() > 0 else -1
+
+
 func select(index: int) -> void:
-	if index >= 0 and index < list.item_count:
-		list.select(index, true)
-	else:
-		list.deselect_all()
+	_syncing = true
+	list.deselect_all()
+	var it := _item(index)
+	if it != null:
+		it.select(0)
+	_syncing = false
 	_update_buttons()
 
 
 func select_many(indices: Array) -> void:
+	_syncing = true
 	list.deselect_all()
 	for i in indices:
-		if i >= 0 and i < list.item_count:
-			list.select(i, false)
+		var it := _item(i)
+		if it != null:
+			it.select(0)
+	_syncing = false
 	_update_buttons()
 
 
 func refresh() -> void:
 	var prev_all := selected_indices()
+	_syncing = true
 	list.clear()
-	for l in rig.lights:
-		var txt := l.name
-		if not l.enabled:
-			txt += "  (off)"
-		if l.solo:
-			txt += "  [solo]"
-		if l.separate:
-			txt += "  ⇗"
-		if l.locked:
-			txt += "  🔒"
-		list.add_item(txt)
+	_root = list.create_item()
+	for i in rig.lights.size():
+		var l: RigLight = rig.lights[i]
+		var it := _root.create_child()
+		it.set_text(0, l.name + ("  ⇗" if l.separate else ""))
+		it.set_metadata(0, i)
+		it.set_custom_color(0, COL_ON if l.enabled else Color(1, 1, 1, 0.45))
+		it.add_button(0, LightIcons.eye(), BTN_ENABLED, false, "Visibile (H)")
+		it.add_button(0, LightIcons.dot(), BTN_SOLO, false, "Solo")
+		it.add_button(0, LightIcons.lock(), BTN_LOCKED, false, "Bloccata: LightPaint, mappa e frecce non la spostano")
+		it.set_button_color(0, 0, COL_ON if l.enabled else COL_OFF)
+		it.set_button_color(0, 1, COL_ON if l.solo else COL_OFF)
+		it.set_button_color(0, 2, COL_ON if l.locked else COL_OFF)
+	_syncing = false
 	select_many(prev_all)
 	_update_buttons()
+
+
+func _on_button(item: TreeItem, _col: int, id: int, mouse: int) -> void:
+	if mouse != MOUSE_BUTTON_LEFT:
+		return
+	var i: int = item.get_metadata(0)
+	var l: RigLight = rig.lights[i]
+	match id:
+		BTN_ENABLED:
+			l.enabled = not l.enabled
+		BTN_SOLO:
+			l.solo = not l.solo
+		BTN_LOCKED:
+			l.locked = not l.locked
+	refresh()
+	state_changed.emit()
 
 
 func _update_buttons() -> void:
@@ -171,9 +234,10 @@ func add_and_select(l: RigLight) -> void:
 
 
 func _drag_data(at_position: Vector2) -> Variant:
-	var i := list.get_item_at_position(at_position, true)
-	if i < 0:
+	var it := list.get_item_at_position(at_position)
+	if it == null:
 		return null
+	var i: int = it.get_metadata(0)
 	var moving: Array = selected_indices() if i in selected_indices() else [i]
 	var preview := Label.new()
 	preview.text = "  ".join(moving.map(func(k: int) -> String: return rig.lights[k].name))
@@ -190,10 +254,11 @@ func _drop(at_position: Vector2, data: Variant) -> void:
 	var moving: Array = data["indices"]
 	moving.sort()
 	# destinazione: prima o dopo la voce sotto il cursore (metà superiore / inferiore), altrimenti in fondo
-	var target := list.get_item_at_position(at_position, true)
+	var target_item := list.get_item_at_position(at_position)
 	var insert_at := rig.lights.size()
-	if target >= 0:
-		var r := list.get_item_rect(target)
+	if target_item != null:
+		var target: int = target_item.get_metadata(0)
+		var r := list.get_item_area_rect(target_item)
 		insert_at = target if at_position.y < r.position.y + r.size.y * 0.5 else target + 1
 	var block: Array = []
 	for k in moving:
