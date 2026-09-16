@@ -604,6 +604,10 @@ luci Texture e catalogo, luci separate, app standalone.
   tool: luce da studio, spesso partendo da un'HDRI esistente da aumentare.
 - 15/09/2026 — Risoluzione di default 4096×2048 half. 8k e `.hdr` rimandati a Fase 2.
 - 15/09/2026 — Intensità lineare + EV, tre sfere di preview, nessuna feature extra prima del prototipo.
+- 16/09/2026 — ID Octane per C4D 2026 misurati con la diagnostica del plugin: tag Octane Light 1029526
+  (Texture 1155, Power 1151, Surface brightness 1166, Camera visibility 1163), shader Image Texture
+  1029508 (File 1100, Reload 1127, Color space 1118 con Linear sRGB = 2). La luce separata di default
+  non dipende più da ricerche per nome.
 - 15/09/2026 — Orientamento **Cinema 4D**: C4D nativo mostra il punto bianco a sinistra → preset
   "Cinema 4D nativo" con specchio; **Octane** lo mostra a destra, come il preview → preset
   "Cinema 4D + Octane" senza specchio, che è il default. I due renderer non concordano fra loro.

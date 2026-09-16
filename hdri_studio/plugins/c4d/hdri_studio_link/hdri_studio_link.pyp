@@ -34,7 +34,7 @@ import link_core  # noqa: E402
 # ID unici del plugin: valori alti fuori dagli intervalli usati dai moduli di Cinema 4D
 # (1065932 collideva con C4d_objects). Per una distribuzione pubblica andrebbero richiesti su
 # https://developers.maxon.net/forum/pid
-PLUGIN_VERSION = "0.7 (parametri del tag per ID)"
+PLUGIN_VERSION = "0.8 (Image Texture per ID)"
 PLUGIN_ID_LINK = 1099780031
 PLUGIN_ID_RELOAD = 1099780032
 PLUGIN_ID_PAINT = 1099780033
@@ -185,9 +185,15 @@ def _nodes_of(obj):
 
 
 def _set_image_path(obj, path):
-    """Assegna `path` al primo parametro immagine trovato nella luce (tag Octane / shader) e preme Reload.
-    Prima cerca un parametro che già contiene un .exr/.hdr; se non c'è (ImageTexture appena creato),
-    cerca un parametro di tipo filename negli shader."""
+    """Assegna `path` all'immagine della luce e preme Reload. Per l'Image Texture di Octane usa gli ID
+    misurati (file, spazio colore Linear sRGB, Reload); per altri shader cerca un parametro che già
+    contiene un .exr/.hdr o un parametro di tipo filename."""
+    for node in _nodes_of(obj):
+        if node.GetType() == OCTANE_IMAGE_TEXTURE_ID:
+            node[OCT_IMG_FILE] = path
+            node[OCT_IMG_COLOR_SPACE] = OCT_IMG_COLOR_SPACE_LINEAR_SRGB
+            node.Message(c4d.MSG_DESCRIPTION_COMMAND, {"id": c4d.DescID(c4d.DescLevel(OCT_IMG_RELOAD))})
+            return True
     for node in _nodes_of(obj):
         bc = node.GetDataInstance()
         if bc is None:
@@ -249,6 +255,11 @@ OCT_LIGHT_POWER = 1151
 OCT_LIGHT_TEXTURE = 1155
 OCT_LIGHT_SURFACE_BRIGHTNESS = 1166
 OCT_LIGHT_CAMERA_VISIBILITY = 1163
+# parametri dello shader Image Texture (diagnostica del 16/09/2026)
+OCT_IMG_FILE = 1100
+OCT_IMG_RELOAD = 1127
+OCT_IMG_COLOR_SPACE = 1118
+OCT_IMG_COLOR_SPACE_LINEAR_SRGB = 2
 
 
 def _plugin_exists(ptype, pid):
