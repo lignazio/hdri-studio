@@ -606,8 +606,9 @@ luci Texture e catalogo, luci separate, app standalone.
 - 15/09/2026 — Intensità lineare + EV, tre sfere di preview, nessuna feature extra prima del prototipo.
 - 16/09/2026 — ID Octane per C4D 2026 misurati con la diagnostica del plugin: tag Octane Light 1029526
   (Texture 1155, Power 1151, Surface brightness 1166, Camera visibility 1163), shader Image Texture
-  1029508 (File 1100, Reload 1127, Color space 1118 con Linear sRGB = 2). La luce separata di default
-  non dipende più da ricerche per nome.
+  1029508 (File 1100, Reload 1127, Color space 1118 con Linear sRGB = 2), tag Octane Environment
+  1029643 (Texture 1150, Power 1151, Imp. Samp. 1153, Type 1162 con Primary = 0). Luce separata di
+  default e ambiente HDRI di default non dipendono più da ricerche per nome.
 - 15/09/2026 — Orientamento **Cinema 4D**: C4D nativo mostra il punto bianco a sinistra → preset
   "Cinema 4D nativo" con specchio; **Octane** lo mostra a destra, come il preview → preset
   "Cinema 4D + Octane" senza specchio, che è il default. I due renderer non concordano fra loro.

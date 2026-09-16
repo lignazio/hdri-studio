@@ -34,7 +34,7 @@ import link_core  # noqa: E402
 # ID unici del plugin: valori alti fuori dagli intervalli usati dai moduli di Cinema 4D
 # (1065932 collideva con C4d_objects). Per una distribuzione pubblica andrebbero richiesti su
 # https://developers.maxon.net/forum/pid
-PLUGIN_VERSION = "0.9 (ambiente HDRI di default)"
+PLUGIN_VERSION = "1.0 (Octane per ID)"
 PLUGIN_ID_LINK = 1099780031
 PLUGIN_ID_RELOAD = 1099780032
 PLUGIN_ID_PAINT = 1099780033
@@ -261,8 +261,13 @@ OCT_IMG_FILE = 1100
 OCT_IMG_RELOAD = 1127
 OCT_IMG_COLOR_SPACE = 1118
 OCT_IMG_COLOR_SPACE_LINEAR_SRGB = 2
-# tag Octane Environment (id dalla diagnostica; i parametri si cercano per nome finché non sono misurati)
+# tag Octane Environment (diagnostica del 16/09/2026)
 OCTANE_ENV_TAG_ID = 1029643
+OCT_ENV_TEXTURE = 1150
+OCT_ENV_POWER = 1151
+OCT_ENV_IMPORTANCE_SAMPLING = 1153
+OCT_ENV_TYPE = 1162
+OCT_ENV_TYPE_PRIMARY = 0
 ENV_SKY_NAME = "HDRI Studio Environment"
 _state = {"last_env_path": ""}
 
@@ -345,32 +350,18 @@ def create_environment(doc, path):
     doc.InsertObject(sky)
     tag = sky.MakeTag(tag_id)
     notes = []
-    # tipo di ambiente: se c'è un menu con una voce "texture", sceglila
-    desc = tag.GetDescription(c4d.DESCFLAGS_DESC_NONE)
-    tex_pid = None
-    if desc is not None:
-        for bc, pid, _g in desc:
-            try:
-                name = bc.GetString(c4d.DESC_NAME).lower()
-                if pid[0].dtype == c4d.DTYPE_LONG and name.strip() in ("type", "environment type"):
-                    cycle = bc.GetContainer(c4d.DESC_CYCLE)
-                    for cid, label in cycle:
-                        if "texture" in str(label).lower():
-                            tag[pid] = cid
-                            break
-                if tex_pid is None and pid[0].dtype == c4d.DTYPE_BASELISTLINK and name.strip() == "texture":
-                    tex_pid = pid
-            except Exception:
-                pass
+    tag[OCT_ENV_TYPE] = OCT_ENV_TYPE_PRIMARY
+    tag[OCT_ENV_POWER] = 1.0
+    tag[OCT_ENV_IMPORTANCE_SAMPLING] = True
     sh_id = _find_plugin(c4d.PLUGINTYPE_SHADER, "Image Texture", OCTANE_IMAGE_TEXTURE_ID)
-    if sh_id is not None and tex_pid is not None:
+    if sh_id is not None:
         sh = c4d.BaseShader(sh_id)
         tag.InsertShader(sh)
-        tag[tex_pid] = sh
+        tag[OCT_ENV_TEXTURE] = sh
         sh[OCT_IMG_FILE] = path
         sh[OCT_IMG_COLOR_SPACE] = OCT_IMG_COLOR_SPACE_LINEAR_SRGB
     else:
-        notes.append("slot texture non trovato nel tag Environment (shader=%s, slot=%s): lancia la diagnostica" % (sh_id, tex_pid))
+        notes.append("shader Image Texture non trovato")
     c4d.EventAdd(c4d.EVENT_FORCEREDRAW)
     return "ambiente HDRI creato ('%s')" % ENV_SKY_NAME + ("; " + "; ".join(notes) if notes else "")
 
