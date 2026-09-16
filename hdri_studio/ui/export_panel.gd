@@ -16,6 +16,7 @@ var _target: OptionButton
 var _shift: ParamRow
 var _status: Label
 var _codec: OptionButton
+var _colorspace: OptionButton
 var _blender_label: Label
 
 signal blender_pick_requested()
@@ -37,6 +38,8 @@ func _init() -> void:
 	_half.text = "EXR half (16 bit)"
 	_half.button_pressed = true
 	add_child(_half)
+	_colorspace = _option("Spazio colore", HdriExport.COLORSPACES)
+	_colorspace.tooltip_text = "Primari dell'EXR esportato. La preview resta Rec.709. Con ACEScg i valori sono convertiti\n(Rec.709 → AP1 con adattamento Bradford) e i metadati dichiarano i primari AP1 con bianco D60."
 	_codec = _option("Compressione", [])
 	for c in ExrConvert.CODECS:
 		_codec.add_item(c if c == "PIZ" else c + "  (via Blender)")
@@ -129,6 +132,10 @@ func set_status(text: String) -> void:
 
 func codec() -> String:
 	return ExrConvert.CODECS[_codec.selected]
+
+
+func acescg() -> bool:
+	return _colorspace.selected == 1
 
 
 func refresh_blender() -> void:

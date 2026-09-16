@@ -123,4 +123,4 @@ iniziano con `[hdri-studio]` sono d'oro.
 - Il preset di orientamento **Houdini** non è ancora misurato.
 - In C4D la Power delle luci separate va tarata una volta nella luce modello (*Surface brightness* on,
   furnace test); in Blender no.
-- La modalità ACEScg in export non c'è: l'output è Rec.709 lineare.
+- L'output è Rec.709 lineare; nel pannello Export puoi scegliere ACEScg (con i metadati AP1/D60).

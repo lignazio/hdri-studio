@@ -23,8 +23,18 @@ layout(push_constant, std430) uniform Params {
 	vec4 bg_horizon; // rgb, calibration flag
 	vec4 bg_nadir;   // rgb, mode: 1 = misura K della luce 0, 2 = proiezione planare della luce 0
 	vec4 base;       // rotazione (rad), esposizione (mult), enabled, flip
-	vec4 extra;      // lod di sfocatura della base, -, -, -
+	vec4 extra;      // lod di sfocatura della base, spazio colore di uscita (0 Rec.709, 1 ACEScg), -, -
 } p;
+
+// Rec.709 lineare (D65) → ACEScg / AP1 (D60), adattamento Bradford. Colonne in ordine GLSL.
+const mat3 REC709_TO_ACESCG = mat3(
+	vec3(0.6130974, 0.0701937, 0.0206156),
+	vec3(0.3395231, 0.9163539, 0.1095698),
+	vec3(0.0473795, 0.0134524, 0.8698131));
+
+vec3 to_output_space(vec3 c) {
+	return p.extra.y > 0.5 ? REC709_TO_ACESCG * c : c;
+}
 
 const float PI = 3.14159265358979;
 
@@ -348,7 +358,7 @@ void planar(ivec2 pix, ivec2 sz) {
 			acc += light_rgb(0, d, mp.y) * mp.x;
 		}
 	}
-	imageStore(out_img, pix, vec4(acc / float(ss * ss), 1.0));
+	imageStore(out_img, pix, vec4(to_output_space(acc / float(ss * ss)), 1.0));
 }
 
 void main() {
@@ -367,5 +377,5 @@ void main() {
 		}
 	}
 	acc /= float(ss * ss);
-	imageStore(out_img, pix, vec4(acc, 1.0));
+	imageStore(out_img, pix, vec4(to_output_space(acc), 1.0));
 }

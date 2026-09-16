@@ -7,7 +7,13 @@ area: progetto
 
 # HDRI Studio — Piano
 
-> [!success] Stato: v1.9 — 16 settembre 2026 — prima release per i tester
+> [!success] Stato: v2.0 — 16 settembre 2026 — export ACEScg: chiusi tutti i sospesi del piano tranne Houdini
+> Icone di stato nella lista, export ACEScg. Dal piano iniziale resta solo Houdini (preset di
+> orientamento e plugin), più la calibrazione della Power in Octane. Blender resta la dipendenza
+> opzionale per i codec EXR: non esiste una GDExtension OpenEXR pronta (cercato su GitHub il 16/09);
+> costruirla è una fase possibile.
+
+> [!success] Stato precedente: v1.9 — 16 settembre 2026 — prima release per i tester
 > Licenza MIT, versione 0.9.0 nell'app, `tools/release.sh` che esporta macOS e Windows, impacchetta
 > con plugin e guida, verifica il build e pubblica su GitHub: prima release
 > https://github.com/lignazio/hdri-studio/releases/tag/v0.9.0. Plugin C4D 1.0: ambiente e luci
@@ -580,7 +586,7 @@ Confronto con la v0.3 (il piano approvato prima di scrivere codice) e con le voc
 | Radiance `.hdr` in export | Fase 1/2 | Fatto (16/09): RGBE codificato sul GPU, flat, verificato in rilettura |
 | Codec EXR (ZIP, DWAA, DWAB…) | richiesta 15/09 | Fatto via Blender in background (Godot scrive solo PIZ, TinyEXR non ha DWA); in lettura, conversione in cache per i codec che TinyEXR non decodifica |
 | Metadati nell'EXR (chromaticities Rec.709, JSON del rig dentro il file) | §4.5 | Fatto (16/09): iniezione nell'header dopo la scrittura con aggiornamento degli offset; reiniettati dopo Blender; il rig si riapre dall'EXR. Verificato con TinyEXR e OpenEXR |
-| ACEScg come spazio di output | §2, Fase 3 | Non fatto |
+| ACEScg come spazio di output | §2, Fase 3 | Fatto (16/09): conversione Rec.709 → AP1 (Bradford) nel bake dell'export, chromaticities AP1/D60 nei metadati, anche per le luci separate |
 | Libreria di preset di studio | Fase 3 | Fatta: tab Preset, cartella di JSON + miniature, carica/aggiungi/elimina |
 | Preset di orientamento **Houdini** e plugin Houdini | §3, Fase 3 | Non misurato, non fatto |
 | Test 3 di §6 (diff pixel per pixel con un piano emissivo in Cycles) | §6 | Fatto in forma equivalente: furnace, singola luce, e ora piano emissivo vs HDRI (1.002) |

@@ -536,6 +536,17 @@ func _run(main: Node) -> void:
 	_check(berr == OK and absf(back.get_pixel(back.get_width() / 2, back.get_height() / 2).r - 7.5) < 0.01, "EXR con metadati ancora leggibile (TinyEXR), centro %.2f" % (back.get_pixel(back.get_width() / 2, back.get_height() / 2).r if berr == OK else -1.0))
 	main.rig.lights.clear()
 	_check(main.load_rig_from(ProjectSettings.globalize_path("res://out/smoke_meta.exr")) and main.rig.lights.size() == 1 and main.rig.lights[0].name == "hdr test", "rig riaperto dall'EXR")
+	# ACEScg: luce rossa pura (7.5, 0, 0) in Rec.709 → (7.5·0.6131, 7.5·0.0702, 7.5·0.0206) in AP1
+	main.rig.lights[0].tint = Color(1, 0, 0)
+	main.rig.lights[0].kelvin = 6500.0
+	_check(main.export_to("res://out/smoke_aces.exr", {"acescg": true}) == OK, "export ACEScg")
+	await process_frame
+	var aces := Image.new()
+	aces.load_exr_from_buffer(FileAccess.get_file_as_bytes("res://out/smoke_aces.exr"))
+	var ac := aces.get_pixel(aces.get_width() / 2, aces.get_height() / 2)
+	_check(absf(ac.r - 7.5 * 0.6130974) < 0.02 and absf(ac.g - 7.5 * 0.0701937) < 0.02 and absf(ac.b - 7.5 * 0.0206156) < 0.02, "ACEScg: rosso Rec.709 → (%.3f, %.3f, %.3f)" % [ac.r, ac.g, ac.b])
+	_check(HdriExport.read_string_attribute("res://out/smoke_aces.exr", "comments").contains("ACEScg"), "metadati ACEScg (chromaticities AP1, commento)")
+	main.rig.lights[0].tint = Color.WHITE
 
 	# riordino con drag & drop nella lista
 	main.rig.lights.clear()

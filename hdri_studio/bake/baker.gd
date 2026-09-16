@@ -443,7 +443,7 @@ func _ensure_measure_set() -> void:
 
 ## Texture planare di una luce (per l'area light nel software 3D): immagine RGBAF di long_side px sul
 ## lato lungo, aspetto = tan(w/2) / tan(h/2), radianza già applicata, supersampling 2×2.
-func bake_planar(l: RigLight, long_side := 1024) -> Image:
+func bake_planar(l: RigLight, long_side := 1024, acescg := false) -> Image:
 	if l.photometric:
 		l.measured_k = measure_k(l)
 	var thw := tan(deg_to_rad(minf(l.width, 178.0)) * 0.5)
@@ -502,7 +502,7 @@ func bake_planar(l: RigLight, long_side := 1024) -> Image:
 		0.0, 0.0, 0.0, 0.0,
 		0.0, 0.0, 0.0, 2.0,
 		0.0, 1.0, 0.0, 0.0,
-		0.0, 0.0, 0.0, 0.0,
+		0.0, 1.0 if acescg else 0.0, 0.0, 0.0,
 	])
 	var pc_bytes := pc.to_byte_array()
 	var cl := rd.compute_list_begin()
@@ -530,7 +530,8 @@ func _upload_gradient_slot0(l: RigLight) -> void:
 
 ## Esegue il bake del rig nella texture. Con calibration = true ignora le luci e disegna i marker degli
 ## assi. include_separate: le luci separate entrano nel preview ma non nell'HDRI esportata.
-func bake(rig: LightRig, calibration := false, include_separate := true) -> void:
+## acescg: converte l'uscita in ACEScg (solo per l'export: la preview resta Rec.709).
+func bake(rig: LightRig, calibration := false, include_separate := true, acescg := false) -> void:
 	# le luci fotometriche hanno bisogno del loro K prima del pack (la misura usa lo stesso buffer)
 	for l in rig.active_lights(include_separate):
 		if l.photometric:
@@ -563,7 +564,7 @@ func bake(rig: LightRig, calibration := false, include_separate := true) -> void
 		rig.bg_horizon.r, rig.bg_horizon.g, rig.bg_horizon.b, 1.0 if calibration else 0.0,
 		rig.bg_nadir.r, rig.bg_nadir.g, rig.bg_nadir.b, 0.0,
 		deg_to_rad(rig.base_rotation), rig.base_exposure(), 1.0 if base_on else 0.0, 1.0 if rig.base_flip else 0.0,
-		rig.base_blur * base_max_lod(), 0.0, 0.0, 0.0,
+		rig.base_blur * base_max_lod(), 1.0 if acescg else 0.0, 0.0, 0.0,
 	])
 	assert(pc.size() == PUSH_CONSTANT_FLOATS)
 	var pc_bytes := pc.to_byte_array()

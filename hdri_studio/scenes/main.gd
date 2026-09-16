@@ -59,6 +59,7 @@ var _last_separate: Array = []
 var _convert_pid := -1
 var _convert_files: Array = []
 var _last_export_path := ""
+var _last_export_acescg := false
 var _autosave_ms := 0
 var _live_change_ms := 0
 var _live_full_pending := false
@@ -579,7 +580,7 @@ func _process(_delta: float) -> void:
 			# Blender riscrive l'header: i metadati vanno reiniettati
 			var rig_json := JSON.stringify(rig.to_dict())
 			for f in _convert_files:
-				HdriExport.inject_metadata(f, rig_json)
+				HdriExport.inject_metadata(f, rig_json, _last_export_acescg)
 		export_panel.set_status("Riconversione %s: %s (%d file)" % [export_panel.codec(), "fatta" if code == 0 else "fallita (codice %d)" % code, _convert_files.size()])
 	if _screenshot_frames >= 0:
 		_screenshot_frames -= 1
@@ -903,19 +904,21 @@ func export_to(path: String, opts := {}) -> Error:
 	tex_rd.texture_rd_rid = RID() # la texture di preview sta per essere liberata
 	baker.set_resolution(res.x, res.y)
 	baker.supersample = 2
-	baker.bake(rig, false, false) # le luci separate non entrano nell'HDRI
+	var acescg: bool = opts.get("acescg", export_panel.acescg())
+	_last_export_acescg = acescg
+	baker.bake(rig, false, false, acescg) # le luci separate non entrano nell'HDRI
 	var img := baker.get_image()
 	img = HdriExport.apply_orientation(img, target, shift)
 	var rig_json := JSON.stringify(rig.to_dict())
-	var err := _write_image(img, path, half, as_hdr, rig_json)
+	var err := _write_image(img, path, half, as_hdr, rig_json, acescg)
 	# luci separate: un file planare ciascuna, accanto all'HDRI
 	_last_separate.clear()
 	for l in rig.separate_lights():
 		var lp := HdriExport.separate_path(path, l.name)
-		var limg := baker.bake_planar(l, 1024)
+		var limg := baker.bake_planar(l, 1024, acescg)
 		if link_panel.separate_flip_tex():
 			limg.flip_x()
-		var lerr := _write_image(limg, lp, half, as_hdr, rig_json)
+		var lerr := _write_image(limg, lp, half, as_hdr, rig_json, acescg)
 		if lerr == OK:
 			_last_separate.append({"light": l, "path": ProjectSettings.globalize_path(lp)})
 		else:
@@ -932,9 +935,9 @@ func export_to(path: String, opts := {}) -> Error:
 	if err == OK:
 		_last_export_path = ProjectSettings.globalize_path(path)
 		AppSettings.set_value("export_dir", _last_export_path.get_base_dir())
-		export_panel.set_status("Esportato %s (%dx%d, %s, %s) in %.1f s" % [
+		export_panel.set_status("Esportato %s (%dx%d, %s, %s, %s) in %.1f s" % [
 			path.get_file(), res.x, res.y, "RGBE" if as_hdr else ("half" if half else "float32"),
-			target, (Time.get_ticks_msec() - t0) / 1000.0])
+			"ACEScg" if acescg else "Rec.709", target, (Time.get_ticks_msec() - t0) / 1000.0])
 		if not as_hdr:
 			_start_conversion(path, half)
 	else:
@@ -944,12 +947,12 @@ func export_to(path: String, opts := {}) -> Error:
 
 
 ## Scrive EXR (con i metadati: chromaticities Rec.709 e rig JSON) oppure Radiance .hdr.
-func _write_image(img: Image, path: String, half: bool, as_hdr: bool, rig_json: String) -> Error:
+func _write_image(img: Image, path: String, half: bool, as_hdr: bool, rig_json: String, acescg := false) -> Error:
 	if as_hdr:
 		return HdriExport.save_hdr(path, img.get_width(), img.get_height(), baker.rgbe_bytes(img))
 	var err := HdriExport.save_exr(img, path, half)
 	if err == OK:
-		var merr := HdriExport.inject_metadata(path, rig_json)
+		var merr := HdriExport.inject_metadata(path, rig_json, acescg)
 		if merr != OK:
 			push_warning("Metadati EXR non scritti in %s (%s)" % [path.get_file(), error_string(merr)])
 	return err

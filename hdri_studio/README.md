@@ -43,6 +43,13 @@ testo cerca in nomi e tag. I metadati stanno in `user://catalog_meta.json`, chia
 alla cartella del catalogo (la collezione non viene toccata). Passando il mouse su una miniatura compare
 un'anteprima più grande.
 
+## Spazio colore
+
+Il bake lavora in Rec.709 lineare (D65) e la preview lo mostra così. Nel pannello Export, *Spazio colore*
+→ **ACEScg**: i valori vengono convertiti sul GPU (Rec.709 → AP1 con adattamento Bradford, la matrice
+standard 0.6131/0.3395/0.0474…) e i metadati dell'EXR dichiarano i primari AP1 con bianco D60. Vale anche
+per gli EXR delle luci separate. Verificato: rosso Rec.709 puro → (0.613, 0.070, 0.021) in AP1.
+
 ## Codec EXR
 
 Godot scrive PIZ (lossless). Nel pannello Export, *Compressione* offre anche ZIP, ZIPS, RLE, NONE

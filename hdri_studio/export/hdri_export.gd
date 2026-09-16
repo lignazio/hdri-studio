@@ -47,6 +47,9 @@ static func save_hdr(path: String, width: int, height: int, rgbe: PackedByteArra
 # spostamento a ogni offset.
 
 const REC709 := [0.64, 0.33, 0.30, 0.60, 0.15, 0.06, 0.3127, 0.3290]
+## ACEScg (AP1) con bianco D60.
+const ACESCG := [0.713, 0.293, 0.165, 0.830, 0.128, 0.044, 0.32168, 0.33767]
+const COLORSPACES := ["Rec.709 lineare", "ACEScg"]
 const RIG_ATTR := "hdristudio_rig"
 const LINES_PER_CHUNK := {0: 1, 1: 1, 2: 1, 3: 16, 4: 32, 5: 16, 6: 32, 7: 32, 8: 32, 9: 256}
 
@@ -67,7 +70,7 @@ static func _attr(name: String, type: String, value: PackedByteArray) -> PackedB
 
 ## Inietta chromaticities Rec.709, un commento e il rig (JSON) nell'EXR. Rimuove eventuali copie
 ## precedenti degli stessi attributi. Restituisce OK o l'errore.
-static func inject_metadata(path: String, rig_json: String) -> Error:
+static func inject_metadata(path: String, rig_json: String, acescg := false) -> Error:
 	var abs := ProjectSettings.globalize_path(path)
 	var data := FileAccess.get_file_as_bytes(abs)
 	if data.size() < 8 or data[0] != 0x76 or data[1] != 0x2f or data[2] != 0x31 or data[3] != 0x01:
@@ -102,10 +105,12 @@ static func inject_metadata(path: String, rig_json: String) -> Error:
 	var rig_bytes := rig_json.to_utf8_buffer()
 	var chroma := PackedByteArray()
 	chroma.resize(32)
+	var prim: Array = ACESCG if acescg else REC709
 	for k in 8:
-		chroma.encode_float(k * 4, REC709[k])
+		chroma.encode_float(k * 4, prim[k])
 	header.append_array(_attr("chromaticities", "chromaticities", chroma))
-	header.append_array(_attr("comments", "string", "HDRI Studio — radianza lineare, primari Rec.709".to_utf8_buffer()))
+	var space := "ACEScg (AP1, D60)" if acescg else "Rec.709 (D65)"
+	header.append_array(_attr("comments", "string", ("HDRI Studio — radianza lineare, primari " + space).to_utf8_buffer()))
 	header.append_array(_attr(RIG_ATTR, "string", rig_bytes))
 	header.append(0)
 	var new_header_end := 8 + header.size()
