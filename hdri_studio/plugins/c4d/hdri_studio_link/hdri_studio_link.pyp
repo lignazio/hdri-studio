@@ -34,11 +34,12 @@ import link_core  # noqa: E402
 # ID unici del plugin: valori alti fuori dagli intervalli usati dai moduli di Cinema 4D
 # (1065932 collideva con C4d_objects). Per una distribuzione pubblica andrebbero richiesti su
 # https://developers.maxon.net/forum/pid
-PLUGIN_VERSION = "0.8 (Image Texture per ID)"
+PLUGIN_VERSION = "0.9 (ambiente HDRI di default)"
 PLUGIN_ID_LINK = 1099780031
 PLUGIN_ID_RELOAD = 1099780032
 PLUGIN_ID_PAINT = 1099780033
 PLUGIN_ID_DIAG = 1099780034
+PLUGIN_ID_ENV = 1099780035
 EXTS = (".exr", ".hdr")
 TIMER_MS = 200
 MTIME_SCAN_S = 1.0
@@ -260,6 +261,10 @@ OCT_IMG_FILE = 1100
 OCT_IMG_RELOAD = 1127
 OCT_IMG_COLOR_SPACE = 1118
 OCT_IMG_COLOR_SPACE_LINEAR_SRGB = 2
+# tag Octane Environment (id dalla diagnostica; i parametri si cercano per nome finché non sono misurati)
+OCTANE_ENV_TAG_ID = 1029643
+ENV_SKY_NAME = "HDRI Studio Environment"
+_state = {"last_env_path": ""}
 
 
 def _plugin_exists(ptype, pid):
@@ -320,6 +325,56 @@ def _create_default_light(doc, root):
     return light, ("Octane Area Light di default" + ("; " + "; ".join(notes) if notes else ""))
 
 
+# --- ambiente HDRI di default -----------------------------------------------------------------------
+
+def _has_environment_tag(doc):
+    for node in all_nodes(doc):
+        if node.IsInstanceOf(c4d.Tbase) and node.GetType() == OCTANE_ENV_TAG_ID:
+            return True
+    return False
+
+
+def create_environment(doc, path):
+    """Sky + tag Octane Environment + Image Texture con l'EXR del live link (Linear sRGB).
+    Restituisce una nota per la console."""
+    tag_id = _find_plugin(c4d.PLUGINTYPE_TAG, "Octane Environment", OCTANE_ENV_TAG_ID)
+    if tag_id is None:
+        return "tag 'Octane Environment' non trovato fra i plugin"
+    sky = c4d.BaseObject(c4d.Osky)
+    sky.SetName(ENV_SKY_NAME)
+    doc.InsertObject(sky)
+    tag = sky.MakeTag(tag_id)
+    notes = []
+    # tipo di ambiente: se c'è un menu con una voce "texture", sceglila
+    desc = tag.GetDescription(c4d.DESCFLAGS_DESC_NONE)
+    tex_pid = None
+    if desc is not None:
+        for bc, pid, _g in desc:
+            try:
+                name = bc.GetString(c4d.DESC_NAME).lower()
+                if pid[0].dtype == c4d.DTYPE_LONG and name.strip() in ("type", "environment type"):
+                    cycle = bc.GetContainer(c4d.DESC_CYCLE)
+                    for cid, label in cycle:
+                        if "texture" in str(label).lower():
+                            tag[pid] = cid
+                            break
+                if tex_pid is None and pid[0].dtype == c4d.DTYPE_BASELISTLINK and name.strip() == "texture":
+                    tex_pid = pid
+            except Exception:
+                pass
+    sh_id = _find_plugin(c4d.PLUGINTYPE_SHADER, "Image Texture", OCTANE_IMAGE_TEXTURE_ID)
+    if sh_id is not None and tex_pid is not None:
+        sh = c4d.BaseShader(sh_id)
+        tag.InsertShader(sh)
+        tag[tex_pid] = sh
+        sh[OCT_IMG_FILE] = path
+        sh[OCT_IMG_COLOR_SPACE] = OCT_IMG_COLOR_SPACE_LINEAR_SRGB
+    else:
+        notes.append("slot texture non trovato nel tag Environment (shader=%s, slot=%s): lancia la diagnostica" % (sh_id, tex_pid))
+    c4d.EventAdd(c4d.EVENT_FORCEREDRAW)
+    return "ambiente HDRI creato ('%s')" % ENV_SKY_NAME + ("; " + "; ".join(notes) if notes else "")
+
+
 def octane_diagnostics(doc):
     """Stampa in console cosa il plugin trova di Octane: serve a fissare la luce di default se nasce male."""
     print("[hdri-studio] --- diagnostica Octane ---")
@@ -337,6 +392,22 @@ def octane_diagnostics(doc):
             for bc, pid, _g in desc:
                 try:
                     print("[hdri-studio]   param id=%-6d dtype=%-8d %s" % (pid[0].id, pid[0].dtype, bc.GetString(c4d.DESC_NAME)))
+                except Exception:
+                    pass
+    env_id = _find_plugin(c4d.PLUGINTYPE_TAG, "Octane Environment", OCTANE_ENV_TAG_ID)
+    print("[hdri-studio] tag Octane Environment usato: %s" % env_id)
+    if env_id is not None:
+        tmp2 = c4d.BaseObject(c4d.Osky)
+        etag = tmp2.MakeTag(env_id)
+        edesc = etag.GetDescription(c4d.DESCFLAGS_DESC_NONE)
+        if edesc is not None:
+            for bc, pid, _g in edesc:
+                try:
+                    line = "[hdri-studio]   env param id=%-6d dtype=%-8d %s" % (pid[0].id, pid[0].dtype, bc.GetString(c4d.DESC_NAME))
+                    cycle = bc.GetContainer(c4d.DESC_CYCLE)
+                    if cycle is not None and len(cycle) > 0:
+                        line += "  {" + ", ".join("%d=%s" % (cid, label) for cid, label in cycle) + "}"
+                    print(line)
                 except Exception:
                     pass
     sh_id = _find_plugin(c4d.PLUGINTYPE_SHADER, "Image Texture", OCTANE_IMAGE_TEXTURE_ID)
@@ -634,6 +705,12 @@ class HdriStudioLink(c4d.plugins.MessageData):
                 path = msg.get("path", "")
                 n = reload_file(doc, path)
                 self.watch.touch(path)
+                if n == 0 and path and not _has_environment_tag(doc) and _state["last_env_path"] != path:
+                    _state["last_env_path"] = path
+                    print("[hdri-studio] nessun ambiente Octane nella scena → %s" % create_environment(doc, path))
+                    n = 1
+                elif n == 0 and path and _has_environment_tag(doc):
+                    print("[hdri-studio] %s: nessun nodo usa questo file; l'Octane Environment esistente punta altrove (carica lì l'EXR del live link, o usa 'HDRI Studio: crea ambiente HDRI')" % os.path.basename(path))
                 print("[hdri-studio] %s → %d nodi ricaricati" % (os.path.basename(path), n))
             elif msg.get("type") == "separate_lights":
                 n = sync_separate_lights(doc, msg)
@@ -663,6 +740,26 @@ class DiagCommand(c4d.plugins.CommandData):
         return True
 
 
+class EnvCommand(c4d.plugins.CommandData):
+    def Execute(self, doc):
+        path = _state.get("last_env_path") or ""
+        # ultimo EXR visto dal live link, altrimenti il primo .exr usato nella scena
+        if not path:
+            for node in all_nodes(doc):
+                for p in image_paths(node):
+                    path = p
+                    break
+                if path:
+                    break
+        if not path:
+            c4d.gui.MessageDialog("HDRI Studio: attiva prima il live link nell'app (serve il percorso dell'EXR).")
+            return True
+        note = create_environment(doc, path)
+        print("[hdri-studio] %s" % note)
+        c4d.gui.MessageDialog("HDRI Studio: %s" % note)
+        return True
+
+
 class ReloadCommand(c4d.plugins.CommandData):
     def Execute(self, doc):
         n = reload_all(doc)
@@ -675,6 +772,9 @@ if __name__ == "__main__":
     c4d.plugins.RegisterCommandPlugin(id=PLUGIN_ID_RELOAD, str="HDRI Studio: ricarica texture",
                                       info=0, icon=None, help="Preme Reload su tutti i nodi con texture EXR/HDR",
                                       dat=ReloadCommand())
+    c4d.plugins.RegisterCommandPlugin(id=PLUGIN_ID_ENV, str="HDRI Studio: crea ambiente HDRI",
+                                      info=0, icon=None, help="Sky + Octane Environment + Image Texture con l'EXR del live link",
+                                      dat=EnvCommand())
     c4d.plugins.RegisterCommandPlugin(id=PLUGIN_ID_DIAG, str="HDRI Studio: diagnostica Octane",
                                       info=0, icon=None, help="Stampa in console i plugin e i parametri Octane trovati",
                                       dat=DiagCommand())

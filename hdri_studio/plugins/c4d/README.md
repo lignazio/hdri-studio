@@ -17,7 +17,10 @@
    `tex/` del progetto C4D) → spunta *Attivo*.
 2. In Cinema 4D carica quello stesso file in un ImageTexture di Octane (Octane Environment / tag).
 3. Da qui ogni modifica in HDRI Studio riscrive il file (300 ms dopo l'ultimo cambiamento) e il plugin
-   preme Reload sui nodi che lo usano. Nella console: `[hdri-studio] nome.exr → 1 nodi ricaricati`.
+   preme Reload sui nodi che lo usano. Se nella scena non c'è **nessun** Octane Environment, il plugin ne
+   crea uno da solo al primo aggiornamento (Sky "HDRI Studio Environment" + tag + Image Texture con l'EXR,
+   Linear sRGB); c'è anche il comando *Extensions → HDRI Studio: crea ambiente HDRI*. Un Environment già
+   presente non viene toccato. Nella console: `[hdri-studio] nome.exr → 1 nodi ricaricati`.
 
 ## Camera
 
