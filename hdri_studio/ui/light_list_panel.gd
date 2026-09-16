@@ -30,6 +30,9 @@ func _init() -> void:
 	list.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	list.custom_minimum_size.y = 160
 	list.select_mode = ItemList.SELECT_MULTI
+	# riordino trascinando: il dato viaggia come Dictionary, il rilascio sposta la voce (o il gruppo
+	# selezionato) prima o dopo la voce sotto il cursore
+	list.set_drag_forwarding(_drag_data, _can_drop, _drop)
 	list.multi_selected.connect(func(i: int, sel: bool) -> void:
 		var primary := i if sel else selected_index()
 		selection_changed.emit(primary)
@@ -165,6 +168,56 @@ func add_and_select(l: RigLight) -> void:
 	select(rig.lights.size() - 1)
 	structure_changed.emit()
 	selection_changed.emit(rig.lights.size() - 1)
+
+
+func _drag_data(at_position: Vector2) -> Variant:
+	var i := list.get_item_at_position(at_position, true)
+	if i < 0:
+		return null
+	var moving: Array = selected_indices() if i in selected_indices() else [i]
+	var preview := Label.new()
+	preview.text = "  ".join(moving.map(func(k: int) -> String: return rig.lights[k].name))
+	preview.modulate = Color(1, 1, 1, 0.85)
+	list.set_drag_preview(preview)
+	return {"type": "light_reorder", "indices": moving}
+
+
+func _can_drop(_at_position: Vector2, data: Variant) -> bool:
+	return data is Dictionary and data.get("type", "") == "light_reorder"
+
+
+func _drop(at_position: Vector2, data: Variant) -> void:
+	var moving: Array = data["indices"]
+	moving.sort()
+	# destinazione: prima o dopo la voce sotto il cursore (metà superiore / inferiore), altrimenti in fondo
+	var target := list.get_item_at_position(at_position, true)
+	var insert_at := rig.lights.size()
+	if target >= 0:
+		var r := list.get_item_rect(target)
+		insert_at = target if at_position.y < r.position.y + r.size.y * 0.5 else target + 1
+	var block: Array = []
+	for k in moving:
+		block.append(rig.lights[k])
+	# tolgo le voci spostate (dal fondo) correggendo la destinazione per quelle che stavano prima
+	var removed_before := 0
+	for k in moving:
+		if k < insert_at:
+			removed_before += 1
+	var rev := moving.duplicate()
+	rev.reverse()
+	for k in rev:
+		rig.lights.remove_at(k)
+	insert_at -= removed_before
+	insert_at = clampi(insert_at, 0, rig.lights.size())
+	var new_idx: Array = []
+	for n in block.size():
+		rig.lights.insert(insert_at + n, block[n])
+		new_idx.append(insert_at + n)
+	refresh()
+	select_many(new_idx)
+	structure_changed.emit()
+	selection_changed.emit(new_idx[0])
+	multi_selection_changed.emit(new_idx)
 
 
 func _move(delta: int) -> void:

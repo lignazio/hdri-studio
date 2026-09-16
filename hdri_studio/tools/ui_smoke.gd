@@ -535,6 +535,26 @@ func _run(main: Node) -> void:
 	main.rig.lights.clear()
 	_check(main.load_rig_from(ProjectSettings.globalize_path("res://out/smoke_meta.exr")) and main.rig.lights.size() == 1 and main.rig.lights[0].name == "hdr test", "rig riaperto dall'EXR")
 
+	# riordino con drag & drop nella lista
+	main.rig.lights.clear()
+	for nm in ["A", "B", "C", "D"]:
+		var lx := RigLight.new()
+		lx.name = nm
+		main.rig.add_light(lx)
+	main.light_list.refresh()
+	await process_frame
+	var r_a: Rect2 = main.light_list.list.get_item_rect(0)
+	var r_d: Rect2 = main.light_list.list.get_item_rect(3)
+	_check(main.light_list._can_drop(r_d.get_center(), {"type": "light_reorder", "indices": [0]}), "la lista accetta il drop di riordino")
+	main.light_list._drop(Vector2(r_d.get_center().x, r_d.end.y - 1.0), {"type": "light_reorder", "indices": [0]})
+	var order: Array = main.rig.lights.map(func(l: RigLight) -> String: return l.name)
+	_check(order == ["B", "C", "D", "A"], "drag A in fondo → %s" % [order])
+	await process_frame # la lista ricalcola i rettangoli delle voci al disegno
+	r_a = main.light_list.list.get_item_rect(0)
+	main.light_list._drop(Vector2(r_a.get_center().x, r_a.position.y + 1.0), {"type": "light_reorder", "indices": [1, 2]})
+	order = main.rig.lights.map(func(l: RigLight) -> String: return l.name)
+	_check(order == ["C", "D", "B", "A"], "drag del gruppo C,D in testa → %s" % [order])
+
 	# lucchetto
 	main._select(0)
 	var lk: RigLight = main.rig.lights[0]
