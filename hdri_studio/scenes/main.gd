@@ -377,7 +377,8 @@ func _build_model_panel(parent: Container) -> void:
 	mat.item_selected.connect(func(i: int) -> void:
 		if preview.has_model():
 			preview.set_model_material(i as Preview3D.ModelMaterial)
-		elif i != Preview3D.ModelMaterial.ORIGINAL:
+		else:
+			# senza modello vale per la sfera centrale; Originale = il suo glossy di partenza
 			preview.set_center_sphere_material(i as Preview3D.ModelMaterial))
 	mrow.add_child(mat)
 	_model_label = Label.new()

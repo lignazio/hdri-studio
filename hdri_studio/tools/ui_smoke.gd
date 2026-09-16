@@ -503,6 +503,8 @@ func _run(main: Node) -> void:
 	main.preview.set_center_sphere_material(Preview3D.ModelMaterial.GOLD)
 	var cm: Material = main.preview._spheres[1].material_override
 	_check(cm is ShaderMaterial and (cm as ShaderMaterial).get_shader_parameter("tint") == Preview3D.METAL_F0[Preview3D.ModelMaterial.GOLD], "sfera centrale in oro (riflessi esatti tinti)")
+	main.preview.set_center_sphere_material(Preview3D.ModelMaterial.ORIGINAL)
+	_check(main.preview._spheres[1].material_override == main.preview._glossy, "Originale riporta la sfera centrale al glossy")
 	main._clip_check.button_pressed = true
 	_check(main.map_view._map_mat.get_shader_parameter("clip_threshold") > 0.0, "clipping attivo sulla mappa")
 	main._clip_check.button_pressed = false
