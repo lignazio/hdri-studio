@@ -34,7 +34,7 @@ import link_core  # noqa: E402
 # ID unici del plugin: valori alti fuori dagli intervalli usati dai moduli di Cinema 4D
 # (1065932 collideva con C4d_objects). Per una distribuzione pubblica andrebbero richiesti su
 # https://developers.maxon.net/forum/pid
-PLUGIN_VERSION = "0.6 (ID Octane misurati)"
+PLUGIN_VERSION = "0.7 (parametri del tag per ID)"
 PLUGIN_ID_LINK = 1099780031
 PLUGIN_ID_RELOAD = 1099780032
 PLUGIN_ID_PAINT = 1099780033
@@ -206,12 +206,37 @@ def _set_image_path(obj, path):
     for node in _nodes_of(obj):
         if not node.IsInstanceOf(c4d.Xbase):
             continue
-        pid = _param_by_name(node, [], dtype=c4d.DTYPE_FILENAME)
+        pid = _param_by_name(node, [], dtype=c4d.DTYPE_FILENAME) or _param_by_name(node, ["file"], exclude=("filter",))
         if pid is not None:
             node[pid] = path
+            _set_linear_colorspace(node)
             press_reload(node)
             return True
     return False
+
+
+def _set_linear_colorspace(node):
+    """Spazio colore lineare per l'EXR: legge le voci del menu e sceglie quella con 'linear'
+    (preferendo 'srgb'); se c'è un parametro Gamma lo porta a 1."""
+    desc = node.GetDescription(c4d.DESCFLAGS_DESC_NONE)
+    if desc is None:
+        return
+    for bc, pid, _g in desc:
+        try:
+            name = bc.GetString(c4d.DESC_NAME).lower()
+            if pid[0].dtype == c4d.DTYPE_LONG and ("color" in name and "space" in name or "colorspace" in name):
+                cycle = bc.GetContainer(c4d.DESC_CYCLE)
+                best = None
+                for cid, label in cycle:
+                    lab = str(label).lower()
+                    if "linear" in lab and (best is None or "srgb" in lab):
+                        best = cid
+                if best is not None:
+                    node[pid] = best
+            elif pid[0].dtype == c4d.DTYPE_REAL and name.strip() == "gamma":
+                node[pid] = 1.0
+        except Exception:
+            pass
 
 
 # --- luce di default (senza HS_TEMPLATE) --------------------------------------------------------------
@@ -219,6 +244,11 @@ def _set_image_path(obj, path):
 # ID misurati su Octane per Cinema 4D 2026 (diagnostica del 16/09/2026); il nome esatto è il ripiego.
 OCTANE_LIGHT_TAG_ID = 1029526      # tag "Octane Light"
 OCTANE_IMAGE_TEXTURE_ID = 1029508  # shader "Image Texture"
+# parametri del tag Octane Light (diagnostica del 16/09/2026)
+OCT_LIGHT_POWER = 1151
+OCT_LIGHT_TEXTURE = 1155
+OCT_LIGHT_SURFACE_BRIGHTNESS = 1166
+OCT_LIGHT_CAMERA_VISIBILITY = 1163
 
 
 def _plugin_exists(ptype, pid):
@@ -268,21 +298,14 @@ def _create_default_light(doc, root):
     tag = light.MakeTag(tag_id)
     notes = []
     sh_id = _find_plugin(c4d.PLUGINTYPE_SHADER, "Image Texture", OCTANE_IMAGE_TEXTURE_ID)
-    tex_pid = _param_by_name(tag, ["texture"], dtype=c4d.DTYPE_BASELISTLINK, exclude=("distribution", "opacity", "projection"))
-    if sh_id is not None and tex_pid is not None:
+    if sh_id is not None:
         sh = c4d.BaseShader(sh_id)
         tag.InsertShader(sh)
-        tag[tex_pid] = sh
+        tag[OCT_LIGHT_TEXTURE] = sh
     else:
-        notes.append("slot texture o shader ImageTexture non trovati (shader=%s, slot=%s)" % (sh_id, tex_pid))
-    sb = _param_by_name(tag, ["surface", "brightness"], dtype=c4d.DTYPE_BOOL)
-    if sb is not None:
-        tag[sb] = True
-    else:
-        notes.append("'Surface brightness' non trovato")
-    pw = _param_by_name(tag, ["power"], dtype=c4d.DTYPE_REAL, exclude=("normalize",))
-    if pw is not None:
-        tag[pw] = 1.0
+        notes.append("shader Image Texture non trovato")
+    tag[OCT_LIGHT_SURFACE_BRIGHTNESS] = True
+    tag[OCT_LIGHT_POWER] = 1.0
     return light, ("Octane Area Light di default" + ("; " + "; ".join(notes) if notes else ""))
 
 
@@ -303,6 +326,21 @@ def octane_diagnostics(doc):
             for bc, pid, _g in desc:
                 try:
                     print("[hdri-studio]   param id=%-6d dtype=%-8d %s" % (pid[0].id, pid[0].dtype, bc.GetString(c4d.DESC_NAME)))
+                except Exception:
+                    pass
+    sh_id = _find_plugin(c4d.PLUGINTYPE_SHADER, "Image Texture", OCTANE_IMAGE_TEXTURE_ID)
+    print("[hdri-studio] shader Image Texture usato: %s" % sh_id)
+    if sh_id is not None:
+        sh = c4d.BaseShader(sh_id)
+        desc = sh.GetDescription(c4d.DESCFLAGS_DESC_NONE)
+        if desc is not None:
+            for bc, pid, _g in desc:
+                try:
+                    line = "[hdri-studio]   shader param id=%-6d dtype=%-8d %s" % (pid[0].id, pid[0].dtype, bc.GetString(c4d.DESC_NAME))
+                    cycle = bc.GetContainer(c4d.DESC_CYCLE)
+                    if cycle is not None and len(cycle) > 0:
+                        line += "  {" + ", ".join("%d=%s" % (cid, label) for cid, label in cycle) + "}"
+                    print(line)
                 except Exception:
                     pass
     print("[hdri-studio] --- fine diagnostica ---")
@@ -354,22 +392,13 @@ def sync_separate_lights(doc, msg):
         if obj.IsInstanceOf(c4d.Olight):
             obj[c4d.LIGHT_AREADETAILS_SIZEX] = w
             obj[c4d.LIGHT_AREADETAILS_SIZEY] = h
-        # visibilità alla camera: per le luci Octane serve il tag Octane; in mancanza, non tocchiamo nulla
+        # visibilità alla camera sul tag Octane Light
         vis = bool(e.get("visible", True))
-        for node in _nodes_of(obj):
-            bc = node.GetDataInstance()
-            if bc is None:
-                continue
-            desc = node.GetDescription(c4d.DESCFLAGS_DESC_NONE)
-            if desc is None:
-                continue
-            for dbc, paramid, _g in desc:
-                try:
-                    name = dbc.GetString(c4d.DESC_NAME).lower()
-                    if "camera visibility" in name or name == "camera visible":
-                        node[paramid[0].id] = vis
-                except Exception:
-                    pass
+        tag = obj.GetFirstTag()
+        while tag:
+            if tag.GetType() == OCTANE_LIGHT_TAG_ID:
+                tag[OCT_LIGHT_CAMERA_VISIBILITY] = vis
+            tag = tag.GetNext()
         if not _set_image_path(obj, e["path"]):
             print("[hdri-studio] luce '%s': nessuno slot immagine trovato (metti un ImageTexture nella luce modello)" % name)
         touched += 1
