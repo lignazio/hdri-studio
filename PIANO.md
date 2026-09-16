@@ -7,7 +7,13 @@ area: progetto
 
 # HDRI Studio — Piano
 
-> [!success] Stato: v1.8 — 16 settembre 2026 — .hdr, metadati EXR, lucchetto
+> [!success] Stato: v1.9 — 16 settembre 2026 — prima release per i tester
+> Licenza MIT, versione 0.9.0 nell'app, `tools/release.sh` che esporta macOS e Windows, impacchetta
+> con plugin e guida, verifica il build e pubblica su GitHub: prima release
+> https://github.com/lignazio/hdri-studio/releases/tag/v0.9.0. Plugin C4D 1.0: ambiente e luci
+> separate di default creati per ID misurati.
+
+> [!success] Stato precedente: v1.8 — 16 settembre 2026 — .hdr, metadati EXR, lucchetto
 > Export Radiance .hdr (RGBE sul GPU), metadati nell'EXR (chromaticities Rec.709 e rig JSON, letti
 > anche da *Apri rig…*), luce bloccabile. Restano: ACEScg e Houdini, più i test in Octane della Fase 4.
 
