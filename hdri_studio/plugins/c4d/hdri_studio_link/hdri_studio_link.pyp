@@ -20,6 +20,7 @@ le assegna l'EXR). Il null si può spostare sul soggetto: le luci lo seguono.
 Installazione: Edit > Preferences > Plugins > aggiungi la cartella `plugins/c4d` (quella che contiene
 `hdri_studio_link/`), riavvia Cinema 4D. Nel menu Extensions compare "HDRI Studio: ricarica texture".
 """
+import math
 import os
 import sys
 import time
@@ -441,6 +442,7 @@ class HdriStudioLink(c4d.plugins.MessageData):
         self.watch = link_core.MtimeWatcher()
         self._last_scan = 0.0
         self._was_connected = False
+        self._last_cam = None
 
     def GetTimer(self):
         return TIMER_MS
@@ -452,6 +454,29 @@ class HdriStudioLink(c4d.plugins.MessageData):
             except Exception as e:  # mai far cadere il timer
                 print("[hdri-studio] errore: %r" % e)
         return True
+
+    def _send_camera(self, doc):
+        """Camera attiva della vista: direzione, alto e FOV orizzontale, solo quando cambiano."""
+        if not self.client.connected:
+            return
+        bd = doc.GetActiveBaseDraw()
+        if bd is None:
+            return
+        cam = bd.GetSceneCamera(doc) or bd.GetEditorCamera()
+        if cam is None:
+            return
+        mg = cam.GetMg()
+        try:
+            fov = math.degrees(cam[c4d.CAMERAOBJECT_FOV])
+        except Exception:
+            fov = 40.0
+        key = (round(mg.v3.x, 4), round(mg.v3.y, 4), round(mg.v3.z, 4),
+               round(mg.v2.x, 4), round(mg.v2.y, 4), round(mg.v2.z, 4), round(fov, 2))
+        if key == self._last_cam:
+            return
+        self._last_cam = key
+        self.client.send({"type": "camera", "host": "c4d", "forward": _v(mg.v3), "up": _v(mg.v2),
+                          "position": _v(mg.off), "fov": fov})
 
     def _tick(self):
         doc = c4d.documents.GetActiveDocument()
@@ -472,6 +497,7 @@ class HdriStudioLink(c4d.plugins.MessageData):
         if self.client.connected != self._was_connected:
             self._was_connected = self.client.connected
             print("[hdri-studio] %s" % ("collegato all'app" if self.client.connected else "app non raggiungibile, uso la data dei file"))
+        self._send_camera(doc)
         now = time.time()
         if now - self._last_scan >= MTIME_SCAN_S:
             self._last_scan = now

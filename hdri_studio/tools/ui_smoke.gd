@@ -476,6 +476,37 @@ func _run(main: Node) -> void:
 	_check(n_auto >= 1 and n_auto <= 10, "autosave: %d file" % n_auto)
 	_check(String(AppSettings.get_value("export_dir", "")) != "", "cartella di export ricordata")
 
+	# Fase 6: ruota tutto, specchia, esposimetro, camera dal link, materiali
+	main.rig.lights.clear()
+	var ra := RigLight.new()
+	ra.azimuth = 30.0
+	ra.roll = 15.0
+	main.rig.add_light(ra)
+	main.rig.rotate_all(90.0)
+	_check(is_equal_approx(ra.azimuth, 120.0), "ruota tutto: az 30 → 120")
+	var mir := ra.mirrored()
+	_check(is_equal_approx(mir.azimuth, -120.0) and is_equal_approx(mir.roll, -15.0), "specchiata: az −120, roll −15")
+	main.rig.lights.clear()
+	main.rig.background = LightRig.Background.UNIFORM
+	main.rig.bg_horizon = Color(1, 1, 1)
+	main._dirty = true
+	await create_timer(0.4).timeout
+	main._map_cpu_dirty = true
+	main._update_meter()
+	var e_up: float = main.meter.illuminance(Vector3.UP)
+	var e_side: float = main.meter.illuminance(Vector3(1, 0, 0))
+	_check(absf(e_up - PI) < 0.03 and absf(e_side - PI) < 0.03, "esposimetro: ambiente 1.0 → E = π (%.3f / %.3f), EV100 %.2f" % [e_up, e_side, LightMeter.ev100(e_up)])
+	main._link_camera.button_pressed = true
+	main._on_link_message({"type": "camera", "host": "blender", "forward": [0, 0, 1], "up": [0, 1, 0], "fov": 60.0}, 0)
+	_check(main.preview.camera.global_position.z < -1.0 and absf(main.preview.camera.global_position.x) < 0.01, "camera dal link: guarda +Z dal lato −Z (%s)" % main.preview.camera.global_position)
+	main._link_camera.button_pressed = false
+	main.preview.set_center_sphere_material(Preview3D.ModelMaterial.GOLD)
+	var cm: Material = main.preview._spheres[1].material_override
+	_check(cm is ShaderMaterial and (cm as ShaderMaterial).get_shader_parameter("tint") == Preview3D.METAL_F0[Preview3D.ModelMaterial.GOLD], "sfera centrale in oro (riflessi esatti tinti)")
+	main._clip_check.button_pressed = true
+	_check(main.map_view._map_mat.get_shader_parameter("clip_threshold") > 0.0, "clipping attivo sulla mappa")
+	main._clip_check.button_pressed = false
+
 	ok = ok and _all_ok
 	print("[smoke] %s" % ("TUTTO OK" if ok else "FALLITO"))
 	quit(0 if ok else 1)

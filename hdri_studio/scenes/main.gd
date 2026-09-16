@@ -38,6 +38,15 @@ var _map_cpu_ms := 0
 var _hover_az := INF
 var _hover_el := INF
 var _ev_row: ParamRow
+var meter := LightMeter.new()
+var _meter_mode: OptionButton
+var _meter_az: SpinBox
+var _meter_el: SpinBox
+var _meter_label: Label
+var _meter_dirty := true
+var _clip_check: CheckBox
+var _clip_row: ParamRow
+var _link_camera: CheckBox
 var _rig_path := ""
 var _screenshot_frames := -1
 var _file_dialog: FileDialog
@@ -241,6 +250,11 @@ func _build_layout() -> void:
 	map_view.light_moved.connect(_on_map_move)
 	preview.paint.connect(_on_paint)
 	bg_panel.changed.connect(_on_light_changed)
+	bg_panel.rotate_all.connect(func(delta: float, commit: bool) -> void:
+		if delta != 0.0:
+			rig.rotate_all(delta)
+			props.sync_values()
+		_on_light_changed(commit))
 	bg_panel.base_hdri_requested.connect(_pick_base_hdri)
 	export_panel.export_requested.connect(_export_exr)
 	export_panel.open_folder_requested.connect(func() -> void:
@@ -282,6 +296,54 @@ func _build_model_panel(parent: Container) -> void:
 	hint.add_theme_font_size_override("font_size", 11)
 	hint.modulate = Color(1, 1, 1, 0.5)
 	parent.add_child(hint)
+	# clipping: falsi colori sopra una soglia (mappa e sfera cromata)
+	var crow := HBoxContainer.new()
+	parent.add_child(crow)
+	_clip_check = CheckBox.new()
+	_clip_check.text = "Clipping"
+	_clip_check.tooltip_text = "Evidenzia in magenta i pixel oltre la soglia, sulla mappa e sulla sfera cromata"
+	_clip_check.toggled.connect(func(_v: bool) -> void: _apply_clipping())
+	crow.add_child(_clip_check)
+	_clip_row = ParamRow.new("Soglia", 0.1, 10000.0, 0.1, true)
+	_clip_row.set_value_silent(1.0)
+	_clip_row.value_changed.connect(func(_v: float) -> void: _apply_clipping())
+	_clip_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	crow.add_child(_clip_row)
+	_link_camera = CheckBox.new()
+	_link_camera.text = "Camera dal live link"
+	_link_camera.tooltip_text = "Il preview segue la camera attiva del software 3D collegato (direzione, alto e FOV)"
+	_link_camera.button_pressed = AppSettings.get_value("link_camera", false)
+	_link_camera.toggled.connect(func(v: bool) -> void: AppSettings.set_value("link_camera", v))
+	parent.add_child(_link_camera)
+
+	# esposimetro
+	var mtitle := Label.new()
+	mtitle.text = "Esposimetro"
+	mtitle.add_theme_font_size_override("font_size", 15)
+	parent.add_child(mtitle)
+	var meter_row := HBoxContainer.new()
+	parent.add_child(meter_row)
+	_meter_mode = OptionButton.new()
+	for it in ["Verso la camera", "Verso l'alto", "Az / El"]:
+		_meter_mode.add_item(it)
+	_meter_mode.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_meter_mode.item_selected.connect(func(_i: int) -> void: _update_meter())
+	meter_row.add_child(_meter_mode)
+	_meter_az = SpinBox.new()
+	_meter_az.min_value = -180
+	_meter_az.max_value = 180
+	_meter_az.suffix = "°"
+	_meter_az.value_changed.connect(func(_v: float) -> void: _update_meter())
+	meter_row.add_child(_meter_az)
+	_meter_el = SpinBox.new()
+	_meter_el.min_value = -90
+	_meter_el.max_value = 90
+	_meter_el.suffix = "°"
+	_meter_el.value_changed.connect(func(_v: float) -> void: _update_meter())
+	meter_row.add_child(_meter_el)
+	_meter_label = Label.new()
+	_meter_label.tooltip_text = "E = ∫ L·cosθ dω su tutta l'HDRI per una superficie al centro rivolta nella direzione scelta.\nEV100 = log2(E / 2.5): con radianze in unità fotometriche coerenti è l'EV di un esposimetro a luce incidente."
+	parent.add_child(_meter_label)
 	var title := Label.new()
 	title.text = "Modello nel preview"
 	title.add_theme_font_size_override("font_size", 15)
@@ -306,9 +368,14 @@ func _build_model_panel(parent: Container) -> void:
 	mrow.add_child(ml)
 	var mat := OptionButton.new()
 	mat.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	for it in ["Originale", "Cromato", "Glossy", "Diffuso"]:
+	for it in Preview3D.MATERIAL_LABELS:
 		mat.add_item(it)
-	mat.item_selected.connect(func(i: int) -> void: preview.set_model_material(i as Preview3D.ModelMaterial))
+	mat.tooltip_text = "Materiale del modello caricato; senza modello, della sfera centrale"
+	mat.item_selected.connect(func(i: int) -> void:
+		if preview.has_model():
+			preview.set_model_material(i as Preview3D.ModelMaterial)
+		elif i != Preview3D.ModelMaterial.ORIGINAL:
+			preview.set_center_sphere_material(i as Preview3D.ModelMaterial))
 	mrow.add_child(mat)
 	_model_label = Label.new()
 	_model_label.text = "—"
@@ -455,9 +522,13 @@ func _process(_delta: float) -> void:
 		preview.notify_sky_changed()
 		_dirty = false
 		_map_cpu_dirty = true
+		_meter_dirty = true
 		if _hover_az != INF:
 			_update_status()
-		if _selected >= 0 and rig.lights[_selected].photometric:
+	if _meter_dirty and Time.get_ticks_msec() - _map_cpu_ms > 300:
+		_meter_dirty = false
+		_update_meter()
+		if _selected >= 0 and _selected < rig.lights.size() and rig.lights[_selected].photometric:
 			props.sync_values()
 	if _live_dirty and Time.get_ticks_msec() >= _live_deadline:
 		_live_dirty = false
@@ -540,6 +611,36 @@ func _update_status() -> void:
 			hover += " · RGB %.3f %.3f %.3f" % [c.r, c.g, c.b]
 	status.text = "  %s · %d luci · export %dx%d · preview %+.1f EV%s   |   click su un riflesso: seleziona · Shift+trascina: LightPaint · frecce: sposta (Shift 10°) · H: on/off · ⌘D duplica · Canc elimina · ⌘Z undo" % [
 		name, rig.lights.size(), rig.resolution.x, rig.resolution.y, _preview_ev, hover]
+
+
+func _apply_clipping() -> void:
+	var on := _clip_check.button_pressed
+	var thr := _clip_row.get_value()
+	map_view.set_clipping(on, thr)
+	preview.set_clipping(on, thr)
+
+
+## Esposimetro: E ed EV100 per la normale scelta, dalla copia CPU del bake.
+func _update_meter() -> void:
+	if _meter_label == null:
+		return
+	if _map_cpu == null or _map_cpu_dirty:
+		_map_cpu = baker.get_image()
+		_map_cpu_dirty = false
+		_map_cpu_ms = Time.get_ticks_msec()
+	meter.update(_map_cpu)
+	var n: Vector3
+	match _meter_mode.selected:
+		0:
+			n = preview.camera.global_position.normalized()
+		1:
+			n = Vector3.UP
+		_:
+			n = LightMeter.dir(_meter_az.value, _meter_el.value)
+	var e := meter.illuminance(n)
+	_meter_az.visible = _meter_mode.selected == 2
+	_meter_el.visible = _meter_mode.selected == 2
+	_meter_label.text = "E = %.3f · EV100 %+.1f" % [e, LightMeter.ev100(e)]
 
 
 ## Valore del bake in (az, el), da una copia CPU aggiornata al massimo ogni 300 ms.
@@ -915,6 +1016,15 @@ func _on_link_message(msg: Dictionary, client_id: int) -> void:
 				link.broadcast(separate_message())
 		"lightpaint":
 			_lightpaint_from_host(msg)
+		"camera":
+			if _link_camera != null and _link_camera.button_pressed:
+				var f := _vec(msg.get("forward", []))
+				var u := _vec(msg.get("up", []))
+				if msg.get("host", "c4d") == "c4d":
+					f.x = -f.x
+					u.x = -u.x
+				preview.set_view_from_host(f, u, float(msg.get("fov", 40.0)))
+				_meter_dirty = true
 
 
 ## LightPaint dal software 3D: punto, normale e direzione di vista (o posizione camera) nelle

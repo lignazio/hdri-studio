@@ -4,6 +4,8 @@ extends VBoxContainer
 
 signal changed(commit: bool)
 signal base_hdri_requested()
+## Ruota tutte le luci di delta gradi (commit a fine drag).
+signal rotate_all(delta: float, commit: bool)
 
 var rig: LightRig
 var _syncing := false
@@ -20,6 +22,22 @@ var _base_flip: CheckBox
 
 
 func _init() -> void:
+	var stitle := Label.new()
+	stitle.text = "Set"
+	stitle.add_theme_font_size_override("font_size", 15)
+	add_child(stitle)
+	var rot := ParamRow.new("Ruota tutto", -180.0, 180.0, 1.0)
+	rot.tooltip_text = "Ruota tutte le luci attorno all'asse verticale; torna a 0 quando lasci lo slider"
+	var last := [0.0]
+	rot.value_changed.connect(func(v: float) -> void:
+		rotate_all.emit(v - last[0], false)
+		last[0] = v)
+	rot.committed.connect(func() -> void:
+		rotate_all.emit(0.0, true)
+		last[0] = 0.0
+		rot.set_value_silent(0.0))
+	add_child(rot)
+
 	var title := Label.new()
 	title.text = "Sfondo"
 	title.add_theme_font_size_override("font_size", 15)

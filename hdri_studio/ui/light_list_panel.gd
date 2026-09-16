@@ -53,6 +53,11 @@ func _init() -> void:
 	_btn_del.text = "Elimina"
 	_btn_del.pressed.connect(_on_delete)
 	row.add_child(_btn_del)
+	var mir := Button.new()
+	mir.text = "⇋"
+	mir.tooltip_text = "Duplica specchiata (sinistra ↔ destra)"
+	mir.pressed.connect(_on_mirror)
+	row.add_child(mir)
 	_btn_up = Button.new()
 	_btn_up.text = "▲"
 	_btn_up.tooltip_text = "Sposta su (le luci dopo nell'elenco coprono quelle prima con la fusione Normale)"
@@ -210,6 +215,21 @@ func _on_delete() -> void:
 	structure_changed.emit()
 	selection_changed.emit(ni)
 	multi_selection_changed.emit([ni] if ni >= 0 else [])
+
+
+func _on_mirror() -> void:
+	var sel := selected_indices()
+	if sel.is_empty():
+		return
+	var new_idx: Array = []
+	for i in sel:
+		rig.lights.append(rig.lights[i].mirrored())
+		new_idx.append(rig.lights.size() - 1)
+	refresh()
+	select_many(new_idx)
+	structure_changed.emit()
+	selection_changed.emit(new_idx[0])
+	multi_selection_changed.emit(new_idx)
 
 
 ## Accende/spegne tutte le selezionate (in blocco, verso lo stato opposto della primaria).

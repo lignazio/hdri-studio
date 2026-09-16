@@ -44,6 +44,12 @@ func separate_lights() -> Array:
 	return active_lights(true).filter(func(l: RigLight) -> bool: return l.separate)
 
 
+## Ruota tutte le luci attorno all'asse verticale (gradi, destructivo: modifica gli azimut).
+func rotate_all(delta_deg: float) -> void:
+	for l in lights:
+		l.azimuth = wrapf(l.azimuth + delta_deg, -180.0, 180.0)
+
+
 func base_exposure() -> float:
 	return pow(2.0, base_ev)
 

@@ -16,7 +16,16 @@ const SPHERE_POS := [Vector3(-2.6, 0, 0), Vector3(0, 0, 0), Vector3(2.6, 0, 0)]
 ## Raggio della sfera in cui viene inscritto il modello caricato.
 const MODEL_R := 1.3
 
-enum ModelMaterial { ORIGINAL, CHROME, GLOSSY, DIFFUSE }
+enum ModelMaterial { ORIGINAL, CHROME, GLOSSY, DIFFUSE, GOLD, WHITE_GOLD, SILVER, PLATINUM, COPPER, BRUSHED, GLASS }
+const MATERIAL_LABELS := ["Originale", "Cromato", "Glossy", "Diffuso", "Oro giallo", "Oro bianco", "Argento", "Platino", "Rame", "Spazzolato", "Vetro"]
+## Riflettanza dei metalli lucidi (F0 lineare, valori tipici PBR).
+const METAL_F0 := {
+	ModelMaterial.GOLD: Color(1.0, 0.71, 0.29),
+	ModelMaterial.WHITE_GOLD: Color(0.9, 0.87, 0.78),
+	ModelMaterial.SILVER: Color(0.95, 0.93, 0.88),
+	ModelMaterial.PLATINUM: Color(0.83, 0.81, 0.78),
+	ModelMaterial.COPPER: Color(0.95, 0.64, 0.54),
+}
 
 var viewport: SubViewport
 var camera: Camera3D
@@ -27,6 +36,9 @@ var _sky_flip := 0
 var _chrome: ShaderMaterial
 var _glossy: StandardMaterial3D
 var _diffuse: StandardMaterial3D
+var _metal_mats := {}
+var _brushed: StandardMaterial3D
+var _glass: StandardMaterial3D
 var _spheres: Array[MeshInstance3D] = []
 var _model_root: Node3D
 var _model_meshes: Array[MeshInstance3D] = []
@@ -94,6 +106,28 @@ func setup(tex: Texture2D) -> void:
 	_diffuse = StandardMaterial3D.new()
 	_diffuse.albedo_color = Color(0.8, 0.8, 0.8)
 	_diffuse.roughness = 1.0
+	# metalli lucidi: riflessi esatti dalla panoramica, tinti con la riflettanza del metallo
+	for m in METAL_F0:
+		var mm := ShaderMaterial.new()
+		mm.shader = _chrome.shader
+		mm.set_shader_parameter("panorama", tex)
+		mm.set_shader_parameter("tint", METAL_F0[m])
+		_metal_mats[m] = mm
+	_brushed = StandardMaterial3D.new()
+	_brushed.albedo_color = Color(0.9, 0.88, 0.84)
+	_brushed.metallic = 1.0
+	_brushed.roughness = 0.4
+	_brushed.anisotropy_enabled = true
+	_brushed.anisotropy = 0.85
+	_glass = StandardMaterial3D.new()
+	_glass.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_glass.albedo_color = Color(1.0, 1.0, 1.0, 0.08)
+	_glass.metallic = 0.0
+	_glass.roughness = 0.02
+	_glass.metallic_specular = 0.6
+	_glass.refraction_enabled = true
+	_glass.refraction_scale = 0.04
+	_glass.cull_mode = BaseMaterial3D.CULL_DISABLED
 	var mats := [_chrome, _glossy, _diffuse]
 	for i in 3:
 		var mi := MeshInstance3D.new()
@@ -115,6 +149,8 @@ func set_texture(tex: Texture2D) -> void:
 	for m in _sky_mats:
 		m.panorama = tex
 	_chrome.set_shader_parameter("panorama", tex)
+	for mm in _metal_mats.values():
+		mm.set_shader_parameter("panorama", tex)
 	notify_sky_changed()
 
 
@@ -130,6 +166,46 @@ func set_exposure(k: float) -> void:
 
 func set_fov(deg: float) -> void:
 	camera.fov = deg
+
+
+## Punto di vista dal software 3D: direzione di vista e alto (coordinate interne), FOV orizzontale.
+## Usa solo la direzione: la camera del preview resta alla distanza corrente dal centro.
+func set_view_from_host(forward: Vector3, up: Vector3, fov_h_deg: float) -> void:
+	if forward.length() < 1e-6:
+		return
+	var f := forward.normalized()
+	var pos := -f * _dist
+	camera.look_at_from_position(pos, Vector3.ZERO, up.normalized() if up.length() > 1e-6 else Vector3.UP)
+	# Godot usa il FOV verticale: converto dall'orizzontale con l'aspetto del viewport
+	var aspect := float(viewport.size.x) / maxf(float(viewport.size.y), 1.0)
+	var fov_v := rad_to_deg(2.0 * atan(tan(deg_to_rad(fov_h_deg) * 0.5) / aspect))
+	camera.fov = clampf(fov_v, 5.0, 150.0)
+	# tiene coerenti yaw/pitch dell'orbita con la nuova posizione
+	_yaw = atan2(pos.x, pos.z)
+	_pitch = -asin(clampf(pos.y / _dist, -1.0, 1.0))
+
+
+func set_clipping(on: bool, threshold: float) -> void:
+	_chrome.set_shader_parameter("clip_threshold", threshold if on else -1.0)
+	for mm in _metal_mats.values():
+		mm.set_shader_parameter("clip_threshold", threshold if on else -1.0)
+
+
+## Materiale della sfera centrale (quando non c'è un modello): stessi preset del modello.
+func set_center_sphere_material(mode: ModelMaterial) -> void:
+	var prev := _model_material
+	_model_material = mode
+	var mat: Material = _glossy
+	match mode:
+		ModelMaterial.CHROME: mat = _chrome
+		ModelMaterial.DIFFUSE: mat = _diffuse
+		ModelMaterial.BRUSHED: mat = _brushed
+		ModelMaterial.GLASS: mat = _glass
+		_:
+			if _metal_mats.has(mode):
+				mat = _metal_mats[mode]
+	_spheres[1].material_override = mat
+	_model_material = prev
 
 
 func set_model_scale(s: float) -> void:
@@ -203,6 +279,13 @@ func set_model_material(mode: ModelMaterial) -> void:
 			mat = _glossy
 		ModelMaterial.DIFFUSE:
 			mat = _diffuse
+		ModelMaterial.BRUSHED:
+			mat = _brushed
+		ModelMaterial.GLASS:
+			mat = _glass
+		_:
+			if _metal_mats.has(mode):
+				mat = _metal_mats[mode]
 	for mi in _model_meshes:
 		mi.material_override = mat
 

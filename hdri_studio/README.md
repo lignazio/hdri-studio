@@ -99,6 +99,24 @@ luci seguono; togliendo il flag la luce sparisce dalla scena.
 Da tarare al primo uso (costanti in cima al `.pyp`): il verso di emissione della luce modello
 (`LIGHT_EMITS_ALONG_Z`) e, con il furnace test, il rapporto fra la Power di Octane e la radianza.
 
+## Set, esposimetro, clipping, camera, materiali (16/09)
+
+- **Ruota tutto** (pannello *Set*, in cima alla colonna destra): ruota tutte le luci attorno all'asse
+  verticale; lo slider torna a 0 quando lo lasci. **⇋** nella lista duplica le luci selezionate
+  specchiate sinistra ↔ destra (azimut, rotazione, angolo del gradiente, offset dello scrim, specchio
+  della texture).
+- **Esposimetro** (pannello *Preview*): `E = ∫ L·cosθ dω` su tutta l'HDRI (luci e sfondo) per una
+  superficie al centro rivolta verso la camera, verso l'alto o verso un az/el scelto; `EV100 = log2(E/2.5)`.
+  Ambiente uniforme 1.0 → E = π. Due rig con lo stesso E espongono uguale prima di renderizzare.
+- **Clipping**: spunta + soglia; i pixel oltre la soglia diventano magenta sulla mappa e sulla sfera
+  cromata (e sui metalli lucidi).
+- **Camera dal live link**: spunta nel pannello *Preview*; C4D e Blender mandano la camera attiva
+  (direzione, alto, FOV orizzontale) quando cambia e il preview la segue, alla distanza corrente dal
+  centro. Con un GLB caricato vedi l'inquadratura del render.
+- **Materiali di prova**: Oro giallo, Oro bianco, Argento, Platino, Rame (riflessi esatti dalla
+  panoramica, tinti con la riflettanza F0 del metallo), Spazzolato (anisotropo), Vetro. Valgono per il
+  modello caricato o, senza modello, per la sfera centrale.
+
 ## Rifiniture d'uso (15/09)
 
 - **Mappa**: griglia in gradi, contorno reale delle luci (selezionate in giallo), az/el e RGB del pixel

@@ -49,6 +49,10 @@ func set_exposure(k: float) -> void:
 	_map_mat.set_shader_parameter("exposure", k)
 
 
+func set_clipping(on: bool, threshold: float) -> void:
+	_map_mat.set_shader_parameter("clip_threshold", threshold if on else -1.0)
+
+
 func set_rig(r: LightRig) -> void:
 	rig = r
 	refresh()

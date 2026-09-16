@@ -76,6 +76,18 @@ func duplicate_light() -> RigLight:
 	return RigLight.from_dict(to_dict())
 
 
+## Copia specchiata sinistra ↔ destra rispetto al meridiano az = 0 (key ↔ fill).
+func mirrored() -> RigLight:
+	var m := duplicate_light()
+	m.name = name + " specchio"
+	m.azimuth = -azimuth
+	m.roll = -roll
+	m.gradient_angle = -gradient_angle
+	m.scrim_offset.x = -scrim_offset.x
+	m.texture_flip_h = not texture_flip_h
+	return m
+
+
 func radiance() -> float:
 	if photometric:
 		return illuminance * pow(2.0, ev) / maxf(measured_k, 1e-9)

@@ -18,9 +18,11 @@ texture, visibilità in camera delle luci separate.
    export…* → *Attivo*.
 2. In Blender carica lo stesso EXR nell'Environment Texture del World. A ogni modifica nell'app
    l'immagine viene ricaricata (`image.reload()`), Cycles ed EEVEE la rileggono da soli.
-3. **LightPaint**: pulsante nel pannello, poi click o trascina sul modello nel viewport; Esc o tasto
+3. **Camera**: la vista 3D attiva (o la camera di scena quando sei in vista camera) viene mandata
+   all'app quando cambia; con *Camera dal live link* attivo il preview la segue.
+4. **LightPaint**: pulsante nel pannello, poi click o trascina sul modello nel viewport; Esc o tasto
    destro per uscire. Normali interpolate sulle mesh smooth.
-4. **Luci separate**: ogni luce con il flag *Separata* nell'app diventa un piano emissivo (Emission
+5. **Luci separate**: ogni luce con il flag *Separata* nell'app diventa un piano emissivo (Emission
    strength 1 + l'EXR planare) nella collezione `HDRI Studio Lights`, figlio dell'empty `HDRI Studio
    Center` (spostalo sul soggetto: i piani seguono). Direzione, distanza (cm → m), dimensione fisica e
    texture sono automatiche. Verificato in Cycles: il piano illumina il centro come la stessa luce

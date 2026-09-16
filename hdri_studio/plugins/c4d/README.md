@@ -19,6 +19,11 @@
 3. Da qui ogni modifica in HDRI Studio riscrive il file (300 ms dopo l'ultimo cambiamento) e il plugin
    preme Reload sui nodi che lo usano. Nella console: `[hdri-studio] nome.exr → 1 nodi ricaricati`.
 
+## Camera
+
+Il plugin manda all'app la camera attiva della vista (direzione, alto, FOV) quando cambia: con *Camera
+dal live link* attivo nell'app, il preview segue l'inquadratura di C4D.
+
 ## LightPaint
 
 Attiva il tool **HDRI Studio LightPaint** (menu Extensions, oppure Shift+C e scrivi "LightPaint").

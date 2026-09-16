@@ -7,7 +7,13 @@ area: progetto
 
 # HDRI Studio — Piano
 
-> [!success] Stato: v1.6 — 15 settembre 2026 — rifiniture d'uso su tutte le feature esistenti
+> [!success] Stato: v1.7 — 16 settembre 2026 — Fase 6 fatta
+> Ruota tutto il set e duplica specchiata, esposimetro (E e EV100, validato: ambiente 1.0 → π),
+> vista clipping, camera dal live link (C4D e Blender), materiali di prova per gioielleria.
+> Cosa resta: [[#10. Cosa manca rispetto al piano iniziale]] (`.hdr`, metadati EXR, ACEScg, Houdini)
+> e i test in Octane della Fase 4 (Power, verso/specchio della texture).
+
+> [!success] Stato precedente: v1.6 — 15 settembre 2026 — rifiniture d'uso su tutte le feature esistenti
 > Mappa con contorni e griglia, selezione dal riflesso, tastiera e multi-selezione, gelatine, scrim a
 > disco, texture specchiabili, tacche con valore, sfocatura della base, sidecar dalla luce, rinomina
 > preset, export che ricorda cartella e nome, live link adattivo, ultimo rig e autosave. Elenco
@@ -471,16 +477,19 @@ Passi:
 5. Test: `link_smoke.gd` + un client Blender headless (`blender -b --python`) che si collega, riceve
    `hdri_updated`, ricarica e verifica il pixel; furnace test per la strength.
 
-### Fase 6 — Feature nuove concordate (da fare, 15/09/2026)
+### Fase 6 — Feature nuove concordate — fatta il 16/09/2026
 
-1. **Ruota tutto il set**: slider a livello di rig che ruota tutte le luci attorno all'asse verticale;
-   *Duplica specchiata* (sinistra ↔ destra).
-2. **Esposimetro**: illuminamento totale al centro (HDRI intera, sfondo compreso) per una superficie
-   che guarda una direzione scelta, in "lux" e EV; riuso della misura fotometrica estesa alla mappa.
-3. **Vista clipping** nel preview: falsi colori sopra una soglia (il valore sotto il cursore sulla
-   mappa è già fatto).
-4. **Camera dal live link**: C4D e Blender mandano la camera attiva; il preview la usa.
-5. **Materiali di prova per gioielleria**: oro giallo/bianco, argento, platino, spazzolato, vetro.
+1. [x] **Ruota tutto il set** (slider nel pannello *Set*, destructivo sugli azimut, torna a 0) e
+   **⇋ Duplica specchiata** (azimut, rotazione, angolo del gradiente, offset scrim, specchio texture).
+2. [x] **Esposimetro**: copia CPU 256×128 del bake, `E = Σ L·max(d·n,0)·dω`, EV100 = log2(E/2.5),
+   normale verso la camera / l'alto / az-el. Validato: ambiente 1.0 → E = π per qualunque normale.
+3. [x] **Clipping**: soglia con falsi colori (magenta) sulla mappa e sui materiali a riflessi esatti.
+4. [x] **Camera dal live link**: messaggio `camera` (forward, up, fov orizzontale) da C4D (camera
+   della vista attiva) e Blender (vista 3D o camera di scena), mandato solo quando cambia; il preview
+   usa direzione, alto e FOV alla distanza corrente. X invertita per C4D come per il LightPaint.
+5. [x] **Materiali di prova**: metalli lucidi con lo shader a riflessi esatti tinto con F0 (oro
+   1.0/0.71/0.29, oro bianco, argento, platino, rame), spazzolato anisotropo, vetro con rifrazione;
+   per il modello o per la sfera centrale.
 
 ### 5.4 Fase 4 — test in C4D
 

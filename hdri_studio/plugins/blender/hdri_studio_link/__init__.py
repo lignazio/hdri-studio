@@ -16,6 +16,7 @@ Fase 0: Blender_x = interno_z, Blender_y = interno_x, Blender_z = interno_y (rot
 Installazione: Edit > Preferences > Add-ons > Install… > scegli la cartella zippata, oppure copia
 `hdri_studio_link/` in `scripts/addons/`. Poi attiva "HDRI Studio Link".
 """
+import math
 import os
 import sys
 import time
@@ -47,7 +48,7 @@ LIGHT_PREFIX = "HS: "
 
 LINK = link_core.LinkClient(hello={"type": "hello", "host": "blender", "version": bpy.app.version_string})
 WATCH = link_core.MtimeWatcher()
-_state = {"last_scan": 0.0, "was_connected": False, "last_msg": "", "lightpaint": False}
+_state = {"last_scan": 0.0, "was_connected": False, "last_msg": "", "lightpaint": False, "last_cam": None}
 
 
 # --- coordinate ----------------------------------------------------------------------------------
@@ -218,8 +219,45 @@ def sync_separate_lights(msg):
 
 # --- timer ------------------------------------------------------------------------------------------
 
+def _send_camera():
+    """Vista 3D attiva (o camera di scena): direzione, alto e FOV orizzontale, quando cambiano."""
+    if not LINK.connected:
+        return
+    fwd = up = None
+    fov = 40.0
+    for win in bpy.context.window_manager.windows:
+        for area in win.screen.areas:
+            if area.type != "VIEW_3D":
+                continue
+            rv3d = area.spaces.active.region_3d
+            if rv3d is None:
+                continue
+            m = rv3d.view_matrix.inverted()
+            fwd = -(m.to_3x3() @ Vector((0, 0, 1)))
+            up = m.to_3x3() @ Vector((0, 1, 0))
+            if rv3d.view_perspective == "CAMERA" and bpy.context.scene.camera:
+                cam = bpy.context.scene.camera
+                cm = cam.matrix_world
+                fwd = -(cm.to_3x3() @ Vector((0, 0, 1)))
+                up = cm.to_3x3() @ Vector((0, 1, 0))
+                fov = math.degrees(cam.data.angle_x)
+            else:
+                fov = math.degrees(2.0 * math.atan(36.0 / (2.0 * area.spaces.active.lens)))
+            break
+        if fwd is not None:
+            break
+    if fwd is None:
+        return
+    key = tuple(round(c, 4) for c in (*fwd, *up)) + (round(fov, 2),)
+    if key == _state["last_cam"]:
+        return
+    _state["last_cam"] = key
+    LINK.send({"type": "camera", "host": "blender", "forward": to_internal(fwd), "up": to_internal(up), "fov": fov})
+
+
 def tick():
     try:
+        _send_camera()
         for msg in LINK.poll():
             t = msg.get("type")
             if t == "hdri_updated":
