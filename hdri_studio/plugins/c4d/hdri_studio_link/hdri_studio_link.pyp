@@ -34,7 +34,7 @@ import link_core  # noqa: E402
 # ID unici del plugin: valori alti fuori dagli intervalli usati dai moduli di Cinema 4D
 # (1065932 collideva con C4d_objects). Per una distribuzione pubblica andrebbero richiesti su
 # https://developers.maxon.net/forum/pid
-PLUGIN_VERSION = "0.5 (luce di default Octane)"
+PLUGIN_VERSION = "0.6 (ID Octane misurati)"
 PLUGIN_ID_LINK = 1099780031
 PLUGIN_ID_RELOAD = 1099780032
 PLUGIN_ID_PAINT = 1099780033
@@ -216,11 +216,22 @@ def _set_image_path(obj, path):
 
 # --- luce di default (senza HS_TEMPLATE) --------------------------------------------------------------
 
-def _find_plugin(ptype, words):
-    """ID del primo plugin del tipo dato il cui nome contiene tutte le parole (senza spazi, minuscolo)."""
+# ID misurati su Octane per Cinema 4D 2026 (diagnostica del 16/09/2026); il nome esatto è il ripiego.
+OCTANE_LIGHT_TAG_ID = 1029526      # tag "Octane Light"
+OCTANE_IMAGE_TEXTURE_ID = 1029508  # shader "Image Texture"
+
+
+def _plugin_exists(ptype, pid):
+    return any(p.GetID() == pid for p in c4d.plugins.FilterPluginList(ptype, True))
+
+
+def _find_plugin(ptype, exact_name, known_id=None):
+    """ID del plugin: prima l'ID noto se è registrato, poi il nome esatto (senza spazi, minuscolo)."""
+    if known_id is not None and _plugin_exists(ptype, known_id):
+        return known_id
+    want = exact_name.lower().replace(" ", "")
     for p in c4d.plugins.FilterPluginList(ptype, True):
-        n = p.GetName().lower().replace(" ", "")
-        if all(w in n for w in words):
+        if p.GetName().lower().replace(" ", "") == want:
             return p.GetID()
     return None
 
@@ -251,12 +262,12 @@ def _create_default_light(doc, root):
     light[c4d.LIGHT_TYPE] = c4d.LIGHT_TYPE_AREA
     light[c4d.LIGHT_AREADETAILS_SHAPE] = c4d.LIGHT_AREADETAILS_SHAPE_RECTANGLE
     light.InsertUnder(root)
-    tag_id = _find_plugin(c4d.PLUGINTYPE_TAG, ["octane", "light"])
+    tag_id = _find_plugin(c4d.PLUGINTYPE_TAG, "Octane Light", OCTANE_LIGHT_TAG_ID)
     if tag_id is None:
         return light, "tag 'Octane Light' non trovato fra i plugin: luce area nativa senza texture"
     tag = light.MakeTag(tag_id)
     notes = []
-    sh_id = _find_plugin(c4d.PLUGINTYPE_SHADER, ["imagetexture"]) or _find_plugin(c4d.PLUGINTYPE_SHADER, ["octane", "image"])
+    sh_id = _find_plugin(c4d.PLUGINTYPE_SHADER, "Image Texture", OCTANE_IMAGE_TEXTURE_ID)
     tex_pid = _param_by_name(tag, ["texture"], dtype=c4d.DTYPE_BASELISTLINK, exclude=("distribution", "opacity", "projection"))
     if sh_id is not None and tex_pid is not None:
         sh = c4d.BaseShader(sh_id)
@@ -282,7 +293,8 @@ def octane_diagnostics(doc):
         for p in c4d.plugins.FilterPluginList(ptype, True):
             if "octane" in p.GetName().lower() or "imagetexture" in p.GetName().lower().replace(" ", ""):
                 print("[hdri-studio] %-8s %-40s id=%d" % (label, p.GetName(), p.GetID()))
-    tag_id = _find_plugin(c4d.PLUGINTYPE_TAG, ["octane", "light"])
+    tag_id = _find_plugin(c4d.PLUGINTYPE_TAG, "Octane Light", OCTANE_LIGHT_TAG_ID)
+    print("[hdri-studio] tag Octane Light usato: %s" % tag_id)
     if tag_id is not None:
         tmp = c4d.BaseObject(c4d.Olight)
         tag = tmp.MakeTag(tag_id)
