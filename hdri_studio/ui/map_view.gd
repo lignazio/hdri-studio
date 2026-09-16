@@ -176,10 +176,10 @@ func _gui_input(event: InputEvent) -> void:
 		if event.pressed:
 			var i := _pick(event.position)
 			if i >= 0:
-				_dragging = i
+				_dragging = i if not rig.lights[i].locked else -1
 				if i != selected:
 					light_selected.emit(i)
-			elif selected >= 0 and _map_rect().has_point(event.position):
+			elif selected >= 0 and not rig.lights[selected].locked and _map_rect().has_point(event.position):
 				# click sul vuoto: sposta la luce selezionata lì
 				_dragging = selected
 				_move_to(event.position, false)

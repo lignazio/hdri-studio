@@ -99,6 +99,21 @@ luci seguono; togliendo il flag la luce sparisce dalla scena.
 Da tarare al primo uso (costanti in cima al `.pyp`): il verso di emissione della luce modello
 (`LIGHT_EMITS_ALONG_Z`) e, con il furnace test, il rapporto fra la Power di Octane e la radianza.
 
+## Radiance .hdr e metadati EXR (16/09)
+
+Nella dialog di export scegli l'estensione: `.exr` (half/float32, PIZ + codec via Blender) oppure `.hdr`
+(Radiance RGBE, codificato sul GPU, non compresso: lo leggono tutti; precisione della mantissa a 8 bit).
+Le luci separate seguono lo stesso formato.
+
+Ogni EXR esportato porta nell'header `chromaticities` (Rec.709/D65), un `comments` e l'attributo
+`hdristudio_rig` con il **rig completo in JSON**: *Apri rig…* accetta anche un EXR e ricostruisce il set
+da lì. Godot non scrive attributi, quindi vengono iniettati dopo la scrittura aggiornando la tabella
+degli offset; dopo una riconversione con Blender (che non li conserva) vengono reiniettati. Verificato
+con TinyEXR e con OpenEXR (Blender).
+
+Ogni luce ha un **🔒** (accanto a On/Solo): bloccata, non la spostano né il LightPaint né la mappa né
+le frecce.
+
 ## Set, esposimetro, clipping, camera, materiali (16/09)
 
 - **Ruota tutto** (pannello *Set*, in cima alla colonna destra): ruota tutte le luci attorno all'asse

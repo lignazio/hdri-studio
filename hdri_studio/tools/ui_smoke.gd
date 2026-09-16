@@ -535,6 +535,16 @@ func _run(main: Node) -> void:
 	main.rig.lights.clear()
 	_check(main.load_rig_from(ProjectSettings.globalize_path("res://out/smoke_meta.exr")) and main.rig.lights.size() == 1 and main.rig.lights[0].name == "hdr test", "rig riaperto dall'EXR")
 
+	# lucchetto
+	main._select(0)
+	var lk: RigLight = main.rig.lights[0]
+	lk.locked = true
+	var az0 := lk.azimuth
+	main._on_paint(Vector3(1, 0, 0), true)
+	main._nudge(10.0, 0.0, true)
+	_check(is_equal_approx(lk.azimuth, az0), "luce bloccata: LightPaint e frecce non la spostano")
+	lk.locked = false
+
 	ok = ok and _all_ok
 	print("[smoke] %s" % ("TUTTO OK" if ok else "FALLITO"))
 	quit(0 if ok else 1)

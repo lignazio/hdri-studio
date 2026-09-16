@@ -115,6 +115,8 @@ func refresh() -> void:
 			txt += "  [solo]"
 		if l.separate:
 			txt += "  ⇗"
+		if l.locked:
+			txt += "  🔒"
 		list.add_item(txt)
 	select_many(prev_all)
 	_update_buttons()

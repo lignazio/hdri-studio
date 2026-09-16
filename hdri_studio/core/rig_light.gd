@@ -20,6 +20,8 @@ const GRAD_STOPS := 8
 @export var enabled := true
 ## Con almeno una luce in solo, il bake include solo quelle.
 @export var solo := false
+## Bloccata: LightPaint, trascinamento sulla mappa e frecce non la spostano.
+@export var locked := false
 @export var shape := Shape.RECT
 @export_range(-180.0, 180.0) var azimuth := 0.0
 @export_range(-90.0, 90.0) var elevation := 0.0
@@ -251,7 +253,7 @@ func gradient_color(t: float) -> Color:
 
 func to_dict() -> Dictionary:
 	return {
-		"name": name, "enabled": enabled, "solo": solo, "shape": Shape.keys()[shape],
+		"name": name, "enabled": enabled, "solo": solo, "locked": locked, "shape": Shape.keys()[shape],
 		"azimuth": azimuth, "elevation": elevation, "roll": roll,
 		"width": width, "height": height, "softness": softness, "corner_radius": corner_radius,
 		"falloff": Falloff.keys()[falloff],
@@ -274,6 +276,7 @@ static func from_dict(d: Dictionary) -> RigLight:
 	l.name = d.get("name", l.name)
 	l.enabled = d.get("enabled", l.enabled)
 	l.solo = d.get("solo", l.solo)
+	l.locked = d.get("locked", false)
 	l.shape = Shape.get(d.get("shape", "RECT"), Shape.RECT)
 	l.azimuth = d.get("azimuth", l.azimuth)
 	l.elevation = d.get("elevation", l.elevation)

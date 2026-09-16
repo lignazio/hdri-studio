@@ -453,6 +453,8 @@ func _nudge(daz: float, del: float, commit: bool) -> void:
 		return
 	for i in _selection:
 		var l: RigLight = rig.lights[i]
+		if l.locked:
+			continue
 		l.azimuth = wrapf(l.azimuth + daz, -180.0, 180.0)
 		l.elevation = clampf(l.elevation + del, -90.0, 90.0)
 	props.sync_values()
@@ -477,6 +479,8 @@ func _on_map_move(i: int, az: float, el: float, commit: bool) -> void:
 		# trascinare una luce del gruppo sposta tutto il gruppo
 		for j in _selection:
 			var o: RigLight = rig.lights[j]
+			if o.locked:
+				continue
 			o.azimuth = wrapf(o.azimuth + daz, -180.0, 180.0)
 			o.elevation = clampf(o.elevation + del, -90.0, 90.0)
 	else:
@@ -495,6 +499,9 @@ func _on_paint(dir: Vector3, commit: bool) -> void:
 		nl.softness = 1.0
 		light_list.add_and_select(nl)
 	var l: RigLight = rig.lights[_selected]
+	if l.locked:
+		export_panel.set_status("La luce \"%s\" è bloccata (🔒): il LightPaint non la sposta" % l.name)
+		return
 	l.azimuth = rad_to_deg(atan2(-dir.x, dir.z))
 	l.elevation = rad_to_deg(asin(clampf(dir.y, -1.0, 1.0)))
 	props.sync_values()

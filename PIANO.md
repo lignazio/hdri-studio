@@ -7,7 +7,11 @@ area: progetto
 
 # HDRI Studio — Piano
 
-> [!success] Stato: v1.7 — 16 settembre 2026 — Fase 6 fatta
+> [!success] Stato: v1.8 — 16 settembre 2026 — .hdr, metadati EXR, lucchetto
+> Export Radiance .hdr (RGBE sul GPU), metadati nell'EXR (chromaticities Rec.709 e rig JSON, letti
+> anche da *Apri rig…*), luce bloccabile. Restano: ACEScg e Houdini, più i test in Octane della Fase 4.
+
+> [!success] Stato precedente: v1.7 — 16 settembre 2026 — Fase 6 fatta
 > Ruota tutto il set e duplica specchiata, esposimetro (E e EV100, validato: ambiente 1.0 → π),
 > vista clipping, camera dal live link (C4D e Blender), materiali di prova per gioielleria.
 > Cosa resta: [[#10. Cosa manca rispetto al piano iniziale]] (`.hdr`, metadati EXR, ACEScg, Houdini)
@@ -567,9 +571,9 @@ Confronto con la v0.3 (il piano approvato prima di scrivere codice) e con le voc
 
 | Voce | Da dove viene | Stato |
 |---|---|---|
-| Radiance `.hdr` in export | Fase 1/2 | Non fatto. Poco utile finché EXR basta; ~60 righe quando serve |
+| Radiance `.hdr` in export | Fase 1/2 | Fatto (16/09): RGBE codificato sul GPU, flat, verificato in rilettura |
 | Codec EXR (ZIP, DWAA, DWAB…) | richiesta 15/09 | Fatto via Blender in background (Godot scrive solo PIZ, TinyEXR non ha DWA); in lettura, conversione in cache per i codec che TinyEXR non decodifica |
-| Metadati nell'EXR (chromaticities Rec.709, JSON del rig dentro il file) | §4.5 | Non fatto: `Image.save_exr` di Godot non scrive attributi custom; servirebbe un writer EXR nostro |
+| Metadati nell'EXR (chromaticities Rec.709, JSON del rig dentro il file) | §4.5 | Fatto (16/09): iniezione nell'header dopo la scrittura con aggiornamento degli offset; reiniettati dopo Blender; il rig si riapre dall'EXR. Verificato con TinyEXR e OpenEXR |
 | ACEScg come spazio di output | §2, Fase 3 | Non fatto |
 | Libreria di preset di studio | Fase 3 | Fatta: tab Preset, cartella di JSON + miniature, carica/aggiungi/elimina |
 | Preset di orientamento **Houdini** e plugin Houdini | §3, Fase 3 | Non misurato, non fatto |

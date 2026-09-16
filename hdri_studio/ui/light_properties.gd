@@ -16,6 +16,7 @@ var _syncing := false
 var _name: LineEdit
 var _enabled: CheckBox
 var _solo: CheckBox
+var _locked: CheckBox
 var _shape: OptionButton
 var _rows := {}
 var _falloff: OptionButton
@@ -66,6 +67,11 @@ func _init() -> void:
 	_solo.text = "Solo"
 	_solo.toggled.connect(func(v: bool) -> void: _set_prop("solo", v, true, true))
 	top.add_child(_solo)
+	_locked = CheckBox.new()
+	_locked.text = "🔒"
+	_locked.tooltip_text = "Blocca la posizione: LightPaint, mappa e frecce non la spostano"
+	_locked.toggled.connect(func(v: bool) -> void: _set_prop("locked", v, true, true))
+	top.add_child(_locked)
 
 	_shape = _option("Forma", LightListPanel.SHAPE_LABELS, func(i: int) -> void:
 		_set_prop("shape", i, true)
@@ -280,6 +286,7 @@ func set_light(l: RigLight) -> void:
 	_name.text = l.name
 	_enabled.button_pressed = l.enabled
 	_solo.button_pressed = l.solo
+	_locked.button_pressed = l.locked
 	_shape.selected = l.shape
 	for prop in _rows:
 		var v: float
