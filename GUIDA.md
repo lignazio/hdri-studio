@@ -8,15 +8,20 @@ nel software 3D e la luce va dove serve per produrre quel riflesso.
 
 ## 1. Installazione
 
-**Serve Godot 4.7.1** (godotengine.org → Download → versione *Standard*, non .NET; un singolo
-eseguibile, niente installazione) e il repository `hdri-studio`.
+**Strada semplice — l'app già pronta.** Scarica dalla pagina *Releases* del repository l'archivio per
+il tuo sistema (`HDRI-Studio-<versione>-macOS.zip` o `-Windows.zip`), scompattalo: dentro trovi l'app,
+la cartella `plugins/` (C4D e Blender) e questa guida.
 
-1. Scarica o clona il repository, apri Godot → *Import* → scegli `hdri_studio/project.godot`.
-2. Il primo avvio rigenera la cache (qualche secondo). Premi **Play (F5)**.
+- **macOS**: l'app non è firmata, quindi la prima volta macOS la blocca ("sviluppatore non
+  identificato"). Tasto destro sull'app → *Apri* → *Apri* di nuovo; oppure da Terminale
+  `xattr -dr com.apple.quarantine "HDRI Studio.app"`. Serve una sola volta.
+- **Windows**: SmartScreen avvisa "editore sconosciuto" → *Ulteriori informazioni → Esegui comunque*.
+  Se vedi tutto nero, lancia `HDRI Studio.console.exe` (accanto all'exe) e riporta le righe che
+  iniziano con `Baker:` o `ERROR`.
 
-In alternativa, se hai ricevuto l'app già esportata (`HDRI Studio.app` o `HDRI Studio.exe`), basta
-aprirla. Se all'avvio vedi tutto nero, lancia `HDRI Studio.console.exe` (Windows) e riporta le righe
-che iniziano con `Baker:` o `ERROR`.
+**Strada per chi vuole il codice.** Serve Godot 4.7.1 (godotengine.org → Download → versione *Standard*,
+non .NET): clona il repository, apri Godot → *Import* → `hdri_studio/project.godot` → **Play (F5)**. Il
+primo avvio rigenera la cache in qualche secondo.
 
 **Blender** è opzionale: serve solo per i codec EXR diversi da PIZ e per leggere EXR compressi in
 DWAA/DWAB (comuni nelle collezioni commerciali di HDRI light).

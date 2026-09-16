@@ -67,8 +67,17 @@ const AUTOSAVE_MS := 60000
 const LIVE_FAST_WINDOW_MS := 1500
 
 
+const VERSION_FALLBACK := "dev"
+
+
+static func app_version() -> String:
+	var v: String = ProjectSettings.get_setting("application/config/version", "")
+	return v if v != "" else VERSION_FALLBACK
+
+
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	get_window().title = "HDRI Studio %s" % app_version()
 	baker = HdriBaker.new(false)
 	baker.supersample = 1
 	baker.set_resolution(PREVIEW_RES.x, PREVIEW_RES.y)
@@ -638,8 +647,8 @@ func _update_status() -> void:
 		var c := _map_value(_hover_az, _hover_el)
 		if c != Color.TRANSPARENT:
 			hover += " · RGB %.3f %.3f %.3f" % [c.r, c.g, c.b]
-	status.text = "  %s · %d luci · export %dx%d · preview %+.1f EV%s   |   click su un riflesso: seleziona · Shift+trascina: LightPaint · frecce: sposta (Shift 10°) · H: on/off · ⌘D duplica · Canc elimina · ⌘Z undo" % [
-		name, rig.lights.size(), rig.resolution.x, rig.resolution.y, _preview_ev, hover]
+	status.text = "  HDRI Studio %s · %s · %d luci · export %dx%d · preview %+.1f EV%s   |   click su un riflesso: seleziona · Shift+trascina: LightPaint · frecce: sposta (Shift 10°) · H: on/off · ⌘D duplica · Canc elimina · ⌘Z undo" % [
+		app_version(), name, rig.lights.size(), rig.resolution.x, rig.resolution.y, _preview_ev, hover]
 
 
 func _apply_clipping() -> void:
