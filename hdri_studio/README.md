@@ -268,4 +268,5 @@ l'integrale numerico e con un render Cycles.
     livelink/  LiveLink (server TCP, JSON-lines)
     plugins/   c4d/hdri_studio_link (plugin Cinema 4D), blender/hdri_studio_link (add-on Blender)
     tools/     spike di Fase 0, verifica Blender, smoke test UI, link ed EXR, test del drag & drop
+    splash.png boot splash (generato da ../tools/make_splash.py, Pillow + numpy)
     out/       output generati (ignorati da git)
