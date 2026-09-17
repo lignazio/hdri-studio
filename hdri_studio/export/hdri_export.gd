@@ -68,8 +68,8 @@ static func _attr(name: String, type: String, value: PackedByteArray) -> PackedB
 	return out
 
 
-## Inietta chromaticities Rec.709, un commento e il rig (JSON) nell'EXR. Rimuove eventuali copie
-## precedenti degli stessi attributi. Restituisce OK o l'errore.
+## Senza HsOpenEXR: inietta chromaticities, commento e rig (JSON) nell'header di un EXR scritto da
+## TinyEXR, rimuovendo eventuali copie precedenti degli stessi attributi. Restituisce OK o l'errore.
 static func inject_metadata(path: String, rig_json: String, acescg := false) -> Error:
 	var abs := ProjectSettings.globalize_path(path)
 	var data := FileAccess.get_file_as_bytes(abs)
@@ -102,16 +102,15 @@ static func inject_metadata(path: String, rig_json: String, acescg := false) -> 
 			header.append_array(data.slice(i, next))
 		i = next
 	var old_header_end := i # inizio della tabella degli offset nel file originale
-	var rig_bytes := rig_json.to_utf8_buffer()
+	var attrs := metadata(rig_json, acescg)
 	var chroma := PackedByteArray()
 	chroma.resize(32)
-	var prim: Array = ACESCG if acescg else REC709
 	for k in 8:
-		chroma.encode_float(k * 4, prim[k])
+		chroma.encode_float(k * 4, attrs["chromaticities"][k])
 	header.append_array(_attr("chromaticities", "chromaticities", chroma))
-	var space := "ACEScg (AP1, D60)" if acescg else "Rec.709 (D65)"
-	header.append_array(_attr("comments", "string", ("HDRI Studio — radianza lineare, primari " + space).to_utf8_buffer()))
-	header.append_array(_attr(RIG_ATTR, "string", rig_bytes))
+	header.append_array(_attr("comments", "string", attrs["comments"].to_utf8_buffer()))
+	if attrs.has(RIG_ATTR):
+		header.append_array(_attr(RIG_ATTR, "string", attrs[RIG_ATTR].to_utf8_buffer()))
 	header.append(0)
 	var new_header_end := 8 + header.size()
 	var delta := new_header_end - old_header_end
@@ -195,17 +194,22 @@ static func _roll_x(img: Image, px: int) -> Image:
 	return out
 
 
-## Salva in EXR. half = true scrive 16 bit; se il bake contiene valori oltre il massimo
-## dell'half (una luce "sole") passa automaticamente a float32 e lo segnala.
-static func save_exr(img: Image, path: String, half := true) -> Error:
+## Salva in EXR con codec e metadati (chromaticities, commento, rig JSON se non vuoto). half = true scrive
+## 16 bit; se il bake contiene valori oltre il massimo dell'half (una luce "sole") passa automaticamente
+## a float32 e lo segnala. Con la GDExtension HsOpenEXR tutto avviene in una scrittura; senza, TinyEXR
+## scrive PIZ (gli altri codec sono ignorati con un avviso) e i metadati vengono iniettati dopo.
+static func save_exr(img: Image, path: String, half := true, codec := "PIZ", rig_json := "", acescg := false) -> Error:
+	if half and _peak(img) > HALF_MAX:
+		push_warning("Picco oltre il massimo dell'half: %s scritto in float32" % path.get_file())
+		half = false
+	if ExrCodec.available():
+		return ExrCodec.save(img, path, codec, half, metadata(rig_json, acescg))
+	if codec != "PIZ":
+		push_warning("HsOpenEXR non caricata: %s scritto in PIZ invece di %s" % [path.get_file(), codec])
 	var out := img
 	if half:
-		var peak := _peak(img)
-		if peak > HALF_MAX:
-			push_warning("Picco %.0f oltre il massimo dell'half: %s scritto in float32" % [peak, path.get_file()])
-		else:
-			out = img.duplicate() as Image
-			out.convert(Image.FORMAT_RGBAH)
+		out = img.duplicate() as Image
+		out.convert(Image.FORMAT_RGBAH)
 	# Scrittura atomica: file temporaneo accanto alla destinazione, poi rinomina. Così un plugin che
 	# guarda il file non lo legge mai a metà.
 	var dest := ProjectSettings.globalize_path(path)
@@ -220,7 +224,23 @@ static func save_exr(img: Image, path: String, half := true) -> Error:
 		# fallback: scrittura diretta
 		DirAccess.remove_absolute(tmp)
 		err = out.save_exr(dest)
+	if err == OK:
+		var merr := inject_metadata(path, rig_json, acescg)
+		if merr != OK:
+			push_warning("Metadati EXR non scritti in %s (%s)" % [path.get_file(), error_string(merr)])
 	return err
+
+
+## Attributi da scrivere nell'header: chromaticities, commento e (se c'è) il rig.
+static func metadata(rig_json: String, acescg := false) -> Dictionary:
+	var space := "ACEScg (AP1, D60)" if acescg else "Rec.709 (D65)"
+	var attrs := {
+		"chromaticities": PackedFloat32Array(ACESCG if acescg else REC709),
+		"comments": "HDRI Studio — radianza lineare, primari " + space,
+	}
+	if rig_json != "":
+		attrs[RIG_ATTR] = rig_json
+	return attrs
 
 
 ## PNG di controllo: esposizione moltiplicativa, clamp, sRGB. Solo per guardare, mai per illuminare.

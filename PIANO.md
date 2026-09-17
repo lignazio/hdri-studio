@@ -7,7 +7,13 @@ area: progetto
 
 # HDRI Studio — Piano
 
-> [!success] Stato: v2.0 — 16 settembre 2026 — export ACEScg: chiusi tutti i sospesi del piano tranne Houdini
+> [!success] Stato: v2.1 — 17 settembre 2026 — OpenEXR dentro l'app: Fase 7 fatta
+> GDExtension HsOpenEXR (C++, OpenEXR 3.4.9 statico, macOS universal + Windows x86_64 cross-compilata
+> dal Mac): tutti i codec in scrittura e lettura, metadati scritti insieme ai pixel, niente più Blender
+> per gli EXR. Restano Houdini (preset e plugin) e la calibrazione della Power in Octane.
+> Da verificare sul PC: la DLL Windows (compilata con mingw, non ancora eseguita).
+
+> [!success] Stato precedente: v2.0 — 16 settembre 2026 — export ACEScg: chiusi tutti i sospesi del piano tranne Houdini
 > Icone di stato nella lista, export ACEScg. Dal piano iniziale resta solo Houdini (preset di
 > orientamento e plugin), più la calibrazione della Power in Octane. Blender resta la dipendenza
 > opzionale per i codec EXR: non esiste una GDExtension OpenEXR pronta (cercato su GitHub il 16/09);
@@ -507,6 +513,44 @@ Passi:
    1.0/0.71/0.29, oro bianco, argento, platino, rame), spazzolato anisotropo, vetro con rifrazione;
    per il modello o per la sfera centrale.
 
+### Fase 7 — OpenEXR dentro l'app (GDExtension) — fatta il 17/09/2026
+
+Obiettivo: esportare in ogni codec EXR e leggere DWAA/DWAB/B44/PXR24 senza dipendere da Blender.
+Non esisteva una GDExtension OpenEXR pronta: costruita in casa, ~350 righe di C++.
+
+1. [x] **Sorgenti** in `gdextension/` (`src/hs_openexr.cpp`, `register_types.cpp`, `CMakeLists.txt`,
+   toolchain mingw). Classe `HsOpenEXR` (RefCounted, metodi statici): `save(image, path, codec, half,
+   attributes, dwa_level)`, `load(path) → Image RGBAF`, `info(path)`, `codecs()`, `version()`.
+   Stream `Imf::OStream`/`IStream` sopra `FileAccess`, così i percorsi `user://` e Unicode li gestisce
+   Godot. Si scrivono solo R, G, B; OpenEXR non converte i tipi in scrittura, quindi l'immagine viene
+   convertita in `RGBH`/`RGBF` prima. In lettura: R/G/B piatti, oppure il primo layer (`beauty.R`),
+   oppure `Y` monocromatico; canali mancanti riempiti; tiled e prima parte dei multipart gestiti da
+   `InputFile`. Thread pool = core della macchina.
+2. [x] **Build**: `tools/build_gdextension.sh [macos|windows]`. Due progetti CMake in sequenza:
+   OpenEXR 3.4.9 statico (Imath, libdeflate e OpenJPH interni; il config esportato cita `openjph`
+   senza installarlo → copiato nel prefix e dichiarato come target importato) e poi l'estensione con
+   godot-cpp v10 (master, commit fissato, `api_version 4.7`) via FetchContent. macOS: universal
+   arm64+x86_64, deployment 11.0, 5,3 MB. Windows: `brew install mingw-w64` (GCC 16, thread posix),
+   `-static` per libstdc++/winpthread, dipende solo da KERNEL32 e UCRT, 3,9 MB. Binari committati in
+   `hdri_studio/addons/hs_openexr/bin/`; il `.gdextension` li dichiara per `macos` e `windows.x86_64`.
+3. [x] **Integrazione**: `ExrCodec` (ex `ExrConvert`) chiama l'estensione via
+   `ClassDB.class_call_static`, così se il binario manca il codice resta valido e si torna a TinyEXR
+   (solo PIZ, metadati iniettati dopo). `HdriExport.save_exr(img, path, half, codec, rig_json, acescg)`
+   scrive pixel e metadati in una volta; il fallback half → float32 sopra 65504 resta. `export_to`
+   accetta `codec` nelle opzioni; il live link usa sempre PIZ. `HdriBaker.load_linear_image` legge
+   qualunque EXR con l'estensione. Rimossi: riconversione in background, cache PIZ, ricerca e scelta
+   dell'eseguibile di Blender, `blender_path`.
+4. [x] **Test**: `tools/exr_smoke.gd` (10 codec × half/float32: scrittura, rilettura, errore massimo
+   — lossless 0, half 5e-4, DWA 6e-3, B44 2e-3 lontano dai blocchi con inf —, metadati, rilettura con
+   TinyEXR dei codec che conosce, EXR scritto da Godot riletto da OpenEXR); `ui_smoke.gd` (export ZIP
+   identico al PIZ e con rig, DWAA riletto); `--selftest` dell'app esportata ora pretende l'estensione
+   caricata (`release.sh` fallisce altrimenti). Export macOS: dylib in `Contents/Frameworks`, firmata
+   ad hoc dall'export; Windows: DLL accanto all'exe. Tempi a 4k×2k half, bake compreso: ZIP 0,65 s,
+   DWAA 0,7 s. Dimensioni sul rig di prova: PIZ 40 KB, ZIP 23 KB, DWAA 14 KB.
+5. [ ] **Verifica sul PC**: avviare la build Windows, leggere `[selftest] … OpenEXR 3.4.9`, esportare
+   in DWAA e aprirlo in C4D/Octane. HTJ2K (nuovo in OpenEXR 3.4) è compilato ma non esposto nel menu:
+   i software 3D con OpenEXR < 3.4 non lo leggono.
+
 ### 5.4 Fase 4 — test in C4D
 
 > [!todo] Da fare sul PC
@@ -584,8 +628,8 @@ Confronto con la v0.3 (il piano approvato prima di scrivere codice) e con le voc
 | Voce | Da dove viene | Stato |
 |---|---|---|
 | Radiance `.hdr` in export | Fase 1/2 | Fatto (16/09): RGBE codificato sul GPU, flat, verificato in rilettura |
-| Codec EXR (ZIP, DWAA, DWAB…) | richiesta 15/09 | Fatto via Blender in background (Godot scrive solo PIZ, TinyEXR non ha DWA); in lettura, conversione in cache per i codec che TinyEXR non decodifica |
-| Metadati nell'EXR (chromaticities Rec.709, JSON del rig dentro il file) | §4.5 | Fatto (16/09): iniezione nell'header dopo la scrittura con aggiornamento degli offset; reiniettati dopo Blender; il rig si riapre dall'EXR. Verificato con TinyEXR e OpenEXR |
+| Codec EXR (ZIP, DWAA, DWAB…) | richiesta 15/09 | Fatto (17/09, Fase 7): OpenEXR dentro l'app con la GDExtension HsOpenEXR, scrittura e lettura di tutti i codec; Blender non serve più |
+| Metadati nell'EXR (chromaticities Rec.709, JSON del rig dentro il file) | §4.5 | Fatto (16/09): scritti da OpenEXR insieme ai pixel (dal 17/09); nel fallback TinyEXR iniettati nell'header dopo la scrittura; il rig si riapre dall'EXR |
 | ACEScg come spazio di output | §2, Fase 3 | Fatto (16/09): conversione Rec.709 → AP1 (Bradford) nel bake dell'export, chromaticities AP1/D60 nei metadati, anche per le luci separate |
 | Libreria di preset di studio | Fase 3 | Fatta: tab Preset, cartella di JSON + miniature, carica/aggiungi/elimina |
 | Preset di orientamento **Houdini** e plugin Houdini | §3, Fase 3 | Non misurato, non fatto |
@@ -644,3 +688,7 @@ luci Texture e catalogo, luci separate, app standalone.
   (identica a `PanoramaSkyMaterial` di Godot, così il preview non ha offset). Gli offset per software
   sono applicati solo all'export.
 - 15/09/2026 — Spazio colore di output: lineare Rec.709. ACEScg rimandato a Fase 3.
+- 17/09/2026 — EXR: **OpenEXR in una GDExtension nostra** (C++, BSD-3) invece di Blender in
+  background. Statico, senza dipendenze di sistema, cross-compilata per Windows dal Mac con mingw.
+  Il fallback TinyEXR resta nel codice (via `ClassDB.class_call_static`) per non rompere l'app se
+  il binario manca, ma non è più la strada normale.

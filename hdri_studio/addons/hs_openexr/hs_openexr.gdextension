@@ -1,0 +1,10 @@
+[configuration]
+
+entry_symbol = "hs_openexr_init"
+compatibility_minimum = "4.7"
+reloadable = false
+
+[libraries]
+
+macos = "res://addons/hs_openexr/bin/libhs_openexr.macos.universal.dylib"
+windows.x86_64 = "res://addons/hs_openexr/bin/hs_openexr.windows.x86_64.dll"

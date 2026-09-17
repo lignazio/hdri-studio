@@ -50,15 +50,33 @@ Il bake lavora in Rec.709 lineare (D65) e la preview lo mostra così. Nel pannel
 standard 0.6131/0.3395/0.0474…) e i metadati dell'EXR dichiarano i primari AP1 con bianco D60. Vale anche
 per gli EXR delle luci separate. Verificato: rosso Rec.709 puro → (0.613, 0.070, 0.021) in AP1.
 
-## Codec EXR
+## Codec EXR (GDExtension HsOpenEXR)
 
-Godot scrive PIZ (lossless). Nel pannello Export, *Compressione* offre anche ZIP, ZIPS, RLE, NONE
-(lossless) e PXR24, B44, B44A, DWAA, DWAB (lossy): l'export scrive PIZ e poi **Blender** riconverte in
-background (rilevato nel percorso standard, o *Blender…* per indicarlo). Il live link resta PIZ.
+Gli EXR sono scritti e letti da **OpenEXR 3.4** (BSD-3) compilato dentro una GDExtension in C++
+(`gdextension/`, binari in `addons/hs_openexr/bin/` per macOS universal e Windows x86_64). Nel pannello
+Export, *Compressione* offre PIZ, ZIP, ZIPS, RLE, NONE (lossless) e PXR24, B44, B44A, DWAA, DWAB
+(lossy): il file esce direttamente nel codec scelto, con i metadati, in una scrittura sola (4k×2k half:
+~0,7 s compreso il bake). Il live link usa sempre PIZ. In lettura, gli EXR del catalogo o di base con
+qualunque codec (DWAA/DWAB compresi, comuni nelle collezioni commerciali) si aprono senza conversioni.
+Blender non serve più per nulla di tutto questo.
 
-Nell'altra direzione, TinyEXR non decodifica DWAA/DWAB/B44/PXR24: gli EXR del catalogo o di base con
-quei codec vengono convertiti in PIZ da Blender una volta e messi in cache (`user://exr_piz_cache`).
-Senza Blender, quei file non si aprono.
+Senza l'estensione (piattaforma senza binario) resta TinyEXR di Godot: scrive solo PIZ, i metadati
+vengono iniettati dopo la scrittura (`HdriExport.inject_metadata`) e DWAA/DWAB/B44/PXR24 non si leggono.
+
+API dell'estensione, da GDScript tramite `ExrCodec` (`core/exr_codec.gd`):
+
+    HsOpenEXR.save(image, path, codec := "PIZ", half := true, attributes := {}, dwa_level := 45.0) -> Error
+    HsOpenEXR.load(path) -> Image            # RGBAF, qualunque codec; layer "beauty.R" e Y monocromatico gestiti
+    HsOpenEXR.info(path) -> Dictionary       # width, height, compression, channels, half, attributes (string)
+    HsOpenEXR.codecs() -> PackedStringArray, HsOpenEXR.version() -> String
+
+`attributes`: String → attributo string, PackedFloat32Array di 8 → `chromaticities`, float/int → float/int.
+Scrittura atomica (temporaneo + rinomina). Si scrivono solo R, G, B.
+
+Per ricompilarla: `tools/build_gdextension.sh [macos|windows]` (cmake ≥ 3.24; per Windows dal Mac
+`brew install mingw-w64`). Scarica OpenEXR 3.4.9 (+ Imath, libdeflate e OpenJPH vendored) e godot-cpp
+v10 al primo avvio, in `gdextension/build/` (ignorata). Test: `tools/exr_smoke.gd` (tutti i codec,
+half/float32, rilettura, metadati, compatibilità TinyEXR).
 
 ## Modalità fotometrica
 
@@ -108,15 +126,14 @@ Da tarare al primo uso (costanti in cima al `.pyp`): il verso di emissione della
 
 ## Radiance .hdr e metadati EXR (16/09)
 
-Nella dialog di export scegli l'estensione: `.exr` (half/float32, PIZ + codec via Blender) oppure `.hdr`
+Nella dialog di export scegli l'estensione: `.exr` (half/float32, codec a scelta) oppure `.hdr`
 (Radiance RGBE, codificato sul GPU, non compresso: lo leggono tutti; precisione della mantissa a 8 bit).
 Le luci separate seguono lo stesso formato.
 
 Ogni EXR esportato porta nell'header `chromaticities` (Rec.709/D65), un `comments` e l'attributo
 `hdristudio_rig` con il **rig completo in JSON**: *Apri rig…* accetta anche un EXR e ricostruisce il set
-da lì. Godot non scrive attributi, quindi vengono iniettati dopo la scrittura aggiornando la tabella
-degli offset; dopo una riconversione con Blender (che non li conserva) vengono reiniettati. Verificato
-con TinyEXR e con OpenEXR (Blender).
+da lì. Gli attributi li scrive OpenEXR insieme ai pixel (HsOpenEXR); nel fallback TinyEXR vengono
+iniettati dopo la scrittura aggiornando la tabella degli offset. Verificato con TinyEXR e con OpenEXR.
 
 Ogni luce ha un **🔒** (accanto a On/Solo): bloccata, non la spostano né il LightPaint né la mappa né
 le frecce.
@@ -241,13 +258,14 @@ l'integrale numerico e con un render Cycles.
 
 ## Struttura
 
-    core/      RigLight, LightRig, ColorTemp, UndoStack, AppSettings, ThumbnailCache, ExrConvert
+    core/      RigLight, LightRig, ColorTemp, UndoStack, AppSettings, ThumbnailCache, ExrCodec
+    addons/    hs_openexr — GDExtension OpenEXR (binari macOS/Windows; sorgenti in ../gdextension/)
     bake/      bake.glsl (compute shader), HdriBaker (RenderingDevice, texture RGBA32F)
     preview/   Preview3D (viewport, sfere, LightPaint), shader della sfera cromata e della mappa 2D
     ui/        ParamRow, LightListPanel, LightProperties, BackgroundPanel, ExportPanel, LiveLinkPanel, CatalogPanel, PresetPanel, MapView
-    export/    HdriExport (EXR half/float32, PNG di controllo)
+    export/    HdriExport (EXR half/float32 con codec e metadati, .hdr, PNG di controllo)
     scenes/    main.tscn / main.gd — app
     livelink/  LiveLink (server TCP, JSON-lines)
     plugins/   c4d/hdri_studio_link (plugin Cinema 4D), blender/hdri_studio_link (add-on Blender)
-    tools/     spike di Fase 0, verifica Blender, smoke test UI e link, test del drag & drop
+    tools/     spike di Fase 0, verifica Blender, smoke test UI, link ed EXR, test del drag & drop
     out/       output generati (ignorati da git)

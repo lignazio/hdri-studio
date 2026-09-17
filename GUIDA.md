@@ -23,8 +23,8 @@ la cartella `plugins/` (C4D e Blender) e questa guida.
 non .NET): clona il repository, apri Godot → *Import* → `hdri_studio/project.godot` → **Play (F5)**. Il
 primo avvio rigenera la cache in qualche secondo.
 
-**Blender** è opzionale: serve solo per i codec EXR diversi da PIZ e per leggere EXR compressi in
-DWAA/DWAB (comuni nelle collezioni commerciali di HDRI light).
+Gli EXR (tutti i codec, DWAA/DWAB compresi) li scrive e legge l'app da sola, con OpenEXR incluso:
+Blender serve solo se vuoi il live link con Blender.
 
 ## 2. La finestra
 
@@ -119,7 +119,6 @@ iniziano con `[hdri-studio]` sono d'oro.
 
 ## 9. Limiti noti
 
-- Gli EXR compressi DWAA/DWAB/B44/PXR24 si aprono solo se Blender è installato (conversione in cache).
 - Il preset di orientamento **Houdini** non è ancora misurato.
 - In C4D la Power delle luci separate va tarata una volta nella luce modello (*Surface brightness* on,
   furnace test); in Blender no.

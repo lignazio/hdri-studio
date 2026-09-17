@@ -56,10 +56,7 @@ var _link_hosts := {}
 var _model_label: Label
 ## Luci separate scritte dall'ultimo export (per il messaggio al plugin).
 var _last_separate: Array = []
-var _convert_pid := -1
-var _convert_files: Array = []
 var _last_export_path := ""
-var _last_export_acescg := false
 var _autosave_ms := 0
 var _live_change_ms := 0
 var _live_full_pending := false
@@ -120,10 +117,12 @@ func _selftest() -> void:
 	var back := Image.new()
 	var err2 := back.load_exr_from_buffer(FileAccess.get_file_as_bytes(path))
 	var c := back.get_pixel(back.get_width() / 2, back.get_height() / 2) if err2 == OK else Color.BLACK
-	print("[selftest] export %s · rilettura %s · %dx%d · pixel centro %s · %s" % [
+	var exr := ExrCodec.available()
+	print("[selftest] export %s · rilettura %s · %dx%d · pixel centro %s · OpenEXR %s · %s" % [
 		error_string(err), error_string(err2), back.get_width(), back.get_height(), c,
-		"OK" if err == OK and err2 == OK else "FALLITO"])
-	get_tree().quit(0 if err == OK and err2 == OK else 1)
+		ExrCodec.version() if exr else "NON CARICATA",
+		"OK" if err == OK and err2 == OK and exr else "FALLITO"])
+	get_tree().quit(0 if err == OK and err2 == OK and exr else 1)
 
 
 # --- layout ------------------------------------------------------------------------------------
@@ -256,7 +255,6 @@ func _build_layout() -> void:
 	presets.load_requested.connect(_load_preset)
 	presets.merge_requested.connect(_merge_preset)
 	presets.folder_pick_requested.connect(_pick_preset_folder)
-	export_panel.blender_pick_requested.connect(_pick_blender)
 	props.changed.connect(_on_light_changed)
 	props.light_renamed.connect(func() -> void: light_list.refresh(); map_view.refresh())
 	map_view.light_selected.connect(func(i: int) -> void: light_list.select(i); _select(i))
@@ -573,15 +571,6 @@ func _process(_delta: float) -> void:
 	if Time.get_ticks_msec() - _autosave_ms > AUTOSAVE_MS:
 		_autosave_ms = Time.get_ticks_msec()
 		_autosave()
-	if _convert_pid >= 0 and not OS.is_process_running(_convert_pid):
-		var code := OS.get_process_exit_code(_convert_pid)
-		_convert_pid = -1
-		if code == 0:
-			# Blender riscrive l'header: i metadati vanno reiniettati
-			var rig_json := JSON.stringify(rig.to_dict())
-			for f in _convert_files:
-				HdriExport.inject_metadata(f, rig_json, _last_export_acescg)
-		export_panel.set_status("Riconversione %s: %s (%d file)" % [export_panel.codec(), "fatta" if code == 0 else "fallita (codice %d)" % code, _convert_files.size()])
 	if _screenshot_frames >= 0:
 		_screenshot_frames -= 1
 		if _screenshot_frames == 0:
@@ -773,12 +762,6 @@ func _show_hover(tex: Texture2D, name: String, anchor: Rect2) -> void:
 	_hover.position = pos
 
 
-func _pick_blender() -> void:
-	_dialog(FileDialog.FILE_MODE_OPEN_FILE, [], "Eseguibile di Blender", func(path: String) -> void:
-		AppSettings.set_value("blender_path", path)
-		export_panel.refresh_blender())
-
-
 func _pick_preset_folder() -> void:
 	_dialog(FileDialog.FILE_MODE_OPEN_DIR, [], "Cartella dei preset", func(path: String) -> void:
 		AppSettings.set_value("preset_folder", path)
@@ -887,7 +870,8 @@ func _save_sidecar() -> void:
 
 
 ## Bake a piena risoluzione con supersampling, preset di orientamento, scrittura EXR.
-## opts: "resolution" (Vector2i), "half" (bool), "target" (String), "shift" (float), "quiet" (bool).
+## opts: "resolution" (Vector2i), "half" (bool), "target" (String), "shift" (float), "codec" (String),
+## "acescg" (bool), "quiet" (bool).
 func export_to(path: String, opts := {}) -> Error:
 	var ext := path.get_extension().to_lower()
 	if ext != "exr" and ext != "hdr":
@@ -905,12 +889,12 @@ func export_to(path: String, opts := {}) -> Error:
 	baker.set_resolution(res.x, res.y)
 	baker.supersample = 2
 	var acescg: bool = opts.get("acescg", export_panel.acescg())
-	_last_export_acescg = acescg
+	var codec: String = opts.get("codec", export_panel.codec())
 	baker.bake(rig, false, false, acescg) # le luci separate non entrano nell'HDRI
 	var img := baker.get_image()
 	img = HdriExport.apply_orientation(img, target, shift)
 	var rig_json := JSON.stringify(rig.to_dict())
-	var err := _write_image(img, path, half, as_hdr, rig_json, acescg)
+	var err := _write_image(img, path, half, as_hdr, codec, rig_json, acescg)
 	# luci separate: un file planare ciascuna, accanto all'HDRI
 	_last_separate.clear()
 	for l in rig.separate_lights():
@@ -918,7 +902,7 @@ func export_to(path: String, opts := {}) -> Error:
 		var limg := baker.bake_planar(l, 1024, acescg)
 		if link_panel.separate_flip_tex():
 			limg.flip_x()
-		var lerr := _write_image(limg, lp, half, as_hdr, rig_json, acescg)
+		var lerr := _write_image(limg, lp, half, as_hdr, codec, rig_json, acescg)
 		if lerr == OK:
 			_last_separate.append({"light": l, "path": ProjectSettings.globalize_path(lp)})
 		else:
@@ -936,46 +920,19 @@ func export_to(path: String, opts := {}) -> Error:
 		_last_export_path = ProjectSettings.globalize_path(path)
 		AppSettings.set_value("export_dir", _last_export_path.get_base_dir())
 		export_panel.set_status("Esportato %s (%dx%d, %s, %s, %s) in %.1f s" % [
-			path.get_file(), res.x, res.y, "RGBE" if as_hdr else ("half" if half else "float32"),
+			path.get_file(), res.x, res.y, "RGBE" if as_hdr else ("%s %s" % ["half" if half else "float32", codec]),
 			"ACEScg" if acescg else "Rec.709", target, (Time.get_ticks_msec() - t0) / 1000.0])
-		if not as_hdr:
-			_start_conversion(path, half)
 	else:
 		export_panel.set_status("Errore export: " + error_string(err))
 	_update_status()
 	return err
 
 
-## Scrive EXR (con i metadati: chromaticities Rec.709 e rig JSON) oppure Radiance .hdr.
-func _write_image(img: Image, path: String, half: bool, as_hdr: bool, rig_json: String, acescg := false) -> Error:
+## Scrive EXR (codec e metadati: chromaticities e rig JSON) oppure Radiance .hdr.
+func _write_image(img: Image, path: String, half: bool, as_hdr: bool, codec: String, rig_json: String, acescg := false) -> Error:
 	if as_hdr:
 		return HdriExport.save_hdr(path, img.get_width(), img.get_height(), baker.rgbe_bytes(img))
-	var err := HdriExport.save_exr(img, path, half)
-	if err == OK:
-		var merr := HdriExport.inject_metadata(path, rig_json, acescg)
-		if merr != OK:
-			push_warning("Metadati EXR non scritti in %s (%s)" % [path.get_file(), error_string(merr)])
-	return err
-
-
-## Riconversione con un altro codec via Blender (solo export manuale, in background).
-func _start_conversion(path: String, half: bool) -> void:
-	var codec := export_panel.codec()
-	if codec == "PIZ":
-		return
-	var pairs: Array = []
-	var files: Array = [ProjectSettings.globalize_path(path)]
-	for e in _last_separate:
-		files.append(e["path"])
-	for f in files:
-		pairs.append(f)
-		pairs.append(f)
-	_convert_pid = ExrConvert.start(pairs, codec, half)
-	_convert_files = files
-	if _convert_pid < 0:
-		export_panel.set_status("Riconversione %s non avviata: Blender non trovato (pannello Export → Blender…)" % codec)
-	else:
-		export_panel.set_status("Esportato in PIZ, riconversione %s in corso con Blender…" % codec)
+	return HdriExport.save_exr(img, path, half, codec, rig_json, acescg)
 
 
 # --- live link ----------------------------------------------------------------------------------
@@ -1020,7 +977,7 @@ func _live_export() -> void:
 	if fast:
 		res = Vector2i(maxi(res.x / 2, 512), maxi(res.y / 2, 256))
 	var err := export_to(rig.live_export_path, {
-		"resolution": res, "half": true,
+		"resolution": res, "half": true, "codec": "PIZ",
 		"target": export_panel.target(), "shift": export_panel.extra_shift(), "quiet": true})
 	if fast:
 		_live_dirty = true

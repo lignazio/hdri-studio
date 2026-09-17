@@ -266,19 +266,22 @@ func _create_texture_array() -> void:
 	_tex_array = rd.texture_create(fmt, RDTextureView.new(), layers)
 
 
-## Carica un'immagine lineare (EXR o .hdr) dal disco; null se non leggibile. Gli EXR con codec che
-## TinyEXR non decodifica (DWAA/DWAB, B44, PXR24) passano da una conversione in PIZ via Blender.
+## Carica un'immagine lineare (EXR o .hdr) dal disco; null se non leggibile. Gli EXR passano da
+## OpenEXR (HsOpenEXR: qualunque codec); senza l'estensione resta TinyEXR, che non decodifica
+## DWAA/DWAB, B44, PXR24.
 static func load_linear_image(path: String) -> Image:
 	var img := Image.new()
-	var err: Error
+	var err: Error = OK
 	if path.get_extension().to_lower() == "exr":
-		var src := path
-		if not ExrConvert.tinyexr_can_read(path):
-			src = ExrConvert.to_piz_cached(path)
-			if src == "":
-				push_warning("EXR con codec non leggibile e Blender non disponibile per convertirlo: " + path)
+		if ExrCodec.available():
+			img = ExrCodec.load(path)
+			if img == null:
 				return null
-		err = img.load_exr_from_buffer(FileAccess.get_file_as_bytes(src))
+		elif not ExrCodec.tinyexr_can_read(path):
+			push_warning("EXR con codec che TinyEXR non legge e libreria OpenEXR non caricata: " + path)
+			return null
+		else:
+			err = img.load_exr_from_buffer(FileAccess.get_file_as_bytes(path))
 	else:
 		err = img.load(path)
 	if err != OK or img.is_empty():

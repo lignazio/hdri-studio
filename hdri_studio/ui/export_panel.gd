@@ -17,9 +17,6 @@ var _shift: ParamRow
 var _status: Label
 var _codec: OptionButton
 var _colorspace: OptionButton
-var _blender_label: Label
-
-signal blender_pick_requested()
 
 
 func _init() -> void:
@@ -41,24 +38,13 @@ func _init() -> void:
 	_colorspace = _option("Spazio colore", HdriExport.COLORSPACES)
 	_colorspace.tooltip_text = "Primari dell'EXR esportato. La preview resta Rec.709. Con ACEScg i valori sono convertiti\n(Rec.709 → AP1 con adattamento Bradford) e i metadati dichiarano i primari AP1 con bianco D60."
 	_codec = _option("Compressione", [])
-	for c in ExrConvert.CODECS:
-		_codec.add_item(c if c == "PIZ" else c + "  (via Blender)")
-	_codec.tooltip_text = "PIZ è nativo. Gli altri codec riconvertono il file con Blender in background dopo l'export.\nLossless: ZIP, ZIPS, RLE, NONE. Lossy: PXR24, B44, B44A, DWAA, DWAB."
-	var brow := HBoxContainer.new()
-	add_child(brow)
-	_blender_label = Label.new()
-	_blender_label.clip_text = true
-	_blender_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	_blender_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_blender_label.modulate = Color(1, 1, 1, 0.6)
-	_blender_label.add_theme_font_size_override("font_size", 12)
-	brow.add_child(_blender_label)
-	var bb := Button.new()
-	bb.text = "Blender…"
-	bb.tooltip_text = "Eseguibile di Blender per la riconversione (rilevato automaticamente se installato nel percorso standard)"
-	bb.pressed.connect(func() -> void: blender_pick_requested.emit())
-	brow.add_child(bb)
-	refresh_blender()
+	var native := ExrCodec.available()
+	for c in ExrCodec.CODECS:
+		_codec.add_item(c + ("  (lossy)" if c in ExrCodec.LOSSY else ""))
+		if not native and c != "PIZ":
+			_codec.set_item_disabled(_codec.item_count - 1, true)
+	_codec.tooltip_text = ("Scritto da OpenEXR %s. Lossless: PIZ, ZIP, ZIPS, RLE, NONE. Lossy: PXR24 (float → 24 bit), B44, B44A, DWAA, DWAB.\nIl live link usa sempre PIZ." % ExrCodec.version()) if native \
+		else "Libreria OpenEXR non caricata: Godot scrive solo PIZ."
 
 	var row := HBoxContainer.new()
 	add_child(row)
@@ -131,14 +117,8 @@ func set_status(text: String) -> void:
 
 
 func codec() -> String:
-	return ExrConvert.CODECS[_codec.selected]
+	return ExrCodec.CODECS[_codec.selected]
 
 
 func acescg() -> bool:
 	return _colorspace.selected == 1
-
-
-func refresh_blender() -> void:
-	var b := ExrConvert.find_blender()
-	_blender_label.text = ("Blender: " + b.get_file()) if b != "" else "Blender non trovato: solo PIZ"
-	_blender_label.tooltip_text = b

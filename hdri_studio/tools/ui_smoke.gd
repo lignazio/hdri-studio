@@ -327,16 +327,16 @@ func _run(main: Node) -> void:
 	main.catalog._apply_filter()
 	_check(FileAccess.file_exists(CatalogPanel.META_PATH), "metadati del catalogo salvati")
 
-	# riconversione EXR via Blender (ZIP lossless → pixel identici)
-	if ExrConvert.find_blender() != "":
-		var src := ProjectSettings.globalize_path("res://out/smoke_export.exr")
+	# codec EXR con la GDExtension HsOpenEXR: ZIP lossless → pixel identici al PIZ; DWAA (che TinyEXR
+	# non legge) → riletto da OpenEXR con valori vicini
+	_check(ExrCodec.available(), "HsOpenEXR caricata (OpenEXR %s)" % ExrCodec.version())
+	if ExrCodec.available():
+		var src := ProjectSettings.globalize_path("res://out/smoke_export_piz.exr")
 		var dst := ProjectSettings.globalize_path("res://out/smoke_export_zip.exr")
-		var pid := ExrConvert.start([src, dst], "ZIP", true)
-		_check(pid >= 0, "Blender avviato per la riconversione")
-		var waited2 := 0.0
-		while OS.is_process_running(pid) and waited2 < 60.0:
-			await create_timer(0.5).timeout
-			waited2 += 0.5
+		_check(main.export_to(src, {"codec": "PIZ", "quiet": true}) == OK, "export PIZ di riferimento")
+		var t_zip := Time.get_ticks_msec()
+		_check(main.export_to(dst, {"codec": "ZIP", "quiet": true}) == OK, "export ZIP (%d ms)" % (Time.get_ticks_msec() - t_zip))
+		_check(ExrCodec.compression_of(dst) == 3, "header: compression = ZIP")
 		var a := Image.new()
 		a.load_exr_from_buffer(FileAccess.get_file_as_bytes(src))
 		var b := Image.new()
@@ -348,25 +348,22 @@ func _run(main: Node) -> void:
 				var y := (i * 53) % a.get_height()
 				if not a.get_pixel(x, y).is_equal_approx(b.get_pixel(x, y)):
 					same = false
-		_check(same, "ZIP via Blender: pixel identici (%.1f s)" % waited2)
-		# DWAA: Godot non lo legge → fallback di conversione in cache
+		_check(same, "ZIP: pixel identici al PIZ, leggibile anche da TinyEXR")
+		_check(HdriExport.read_string_attribute(dst, HdriExport.RIG_ATTR) != "", "ZIP: rig nei metadati")
 		var dwaa := ProjectSettings.globalize_path("res://out/smoke_export_dwaa.exr")
-		var pid2 := ExrConvert.start([src, dwaa], "DWAA", true)
-		waited2 = 0.0
-		while OS.is_process_running(pid2) and waited2 < 60.0:
-			await create_timer(0.5).timeout
-			waited2 += 0.5
+		var t_dwa := Time.get_ticks_msec()
+		_check(main.export_to(dwaa, {"codec": "DWAA", "quiet": true}) == OK, "export DWAA (%d ms)" % (Time.get_ticks_msec() - t_dwa))
 		var direct := Image.new()
 		var derr := direct.load_exr_from_buffer(FileAccess.get_file_as_bytes(dwaa))
-		_check(derr != OK or direct.is_empty(), "DWAA non leggibile direttamente da TinyEXR (come previsto)")
+		_check(derr != OK or direct.is_empty(), "DWAA non leggibile da TinyEXR (come previsto)")
 		var via := HdriBaker.load_linear_image(dwaa)
-		_check(via != null and via.get_size() == a.get_size(), "DWAA caricato tramite conversione PIZ in cache")
+		_check(via != null and via.get_size() == a.get_size(), "DWAA caricato da OpenEXR")
 		if via != null:
 			var pa := a.get_pixel(a.get_width() / 4, a.get_height() / 2)
 			var pv := via.get_pixel(a.get_width() / 4, a.get_height() / 2)
 			_check(absf(pa.r - pv.r) < 0.05 * maxf(pa.r, 0.1) + 0.01, "DWAA: valori vicini (%.3f vs %.3f)" % [pa.r, pv.r])
-	else:
-		print("[smoke] (Blender non trovato: riconversione non testata)")
+		var sizes := [FileAccess.get_file_as_bytes(src).size(), FileAccess.get_file_as_bytes(dst).size(), FileAccess.get_file_as_bytes(dwaa).size()]
+		print("[smoke] dimensioni PIZ %d KB · ZIP %d KB · DWAA %d KB" % [sizes[0] / 1024, sizes[1] / 1024, sizes[2] / 1024])
 
 	# geometria: contains / outline / pick per riflesso
 	var gl := RigLight.new()
