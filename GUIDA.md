@@ -19,6 +19,13 @@ la cartella `plugins/` (C4D e Blender) e questa guida.
   Se vedi tutto nero, lancia `HDRI Studio.console.exe` (accanto all'exe) e riporta le righe che
   iniziano con `Baker:` o `ERROR`.
 
+All'avvio la riga di stato del pannello Export dice `OpenEXR 3.4.9 caricata`: se invece dice
+"non caricata", segnalalo. Auto-test da terminale (bake, export, rilettura, libreria EXR):
+macOS `"HDRI Studio.app/Contents/MacOS/HDRI Studio" -- --selftest`; Windows, da PowerShell nella
+cartella dell'app, `& ".\HDRI Studio.console.exe" --% -- --selftest` (da cmd: `"HDRI Studio.console.exe" -- --selftest`).
+Il risultato è anche in `%APPDATA%\Godot\app_userdata\HDRI Studio\selftest.log`
+(macOS: `~/Library/Application Support/Godot/app_userdata/HDRI Studio/selftest.log`).
+
 **Strada per chi vuole il codice.** Serve Godot 4.7.1 (godotengine.org → Download → versione *Standard*,
 non .NET): clona il repository, apri Godot → *Import* → `hdri_studio/project.godot` → **Play (F5)**. Il
 primo avvio rigenera la cache in qualche secondo.

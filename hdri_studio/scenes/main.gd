@@ -118,10 +118,16 @@ func _selftest() -> void:
 	var err2 := back.load_exr_from_buffer(FileAccess.get_file_as_bytes(path))
 	var c := back.get_pixel(back.get_width() / 2, back.get_height() / 2) if err2 == OK else Color.BLACK
 	var exr := ExrCodec.available()
-	print("[selftest] export %s · rilettura %s · %dx%d · pixel centro %s · OpenEXR %s · %s" % [
+	var line := "[selftest] export %s · rilettura %s · %dx%d · pixel centro %s · OpenEXR %s · %s" % [
 		error_string(err), error_string(err2), back.get_width(), back.get_height(), c,
 		ExrCodec.version() if exr else "NON CARICATA",
-		"OK" if err == OK and err2 == OK and exr else "FALLITO"])
+		"OK" if err == OK and err2 == OK and exr else "FALLITO"]
+	print(line)
+	# anche su file: su Windows l'exe senza console wrapper non stampa nulla nel terminale
+	var log := FileAccess.open("user://selftest.log", FileAccess.WRITE)
+	if log != null:
+		log.store_line(line)
+		log.close()
 	get_tree().quit(0 if err == OK and err2 == OK and exr else 1)
 
 
@@ -282,6 +288,9 @@ func _build_layout() -> void:
 	link_panel.separate_options_changed.connect(func() -> void: _live_export())
 	_update_status()
 	_update_link_status()
+	# visibile all'avvio, così un tester vede subito se la libreria EXR è caricata (Windows compreso)
+	export_panel.set_status("OpenEXR %s caricata: tutti i codec EXR" % ExrCodec.version() if ExrCodec.available()
+		else "Libreria OpenEXR non caricata: solo PIZ (TinyEXR)")
 
 
 func _build_model_panel(parent: Container) -> void:
