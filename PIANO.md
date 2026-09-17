@@ -11,7 +11,7 @@ area: progetto
 > GDExtension HsOpenEXR (C++, OpenEXR 3.4.9 statico, macOS universal + Windows x86_64 cross-compilata
 > dal Mac): tutti i codec in scrittura e lettura, metadati scritti insieme ai pixel, niente più Blender
 > per gli EXR. Restano Houdini (preset e plugin) e la calibrazione della Power in Octane.
-> Da verificare sul PC: la DLL Windows (compilata con mingw, non ancora eseguita).
+> Verificata sul PC il 17/09: la DLL Windows si carica e l'EXR esce corretto. Release 0.9.1.
 
 > [!success] Stato precedente: v2.0 — 16 settembre 2026 — export ACEScg: chiusi tutti i sospesi del piano tranne Houdini
 > Icone di stato nella lista, export ACEScg. Dal piano iniziale resta solo Houdini (preset di
@@ -547,8 +547,7 @@ Non esisteva una GDExtension OpenEXR pronta: costruita in casa, ~350 righe di C+
    caricata (`release.sh` fallisce altrimenti). Export macOS: dylib in `Contents/Frameworks`, firmata
    ad hoc dall'export; Windows: DLL accanto all'exe. Tempi a 4k×2k half, bake compreso: ZIP 0,65 s,
    DWAA 0,7 s. Dimensioni sul rig di prova: PIZ 40 KB, ZIP 23 KB, DWAA 14 KB.
-5. [ ] **Verifica sul PC**: avviare la build Windows, leggere `[selftest] … OpenEXR 3.4.9`, esportare
-   in DWAA e aprirlo in C4D/Octane. HTJ2K (nuovo in OpenEXR 3.4) è compilato ma non esposto nel menu:
+5. [x] **Verifica sul PC** (17/09): la DLL si carica, l'EXR viene salvato correttamente. HTJ2K (nuovo in OpenEXR 3.4) è compilato ma non esposto nel menu:
    i software 3D con OpenEXR < 3.4 non lo leggono.
 
 ### 5.4 Fase 4 — test in C4D
