@@ -35,6 +35,11 @@ Blender serve solo se vuoi il live link con Blender.
 
 ## 2. La finestra
 
+Al primo avvio si apre grande, quasi tutto lo schermo. Da lì in poi ricorda com'era quando l'hai
+chiusa — dimensione, posizione e se era massimizzata — e si riapre così. Se cambi monitor e la
+posizione salvata non esiste più, torna al comportamento del primo avvio invece di aprirsi fuori
+schermo.
+
 Tre colonne, ridimensionabili trascinando i bordi.
 
 | Sinistra | Centro | Destra |

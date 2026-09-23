@@ -67,6 +67,12 @@ const LIVE_FAST_WINDOW_MS := 1500
 
 const VERSION_FALLBACK := "dev"
 
+## Quanto della parte utile dello schermo prende la finestra la prima volta che l'app si apre: i
+## 1600×900 del progetto sono una finestrella su un monitor grande.
+const WINDOW_FILL := 0.92
+## Sotto questa dimensione una geometria salvata si considera rotta e si riparte dal default.
+const WINDOW_MIN := Vector2i(960, 600)
+
 
 static func app_version() -> String:
 	var v: String = ProjectSettings.get_setting("application/config/version", "")
@@ -95,11 +101,14 @@ func _ready() -> void:
 	_bind_rig()
 	undo.reset(rig.to_dict())
 	_select(0)
+	# dopo che l'interfaccia esiste: ridimensionare la finestra fa girare un giro di ciclo di eventi,
+	# e _process troverebbe il baker non ancora creato
+	_setup_window()
 
 	# riapre l'ultimo rig salvato/aperto
 	var args := OS.get_cmdline_user_args()
 	var last: String = AppSettings.get_value("last_rig", "")
-	if last != "" and FileAccess.file_exists(last) and not ("--fresh" in args or "--screenshot" in args or "--selftest" in args or "--export" in args):
+	if last != "" and FileAccess.file_exists(last) and not _unattended():
 		load_rig_from(last)
 	_autosave_ms = Time.get_ticks_msec()
 	if "--screenshot" in OS.get_cmdline_user_args():
@@ -1224,8 +1233,68 @@ func load_rig_from(path: String) -> bool:
 
 
 func _exit_tree() -> void:
+	_save_window()
 	tex_rd.texture_rd_rid = RID()
 	baker.free_resources()
+
+
+# --- finestra -----------------------------------------------------------------------------------
+
+## Dimensione e posizione della finestra: la prima volta quasi tutto lo schermo, dopo com'era stata
+## lasciata. Nei modi non interattivi (test, screenshot, CLI) resta quella del progetto, così le
+## verifiche misurano sempre la stessa finestra su qualunque macchina.
+func _setup_window() -> void:
+	if _unattended():
+		return
+	var w := get_window()
+	var saved: Variant = AppSettings.get_value("window", null)
+	if saved is Dictionary and _restore_window(w, saved):
+		return
+	var usable := DisplayServer.screen_get_usable_rect(DisplayServer.window_get_current_screen())
+	var size := Vector2i(Vector2(usable.size) * WINDOW_FILL).min(usable.size)
+	w.size = size
+	w.position = usable.position + (usable.size - size) / 2
+
+
+## Rimette la finestra dov'era, se quel posto esiste ancora: un monitor scollegato o una risoluzione
+## cambiata la lascerebbero fuori dallo schermo, irraggiungibile. false = geometria da buttare.
+func _restore_window(w: Window, d: Dictionary) -> bool:
+	var size := Vector2i(int(d.get("w", 0)), int(d.get("h", 0)))
+	var pos := Vector2i(int(d.get("x", 0)), int(d.get("y", 0)))
+	if size.x < WINDOW_MIN.x or size.y < WINDOW_MIN.y:
+		return false
+	var center := pos + size / 2
+	var on_screen := false
+	for i in DisplayServer.get_screen_count():
+		if DisplayServer.screen_get_usable_rect(i).has_point(center):
+			on_screen = true
+			break
+	if not on_screen:
+		return false
+	w.size = size
+	w.position = pos
+	if bool(d.get("maximized", false)):
+		w.mode = Window.MODE_MAXIMIZED
+	return true
+
+
+func _save_window() -> void:
+	if _unattended():
+		return
+	var w := get_window()
+	if w.mode == Window.MODE_FULLSCREEN or w.mode == Window.MODE_EXCLUSIVE_FULLSCREEN:
+		return # a schermo intero non c'è una geometria sensata da ricordare
+	var maximized := w.mode == Window.MODE_MAXIMIZED
+	# da massimizzata Godot dà comunque la dimensione corrente: va bene, si riapre massimizzata
+	AppSettings.set_value("window", {
+		"x": w.position.x, "y": w.position.y, "w": w.size.x, "h": w.size.y, "maximized": maximized,
+	})
+
+
+## true quando l'app gira per un test o per la riga di comando, non per una persona.
+func _unattended() -> bool:
+	var args := OS.get_cmdline_user_args()
+	return "--fresh" in args or "--screenshot" in args or "--selftest" in args or "--export" in args
 
 
 # --- rig di default -----------------------------------------------------------------------------

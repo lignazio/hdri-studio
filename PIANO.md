@@ -628,6 +628,30 @@ ignorava il rig. Ora i due formati si comportano allo stesso modo.
    prova con un lettore di terze parti compilato resta da fare (stb_image, che è quello che usano in
    tanti, tronca le righe lunghe senza rompersi — letto nel sorgente, non provato).
 
+### Finestra grande all'avvio — fatto il 23/09/2026
+
+I 1600×900 del progetto sono una finestrella su un monitor grande (su questo Mac lo schermo è
+3456×2234: meno della metà in larghezza).
+
+1. [x] **Default**: `_setup_window()` apre al 92% dell'area utile dello schermo, centrata. L'area
+   utile, non lo schermo intero, così la barra dei menu e la dock non ci finiscono sotto.
+2. [x] **Memoria**: `_save_window()` in `_exit_tree` salva geometria e stato massimizzato in
+   `settings.json`; al riavvio si ripristinano. Senza, chi rimpicciolisce la finestra se la ritrova
+   grande a ogni avvio. Una geometria si scarta se il centro non cade in nessuno schermo (monitor
+   scollegato) o se è più piccola di 960×600: in quei casi si riparte dal default.
+3. [x] **Test e CLI** (`_unattended()`: `--fresh`, `--screenshot`, `--selftest`, `--export`) restano
+   ai 1600×900 del progetto e non scrivono la chiave `window`, così ui_smoke misura la stessa finestra
+   sul Mac e sul PC e lo screenshot della guida non cambia formato.
+4. [x] **Provato** sul Mac con `--quit-after`: primo avvio 3178×1858 a (138, 158) su uno schermo
+   3456×2234 con area utile 3456×2020; riavvio che ripristina 1200×800; posizione fuori schermo
+   (x 9000) e dimensione assurda (200×150) che ricadono sul default; massimizzata che si riapre
+   massimizzata. ui_smoke, i18n_smoke e sky_smoke passano e la chiave `window` resta intatta.
+
+Da sapere per dopo: su Retina Godot lavora in pixel fisici e non scala l'interfaccia (`scale 2.0`
+sullo schermo, `content_scale_factor` 1.0), quindi testo e pannelli restano della stessa dimensione
+fisica di prima e la finestra più grande dà solo più spazio a preview e mappa. Se un giorno si vuole
+l'interfaccia più grande sul Mac, la leva è `content_scale_factor`, non la dimensione della finestra.
+
 ### 5.4 Fase 4 — test in C4D
 
 > [!todo] Da fare sul PC
@@ -782,4 +806,7 @@ luci Texture e catalogo, luci separate, app standalone.
   (`#HDRISTUDIO_RIG=…`) e non come variabile: i lettori ignorano i commenti in silenzio, mentre una
   variabile che non conoscono la segnalano (Godot stampa un warning con tutto il JSON a ogni
   apertura dell'immagine). Il formato resta leggibile a occhio, senza base64.
+- 23/09/2026 — La finestra si apre al **92% dello schermo** al primo avvio e poi **ricorda**
+  com'è stata lasciata, invece di essere massimizzata a forza ogni volta: massimizzare è una scelta
+  dell'utente, non del programma, e una finestra rimpicciolita apposta deve restare rimpicciolita.
 

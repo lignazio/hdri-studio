@@ -16,6 +16,9 @@ adesso.
 - **Live link** (TCP 127.0.0.1:47820, JSON-lines): plugin per **Cinema 4D + Octane**, **Blender** e
   **Houdini**. Ricarica dell'HDRI a ogni modifica, luci separate ricreate come luci vere nel software
   3D, LightPaint dal viewport (C4D e Blender).
+- **Finestra**: al primo avvio quasi tutto lo schermo (92% dell'area utile, centrata), poi ricorda
+  dimensione, posizione e stato massimizzato in `settings.json`. Test e riga di comando restano ai
+  1600×900 del progetto, così le verifiche misurano sempre la stessa finestra.
 - **Interfaccia bilingue**: inglese di base, italiano automatico se il sistema è in italiano,
   selettore *Language* in fondo alla colonna destra.
 - **Icona e boot splash** generati da script (`tools/make_icon.py`, `tools/make_splash.py`).

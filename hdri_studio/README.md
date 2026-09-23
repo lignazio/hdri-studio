@@ -124,6 +124,17 @@ luci seguono; togliendo il flag la luce sparisce dalla scena.
 Da tarare al primo uso (costanti in cima al `.pyp`): il verso di emissione della luce modello
 (`LIGHT_EMITS_ALONG_Z`) e, con il furnace test, il rapporto fra la Power di Octane e la radianza.
 
+## Finestra (23/09)
+
+`Main._setup_window()` apre l'app al 92% dell'area utile dello schermo, centrata, e `_save_window()`
+ricorda geometria e stato massimizzato in `settings.json` (chiave `window`). Una geometria salvata si
+ripristina solo se il centro della finestra cade dentro uno schermo esistente e la dimensione è almeno
+960×600: monitor scollegato o risoluzione cambiata → si riparte dal default. Nei modi non interattivi
+(`--fresh`, `--screenshot`, `--selftest`, `--export`, cioè `_unattended()`) non si tocca niente e
+restano i 1600×900 del progetto, perché i test misurino sempre la stessa finestra. La chiamata sta in
+fondo a `_ready()`: ridimensionare la finestra fa girare un giro di ciclo di eventi, e `_process`
+troverebbe il baker non ancora creato.
+
 ## Radiance .hdr e metadati EXR (16/09, il rig nel .hdr il 23/09)
 
 Nella dialog di export scegli l'estensione: `.exr` (half/float32, codec a scelta) oppure `.hdr`
