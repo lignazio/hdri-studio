@@ -20,11 +20,11 @@ var _syncing := false
 static var clipboard: Array = []
 
 const PRESETS := {
-	"Bianco → nero": [[0.0, 1.0, 1.0, 1.0, 1.0], [1.0, 0.0, 0.0, 0.0, 1.0]],
-	"Nero → bianco": [[0.0, 0.0, 0.0, 0.0, 1.0], [1.0, 1.0, 1.0, 1.0, 1.0]],
-	"Caldo → freddo": [[0.0, 1.0, 0.75, 0.45, 1.0], [1.0, 0.45, 0.6, 1.0, 1.0]],
-	"Centro luminoso": [[0.0, 1.0, 1.0, 1.0, 4.0], [0.35, 1.0, 1.0, 1.0, 1.0], [1.0, 0.0, 0.0, 0.0, 1.0]],
-	"Piatto": [[0.0, 1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0, 1.0]],
+	"White → black": [[0.0, 1.0, 1.0, 1.0, 1.0], [1.0, 0.0, 0.0, 0.0, 1.0]],
+	"Black → white": [[0.0, 0.0, 0.0, 0.0, 1.0], [1.0, 1.0, 1.0, 1.0, 1.0]],
+	"Warm → cool": [[0.0, 1.0, 0.75, 0.45, 1.0], [1.0, 0.45, 0.6, 1.0, 1.0]],
+	"Bright center": [[0.0, 1.0, 1.0, 1.0, 4.0], [0.35, 1.0, 1.0, 1.0, 1.0], [1.0, 0.0, 0.0, 0.0, 1.0]],
+	"Flat": [[0.0, 1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0, 1.0]],
 }
 
 
@@ -40,7 +40,7 @@ func _init() -> void:
 	var row := HBoxContainer.new()
 	add_child(row)
 	var l := Label.new()
-	l.text = "Tacca"
+	l.text = "Stop"
 	l.custom_minimum_size.x = 96
 	row.add_child(l)
 	_color = ColorPickerButton.new()
@@ -50,16 +50,16 @@ func _init() -> void:
 	_color.popup_closed.connect(func() -> void: changed.emit(true))
 	row.add_child(_color)
 	var inv := Button.new()
-	inv.text = "Inverti"
-	inv.tooltip_text = "Specchia le tacche (0 ↔ 1)"
+	inv.text = "Invert"
+	inv.tooltip_text = "Mirror the stops (0 ↔ 1)"
 	inv.pressed.connect(_invert)
 	row.add_child(inv)
-	_pos_row = ParamRow.new("Posizione", 0.0, 1.0, 0.001)
+	_pos_row = ParamRow.new("Position", 0.0, 1.0, 0.001)
 	_pos_row.value_changed.connect(func(v: float) -> void: _set_pos(v, false))
 	_pos_row.committed.connect(func() -> void: _sort_keep_selection(); changed.emit(true))
 	add_child(_pos_row)
-	_value_row = ParamRow.new("Valore", 0.0, 16.0, 0.01)
-	_value_row.tooltip_text = "Moltiplicatore della tacca: oltre 1 la zona è più luminosa del resto della luce"
+	_value_row = ParamRow.new("Value", 0.0, 16.0, 0.01)
+	_value_row.tooltip_text = "Stop multiplier: above 1 the area is brighter than the rest of the light"
 	_value_row.value_changed.connect(func(v: float) -> void: _set_value(v, false))
 	_value_row.committed.connect(func() -> void: changed.emit(true))
 	add_child(_value_row)
@@ -69,7 +69,7 @@ func _init() -> void:
 	pl.custom_minimum_size.x = 96
 	prow.add_child(pl)
 	var presets := MenuButton.new()
-	presets.text = "Preset"
+	presets.text = "Presets"
 	presets.flat = false
 	for pname in PRESETS:
 		presets.get_popup().add_item(pname)
@@ -81,11 +81,11 @@ func _init() -> void:
 		changed.emit(true))
 	prow.add_child(presets)
 	var copy := Button.new()
-	copy.text = "Copia"
+	copy.text = "Copy"
 	copy.pressed.connect(func() -> void: clipboard = light.gradient_stops.duplicate(true))
 	prow.add_child(copy)
 	var paste := Button.new()
-	paste.text = "Incolla"
+	paste.text = "Paste"
 	paste.pressed.connect(func() -> void:
 		if not clipboard.is_empty():
 			light.gradient_stops = clipboard.duplicate(true)
@@ -95,7 +95,7 @@ func _init() -> void:
 			changed.emit(true))
 	prow.add_child(paste)
 	var hint := Label.new()
-	hint.text = "click sulla barra: nuova tacca · trascina: sposta · tasto destro / Canc: elimina"
+	hint.text = "click the bar: new stop · drag: move · right click / Del: delete"
 	hint.add_theme_font_size_override("font_size", 11)
 	hint.modulate = Color(1, 1, 1, 0.5)
 	add_child(hint)

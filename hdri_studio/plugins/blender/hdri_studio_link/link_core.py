@@ -151,11 +151,11 @@ def same_file(a, b):
 if __name__ == "__main__":
     c = LinkClient(hello={"type": "hello", "host": "python-test", "version": "0"})
     t_end = time.time() + 15
-    print("[link_core] mi collego a %s:%d per 15 s…" % (c.host, c.port))
+    print("[link_core] connecting to %s:%d for 15 s…" % (c.host, c.port))
     got = 0
     while time.time() < t_end:
         for m in c.poll():
-            print("[link_core] ricevuto:", m)
+            print("[link_core] received:", m)
             if m.get("type") == "hdri_updated":
                 got += 1
                 if got == 2:

@@ -17,7 +17,7 @@ const SPHERE_POS := [Vector3(-2.6, 0, 0), Vector3(0, 0, 0), Vector3(2.6, 0, 0)]
 const MODEL_R := 1.3
 
 enum ModelMaterial { ORIGINAL, CHROME, GLOSSY, DIFFUSE, GOLD, WHITE_GOLD, SILVER, PLATINUM, COPPER, BRUSHED, GLASS }
-const MATERIAL_LABELS := ["Originale", "Cromato", "Glossy", "Diffuso", "Oro giallo", "Oro bianco", "Argento", "Platino", "Rame", "Spazzolato", "Vetro"]
+const MATERIAL_LABELS := ["Original", "Chrome", "Glossy", "Diffuse", "Yellow gold", "White gold", "Silver", "Platinum", "Copper", "Brushed", "Glass"]
 ## Riflettanza dei metalli lucidi (F0 lineare, valori tipici PBR).
 const METAL_F0 := {
 	ModelMaterial.GOLD: Color(1.0, 0.71, 0.29),
@@ -226,7 +226,7 @@ func load_model(path: String) -> bool:
 	var state := GLTFState.new()
 	var err := gltf.append_from_file(path, state)
 	if err != OK:
-		push_warning("Modello non caricabile: %s (%s)" % [path, error_string(err)])
+		push_warning("Cannot load model: %s (%s)" % [path, error_string(err)])
 		return false
 	var scene := gltf.generate_scene(state)
 	if scene == null:

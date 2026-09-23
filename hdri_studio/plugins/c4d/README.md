@@ -9,7 +9,7 @@
    quella che contiene `hdri_studio_link/`). Meglio puntare alla cartella del repository che copiarla in
    `AppData\...\plugins`: così ogni `git pull` aggiorna il plugin (serve comunque riavviare C4D).
 2. Riavvia Cinema 4D. Nella console (Extensions → Console) compare `[hdri-studio] plugin caricato`.
-3. Nel menu **Extensions** compare anche "HDRI Studio: ricarica texture", per ricaricare a mano.
+3. Nel menu **Extensions** compare anche "HDRI Studio: reload textures", per ricaricare a mano.
 
 ## Uso
 
@@ -19,7 +19,7 @@
 3. Da qui ogni modifica in HDRI Studio riscrive il file (300 ms dopo l'ultimo cambiamento) e il plugin
    preme Reload sui nodi che lo usano. Se nella scena non c'è **nessun** Octane Environment, il plugin ne
    crea uno da solo al primo aggiornamento (Sky "HDRI Studio Environment" + tag + Image Texture con l'EXR,
-   Linear sRGB); c'è anche il comando *Extensions → HDRI Studio: crea ambiente HDRI*. Un Environment già
+   Linear sRGB); c'è anche il comando *Extensions → HDRI Studio: create HDRI environment*. Un Environment già
    presente non viene toccato. Nella console: `[hdri-studio] nome.exr → 1 nodi ricaricati`.
 
 ## Camera
@@ -43,7 +43,7 @@ Senza fare nulla, il plugin crea da solo per ogni luce separata una **Octane Are
 attivo, Power 1) e ci carica l'EXR. Se preferisci controllare tu il tipo di luce e le sue impostazioni,
 crea una **Octane Area Light**, mettile un ImageTexture nello slot texture dell'emissione e chiamala
 `HS_TEMPLATE`: il plugin la clona al posto della luce di default. Se la luce di default nasce senza
-texture o senza tag, lancia *Extensions → HDRI Studio: diagnostica Octane* e manda l'output della console. Nell'emissione attiva **Surface brightness** (l'emissione diventa per unità di
+texture o senza tag, lancia *Extensions → HDRI Studio: Octane diagnostics* e manda l'output della console. Nell'emissione attiva **Surface brightness** (l'emissione diventa per unità di
 area, come la radianza dell'HDRI: una luce grande e una piccola con la stessa texture hanno la stessa
 luminosità superficiale) e lascia Power = 1. Il plugin clona questa luce per ogni luce marcata *Separata*
 nell'app, sotto il null `HDRI Studio Lights`: direzione, distanza, dimensione fisica (`Size X/Y`) e

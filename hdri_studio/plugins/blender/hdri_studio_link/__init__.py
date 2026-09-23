@@ -34,7 +34,7 @@ bl_info = {
     "version": (0, 1),
     "blender": (4, 2, 0),
     "location": "3D View > Sidebar > HDRI Studio",
-    "description": "Live link con HDRI Studio: reload dell'HDRI, luci separate, LightPaint",
+    "description": "Live link with HDRI Studio: HDRI reload, separate lights, LightPaint",
     "category": "Lighting",
 }
 
@@ -264,13 +264,13 @@ def tick():
                 path = msg.get("path", "")
                 n = reload_file(path)
                 WATCH.touch(path)
-                _state["last_msg"] = "%s → %d immagini" % (os.path.basename(path), n)
+                _state["last_msg"] = "%s → %d images" % (os.path.basename(path), n)
             elif t == "separate_lights":
                 n = sync_separate_lights(msg)
                 for e in msg.get("lights", []):
                     WATCH.touch(e.get("path", ""))
                 if n:
-                    _state["last_msg"] = "luci separate: %d" % n
+                    _state["last_msg"] = "separate lights: %d" % n
         if LINK.connected != _state["was_connected"]:
             _state["was_connected"] = LINK.connected
             _redraw()
@@ -280,9 +280,9 @@ def tick():
             paths = [p for p in (_image_path(i) for i in bpy.data.images) if p and p.lower().endswith(EXTS)]
             for p in WATCH.changed(paths):
                 n = reload_file(p)
-                _state["last_msg"] = "%s modificato → %d immagini" % (os.path.basename(p), n)
+                _state["last_msg"] = "%s changed → %d images" % (os.path.basename(p), n)
     except Exception as e:  # mai far cadere il timer
-        print("[hdri-studio] errore: %r" % e)
+        print("[hdri-studio] error: %r" % e)
     return TIMER_S
 
 
@@ -334,18 +334,18 @@ def pick(context, event):
 class HDRISTUDIO_OT_lightpaint(bpy.types.Operator):
     bl_idname = "hdri_studio.lightpaint"
     bl_label = "HDRI Studio LightPaint"
-    bl_description = "Click o trascina sul modello: la luce selezionata in HDRI Studio si sposta sul riflesso"
+    bl_description = "Click or drag on the model: the light selected in HDRI Studio moves onto the reflection"
     bl_options = {"REGISTER"}
 
     _pressed = False
 
     def invoke(self, context, event):
         if context.area.type != "VIEW_3D":
-            self.report({"WARNING"}, "Usalo nel viewport 3D")
+            self.report({"WARNING"}, "Use it in the 3D viewport")
             return {"CANCELLED"}
         context.window_manager.modal_handler_add(self)
         _state["lightpaint"] = True
-        context.workspace.status_text_set("LightPaint: click/trascina sul modello · Esc o tasto destro per uscire")
+        context.workspace.status_text_set("LightPaint: click/drag on the model · Esc or right click to exit")
         return {"RUNNING_MODAL"}
 
     def modal(self, context, event):
@@ -374,12 +374,12 @@ class HDRISTUDIO_OT_lightpaint(bpy.types.Operator):
 
 class HDRISTUDIO_OT_reload(bpy.types.Operator):
     bl_idname = "hdri_studio.reload"
-    bl_label = "Ricarica texture"
-    bl_description = "Ricarica tutte le immagini EXR/HDR della scena"
+    bl_label = "Reload textures"
+    bl_description = "Reload every EXR/HDR image in the scene"
 
     def execute(self, context):
         n = reload_all()
-        self.report({"INFO"}, "HDRI Studio: %d immagini ricaricate" % n)
+        self.report({"INFO"}, "HDRI Studio: %d images reloaded" % n)
         return {"FINISHED"}
 
 
@@ -391,12 +391,12 @@ class HDRISTUDIO_PT_panel(bpy.types.Panel):
 
     def draw(self, context):
         col = self.layout.column()
-        col.label(text=("Collegato all'app" if LINK.connected else "App non collegata (uso la data dei file)"),
+        col.label(text=("Connected to the app" if LINK.connected else "App not connected (using file timestamps)"),
                   icon="LINKED" if LINK.connected else "UNLINKED")
         if _state["last_msg"]:
             col.label(text=_state["last_msg"])
         col.operator("hdri_studio.lightpaint", icon="BRUSH_DATA",
-                     text="LightPaint (attivo)" if _state["lightpaint"] else "LightPaint")
+                     text="LightPaint (active)" if _state["lightpaint"] else "LightPaint")
         col.operator("hdri_studio.reload", icon="FILE_REFRESH")
         col.prop(context.scene, "hdri_studio_visible_camera")
 
@@ -408,11 +408,11 @@ def register():
     for c in classes:
         bpy.utils.register_class(c)
     bpy.types.Scene.hdri_studio_visible_camera = bpy.props.BoolProperty(
-        name="Luci separate visibili in camera", default=True,
+        name="Separate lights visible to camera", default=True,
         update=lambda self, ctx: _apply_visibility())
     if not bpy.app.timers.is_registered(tick):
         bpy.app.timers.register(tick, first_interval=TIMER_S, persistent=True)
-    print("[hdri-studio] add-on %s caricato da %s (porta %d)" % (ADDON_VERSION, os.path.dirname(__file__), link_core.DEFAULT_PORT))
+    print("[hdri-studio] add-on %s loaded from %s (port %d)" % (ADDON_VERSION, os.path.dirname(__file__), link_core.DEFAULT_PORT))
 
 
 def _apply_visibility():

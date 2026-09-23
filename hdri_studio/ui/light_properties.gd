@@ -48,7 +48,7 @@ func _init() -> void:
 	add_child(_box)
 
 	var title := Label.new()
-	title.text = "Proprietà"
+	title.text = "Properties"
 	title.add_theme_font_size_override("font_size", 15)
 	_box.add_child(title)
 
@@ -56,7 +56,7 @@ func _init() -> void:
 	_box.add_child(top)
 	_name = LineEdit.new()
 	_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_name.placeholder_text = "Nome"
+	_name.placeholder_text = "Name"
 	_name.text_submitted.connect(func(_t: String) -> void: _on_name())
 	_name.focus_exited.connect(_on_name)
 	top.add_child(_name)
@@ -70,37 +70,37 @@ func _init() -> void:
 	top.add_child(_solo)
 	_locked = CheckBox.new()
 	_locked.text = "🔒"
-	_locked.tooltip_text = "Blocca la posizione: LightPaint, mappa e frecce non la spostano"
+	_locked.tooltip_text = "Lock the position: LightPaint, map and arrow keys will not move it"
 	_locked.toggled.connect(func(v: bool) -> void: _set_prop("locked", v, true, true))
 	top.add_child(_locked)
 
-	_shape = _option("Forma", LightListPanel.SHAPE_LABELS, func(i: int) -> void:
+	_shape = _option("Shape", LightListPanel.SHAPE_LABELS, func(i: int) -> void:
 		_set_prop("shape", i, true)
 		_update_visibility())
 
-	_section("Posizione")
-	_row("azimuth", "Azimut", -180.0, 180.0, 0.1)
-	_row("elevation", "Elevazione", -90.0, 90.0, 0.1)
-	_row("roll", "Rotazione", -180.0, 180.0, 0.1)
+	_section("Position")
+	_row("azimuth", "Azimuth", -180.0, 180.0, 0.1)
+	_row("elevation", "Elevation", -90.0, 90.0, 0.1)
+	_row("roll", "Rotation", -180.0, 180.0, 0.1)
 
-	_section("Dimensione")
-	_row("width", "Larghezza °", 0.5, 180.0, 0.1)
-	_row("height", "Altezza °", 0.5, 180.0, 0.1)
-	_row("softness", "Sfumatura °", 0.0, 45.0, 0.1)
-	_corner_row = _row("corner_radius", "Angoli °", 0.0, 45.0, 0.1)
-	_ring_rows.append(_row("ring_inner", "Raggio interno", 0.0, 0.98, 0.01))
+	_section("Size")
+	_row("width", "Width °", 0.5, 180.0, 0.1)
+	_row("height", "Height °", 0.5, 180.0, 0.1)
+	_row("softness", "Softness °", 0.0, 45.0, 0.1)
+	_corner_row = _row("corner_radius", "Corners °", 0.0, 45.0, 0.1)
+	_ring_rows.append(_row("ring_inner", "Inner radius", 0.0, 0.98, 0.01))
 
-	_gradient_rows.append_array(_section("Gradiente"))
-	_grad_type = _option("Tipo", ["Radiale", "Lineare"], func(i: int) -> void:
+	_gradient_rows.append_array(_section("Gradient"))
+	_grad_type = _option("Type", ["Radial", "Linear"], func(i: int) -> void:
 		_set_prop("gradient_type", i, true)
 		_update_visibility())
 	_gradient_rows.append(_grad_type.get_parent())
-	_grad_shape = _option("Forma", ["Circolare", "Rettangolare"], func(i: int) -> void:
+	_grad_shape = _option("Shape", ["Circular", "Rectangular"], func(i: int) -> void:
 		_set_prop("gradient_shape", i, true)
 		_update_visibility())
 	_gradient_rows.append(_grad_shape.get_parent())
-	_gradient_rows.append(_row("gradient_angle", "Angolo", -180.0, 180.0, 0.1))
-	_falloff = _option("Interpolazione", ["Lineare", "Morbida"], func(i: int) -> void: _set_prop("falloff", i, true))
+	_gradient_rows.append(_row("gradient_angle", "Angle", -180.0, 180.0, 0.1))
+	_falloff = _option("Interpolation", ["Linear", "Smooth"], func(i: int) -> void: _set_prop("falloff", i, true))
 	_gradient_rows.append(_falloff.get_parent())
 	_grad_editor = GradientEditor.new()
 	_grad_editor.changed.connect(func(commit: bool) -> void: changed.emit(commit))
@@ -110,7 +110,7 @@ func _init() -> void:
 	_texture_row = HBoxContainer.new()
 	_box.add_child(_texture_row)
 	var tl0 := Label.new()
-	tl0.text = "Immagine"
+	tl0.text = "Image"
 	tl0.custom_minimum_size.x = 96
 	_texture_row.add_child(tl0)
 	_texture_label = Label.new()
@@ -120,7 +120,7 @@ func _init() -> void:
 	_texture_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_texture_row.add_child(_texture_label)
 	var tb := Button.new()
-	tb.text = "Cambia…"
+	tb.text = "Change…"
 	tb.pressed.connect(func() -> void: texture_pick_requested.emit())
 	_texture_row.add_child(tb)
 	_texture_tools = HBoxContainer.new()
@@ -129,39 +129,39 @@ func _init() -> void:
 	ttl.custom_minimum_size.x = 96
 	_texture_tools.add_child(ttl)
 	var fh := Button.new()
-	fh.text = "↔ Specchia"
+	fh.text = "↔ Mirror"
 	fh.pressed.connect(func() -> void: _set_prop("texture_flip_h", not light.texture_flip_h, true))
 	_texture_tools.add_child(fh)
 	var fv := Button.new()
-	fv.text = "↕ Specchia"
+	fv.text = "↕ Mirror"
 	fv.pressed.connect(func() -> void: _set_prop("texture_flip_v", not light.texture_flip_v, true))
 	_texture_tools.add_child(fv)
 	var rt := Button.new()
-	rt.text = "Ruota 90°"
+	rt.text = "Rotate 90°"
 	rt.pressed.connect(func() -> void: _set_prop("texture_rotate", (light.texture_rotate + 1) % 4, true))
 	_texture_tools.add_child(rt)
 	var sd := Button.new()
-	sd.text = "Salva default"
-	sd.tooltip_text = "Scrive accanto all'immagine un sidecar .json con dimensione, intensità, Kelvin, sfumatura e rotazione di questa luce: il catalogo li userà come default"
+	sd.text = "Save defaults"
+	sd.tooltip_text = "Writes a .json sidecar next to the image with the size, intensity, Kelvin, softness and rotation of this light: the catalog will use them as defaults"
 	sd.pressed.connect(func() -> void: sidecar_save_requested.emit())
 	_texture_tools.add_child(sd)
 
 	_scrim_rows.append_array(_section("Scrim"))
-	_scrim_rows.append(_row("scrim_offset_x", "Sorgente X", -1.0, 1.0, 0.01))
-	_scrim_rows.append(_row("scrim_offset_y", "Sorgente Y", -1.0, 1.0, 0.01))
-	_scrim_rows.append(_row("scrim_depth", "Profondità", 0.05, 5.0, 0.01))
-	_scrim_rows.append(_row("scrim_source_size", "Sorgente Ø", 0.0, 3.0, 0.01))
+	_scrim_rows.append(_row("scrim_offset_x", "Source X", -1.0, 1.0, 0.01))
+	_scrim_rows.append(_row("scrim_offset_y", "Source Y", -1.0, 1.0, 0.01))
+	_scrim_rows.append(_row("scrim_depth", "Depth", 0.05, 5.0, 0.01))
+	_scrim_rows.append(_row("scrim_source_size", "Source Ø", 0.0, 3.0, 0.01))
 
-	_section("Intensità e colore")
+	_section("Intensity and color")
 	_photometric = CheckBox.new()
-	_photometric.text = "Fotometrico (illuminamento al centro)"
-	_photometric.tooltip_text = "La luce è definita dall'illuminamento E che produce al centro della sfera su una superficie che la guarda.\nLa radianza è E / K, con K l'angolo solido proiettato della forma (immagine compresa).\nDue luci con lo stesso E espongono allo stesso modo qualunque sia la loro dimensione."
+	_photometric.text = "Photometric (illuminance at the center)"
+	_photometric.tooltip_text = "The light is defined by the illuminance E it produces at the center of the sphere on a surface facing it.\nRadiance is E / K, where K is the projected solid angle of the shape (image included).\nTwo lights with the same E expose the same way whatever their size."
 	_photometric.toggled.connect(func(v: bool) -> void:
 		_set_prop("photometric", v, true)
 		_update_visibility())
 	_box.add_child(_photometric)
-	_row("intensity", "Intensità", 0.01, 1000.0, 0.01, true)
-	_row("illuminance", "Illuminamento", 0.01, 100000.0, 0.01, true)
+	_row("intensity", "Intensity", 0.01, 1000.0, 0.01, true)
+	_row("illuminance", "Illuminance", 0.01, 100000.0, 0.01, true)
 	_k_label = Label.new()
 	_k_label.modulate = Color(1, 1, 1, 0.6)
 	_k_label.add_theme_font_size_override("font_size", 12)
@@ -184,7 +184,7 @@ func _init() -> void:
 	var tint_row := HBoxContainer.new()
 	_box.add_child(tint_row)
 	var tl := Label.new()
-	tl.text = "Tinta"
+	tl.text = "Tint"
 	tl.custom_minimum_size.x = 96
 	tint_row.add_child(tl)
 	_tint = ColorPickerButton.new()
@@ -194,7 +194,7 @@ func _init() -> void:
 	_tint.popup_closed.connect(func() -> void: changed.emit(true))
 	tint_row.add_child(_tint)
 	var gels := MenuButton.new()
-	gels.text = "Gelatine"
+	gels.text = "Gels"
 	gels.flat = false
 	for gname in ColorTemp.GELS:
 		gels.get_popup().add_item(gname)
@@ -203,19 +203,19 @@ func _init() -> void:
 		_tint.color = c
 		_set_prop("tint", c, true))
 	tint_row.add_child(gels)
-	_blend = _option("Fusione", ["Somma", "Massimo", "Moltiplica", "Normale"], func(i: int) -> void: _set_prop("blend", i, true))
+	_blend = _option("Blend", ["Add", "Max", "Multiply", "Normal"], func(i: int) -> void: _set_prop("blend", i, true))
 
-	_section("Luce separata")
+	_section("Separate light")
 	_separate = CheckBox.new()
-	_separate.text = "Separata → area light nel 3D"
-	_separate.tooltip_text = "Esclusa dall'HDRI esportata: scritta come EXR singolo (proiezione planare) e ricreata\nnel software 3D come area light nella stessa direzione, a questa distanza dal centro.\nNel preview resta visibile nell'HDRI."
+	_separate.text = "Separate → area light in 3D"
+	_separate.tooltip_text = "Excluded from the exported HDRI: written as a separate EXR (planar projection) and recreated\nin the 3D software as an area light in the same direction, at this distance from the center.\nIt stays visible in the HDRI in the preview."
 	_separate.toggled.connect(func(v: bool) -> void:
 		_set_prop("separate", v, true, true)
 		_update_visibility())
 	_box.add_child(_separate)
-	_separate_rows.append(_row("distance", "Distanza (cm)", 1.0, 10000.0, 1.0, true))
+	_separate_rows.append(_row("distance", "Distance (cm)", 1.0, 10000.0, 1.0, true))
 	_separate_visible = CheckBox.new()
-	_separate_visible.text = "Visibile alla camera nel 3D"
+	_separate_visible.text = "Visible to the camera in 3D"
 	_separate_visible.toggled.connect(func(v: bool) -> void: _set_prop("separate_visible", v, true))
 	_box.add_child(_separate_visible)
 	_separate_rows.append(_separate_visible)
@@ -315,7 +315,7 @@ func set_light(l: RigLight) -> void:
 	_photometric.button_pressed = l.photometric
 	_separate.button_pressed = l.separate
 	_separate_visible.button_pressed = l.separate_visible
-	_k_label.text = "K = %.4f sr · radianza risultante %.3f" % [l.measured_k, l.radiance()] if l.photometric else ""
+	_k_label.text = tr("K = %.4f sr · resulting radiance %.3f") % [l.measured_k, l.radiance()] if l.photometric else ""
 	_texture_label.text = l.texture_path.get_file() if l.texture_path != "" else "—"
 	_texture_label.tooltip_text = l.texture_path
 	_syncing = false

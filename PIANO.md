@@ -375,7 +375,7 @@ Da rifinire quando lo usi: default delle nuove luci, range degli slider, tema.
       atomica (tmp + rename) così il plugin non legge mai un file a metà.
 - [x] Plugin Cinema 4D (`plugins/c4d/hdri_studio_link/`): `MessageData` con timer a 200 ms, client
       TCP non bloccante con riconnessione, preme i pulsanti *Reload* dei nodi che usano il file;
-      fallback sulla data di modifica ogni secondo; comando "HDRI Studio: ricarica texture".
+      fallback sulla data di modifica ogni secondo; comando "HDRI Studio: reload textures" (in italiano fino al 23/09/2026).
 - [x] Ricezione del messaggio `lightpaint` (Fase 3 lato app già pronta: conversione C4D → interna).
 - [x] Caricamento GLB nel preview (16/09: pannello *Modello nel preview*, materiale originale/cromato/glossy/diffuso, collisioni trimesh per il LightPaint locale).
 - [ ] Radiance `.hdr` (8k già possibile).
@@ -550,6 +550,38 @@ Non esisteva una GDExtension OpenEXR pronta: costruita in casa, ~350 righe di C+
 5. [x] **Verifica sul PC** (17/09): la DLL si carica, l'EXR viene salvato correttamente. HTJ2K (nuovo in OpenEXR 3.4) è compilato ma non esposto nel menu:
    i software 3D con OpenEXR < 3.4 non lo leggono.
 
+### Interfaccia bilingue — fatta il 23/09/2026
+
+Obiettivo: l'app in inglese per default, l'italiano quando ha senso, senza doppiare i testi nel codice.
+
+1. [x] **Inglese come lingua base**: le stringhe nel codice sono in inglese, quindi un testo senza
+   traduzione resta leggibile invece di sparire. Migrazione una tantum delle ~200 stringhe italiane
+   (label, tooltip, voci di menu, forme, materiali, gelatine, preset di gradiente, messaggi di stato).
+   Console, log CLI/selftest e metadati EXR restano solo in inglese: non sono interfaccia.
+2. [x] **Traduzione italiana** in `core/lang_it.gd` (`LangIt.DATA`, inglese → italiano), caricata a
+   runtime in un `Translation` con locale `it` dall'autoload `I18n` (`core/i18n.gd`). Niente CSV né
+   `.translation` importati: il dizionario è codice, sta in git e non dipende dall'import.
+   I `Control` si ritraducono da soli (Godot usa `atr` su testo, tooltip, voci di popup e schede);
+   solo i testi composti a mano (`%` o concatenazione) passano da `tr()` e vengono riscritti da
+   `Main._retranslate()` al cambio di lingua.
+3. [x] **Politica**: la scelta salvata in `settings.json` vince sempre; con `auto` (default) si segue
+   `OS.get_locale_language()`, quindi italiano su un sistema in italiano e inglese in tutti gli altri
+   casi. Un codice che non sappiamo tradurre ricade sull'inglese. Selettore *Language* in fondo alla
+   colonna destra (Automatic (system) / English / Italiano), cambio a caldo senza riavvio.
+4. [x] **Test**: `tools/i18n_smoke.gd` (politica `auto`/esplicita/sconosciuta, chiavi invariate in
+   inglese, ogni voce del dizionario applicata in italiano, barra di stato ritradotta, selettore che
+   cambia e ricorda la lingua).
+
+5. [x] **Plugin C4D e Blender in inglese** (23/09): voci di menu, tooltip, dialoghi, pannello della
+   sidebar, report e stampe in console. Lì non c'è selettore: Cinema 4D e Blender si usano quasi sempre
+   in inglese, e i testi sono pochi. Rinominati i comandi C4D (`HDRI Studio: reload textures`,
+   `create HDRI environment`, `Octane diagnostics`) e il pannello Blender (`Reload textures`,
+   `Separate lights visible to camera`); i README dei plugin citano i nomi nuovi. Verifica: add-on
+   registrato in Blender headless e `blender_link_test.py` end-to-end OK; il plugin C4D è solo
+   controllato sintatticamente, va riprovato sul PC.
+
+Resta in italiano: `GUIDA.md`, i README dei plugin, questo piano e i commenti/docstring del codice.
+
 ### 5.4 Fase 4 — test in C4D
 
 > [!todo] Da fare sul PC
@@ -667,6 +699,12 @@ luci Texture e catalogo, luci separate, app standalone.
 - 15/09/2026 — Orientamento **Cinema 4D**: C4D nativo mostra il punto bianco a sinistra → preset
   "Cinema 4D nativo" con specchio; **Octane** lo mostra a destra, come il preview → preset
   "Cinema 4D + Octane" senza specchio, che è il default. I due renderer non concordano fra loro.
+- 23/09/2026 — Lingua: **inglese di base, italiano come traduzione**. Il default è `auto` (segue la
+  lingua del sistema: italiano solo su un OS in italiano), la scelta esplicita nel selettore vince e
+  viene ricordata. Le stringhe nel codice sono in inglese perché un testo non tradotto resti leggibile.
+- 23/09/2026 — Icona dell'app: la sfera del preview con il riflesso del softbox su tessera scura, stessa
+  tavolozza dello splash. `tools/make_icon.py` (Pillow + numpy, riflesso calcolato come nell'app) genera
+  `icon.png` per Godot, `icon.icns` per macOS e `icon.ico` per Windows; gli export puntano lì.
 - 15/09/2026 — Assi in **Octane**: da dentro la sfera si vede esattamente il preview; le etichette
   degli assi differiscono solo su X perché C4D è left-handed (rosso = +X interno finisce su −X di C4D,
   Y e Z allineati). Conversione coordinate C4D → interne per LightPaint (Fase 3): `(x, y, z) → (−x, y, z)`.

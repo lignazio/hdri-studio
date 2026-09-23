@@ -29,20 +29,20 @@ var _rename_edit: LineEdit
 
 func _init() -> void:
 	var title := Label.new()
-	title.text = "Preset di studio"
+	title.text = "Studio presets"
 	title.add_theme_font_size_override("font_size", 15)
 	add_child(title)
 	var row := HBoxContainer.new()
 	add_child(row)
 	var save := Button.new()
-	save.text = "Salva preset…"
+	save.text = "Save preset…"
 	save.pressed.connect(func() -> void:
 		_name_edit.text = ""
 		_name_dialog.popup_centered()
 		_name_edit.grab_focus())
 	row.add_child(save)
 	var pick := Button.new()
-	pick.text = "Cartella…"
+	pick.text = "Folder…"
 	pick.pressed.connect(func() -> void: folder_pick_requested.emit())
 	row.add_child(pick)
 	_path_label = Label.new()
@@ -53,21 +53,21 @@ func _init() -> void:
 	var row2 := HBoxContainer.new()
 	add_child(row2)
 	_btn_load = Button.new()
-	_btn_load.text = "Carica"
-	_btn_load.tooltip_text = "Sostituisce il rig corrente con il preset"
+	_btn_load.text = "Load"
+	_btn_load.tooltip_text = "Replaces the current rig with the preset"
 	_btn_load.pressed.connect(func() -> void: if _selected != "": load_requested.emit(_selected))
 	row2.add_child(_btn_load)
 	_btn_merge = Button.new()
-	_btn_merge.text = "Aggiungi luci"
-	_btn_merge.tooltip_text = "Aggiunge le luci del preset al rig corrente"
+	_btn_merge.text = "Add lights"
+	_btn_merge.tooltip_text = "Adds the lights of the preset to the current rig"
 	_btn_merge.pressed.connect(func() -> void: if _selected != "": merge_requested.emit(_selected))
 	row2.add_child(_btn_merge)
 	_btn_delete = Button.new()
-	_btn_delete.text = "Elimina"
+	_btn_delete.text = "Delete"
 	_btn_delete.pressed.connect(func() -> void: if _selected != "": _delete_dialog.popup_centered())
 	row2.add_child(_btn_delete)
 	_btn_rename = Button.new()
-	_btn_rename.text = "Rinomina"
+	_btn_rename.text = "Rename"
 	_btn_rename.pressed.connect(func() -> void:
 		if _selected == "":
 			return
@@ -87,19 +87,19 @@ func _init() -> void:
 	add_child(_status)
 
 	_name_dialog = ConfirmationDialog.new()
-	_name_dialog.title = "Nome del preset"
+	_name_dialog.title = "Preset name"
 	_name_edit = LineEdit.new()
-	_name_edit.placeholder_text = "es. Still life gioiello"
+	_name_edit.placeholder_text = "e.g. Jewelry still life"
 	_name_edit.text_submitted.connect(func(_t: String) -> void: _name_dialog.hide(); _on_save_confirmed())
 	_name_dialog.add_child(_name_edit)
 	_name_dialog.confirmed.connect(_on_save_confirmed)
 	add_child(_name_dialog)
 	_delete_dialog = ConfirmationDialog.new()
-	_delete_dialog.dialog_text = "Eliminare il preset?"
+	_delete_dialog.dialog_text = "Delete the preset?"
 	_delete_dialog.confirmed.connect(_on_delete_confirmed)
 	add_child(_delete_dialog)
 	_rename_dialog = ConfirmationDialog.new()
-	_rename_dialog.title = "Nuovo nome"
+	_rename_dialog.title = "New name"
 	_rename_edit = LineEdit.new()
 	_rename_edit.text_submitted.connect(func(_t: String) -> void: _rename_dialog.hide(); _on_rename_confirmed())
 	_rename_dialog.add_child(_rename_edit)
@@ -136,7 +136,7 @@ func refresh() -> void:
 	if not _buttons.has(_selected):
 		_selected = ""
 	_update_buttons()
-	_status.text = "%d preset" % names.size()
+	_status.text = tr("%d presets") % names.size()
 
 
 func _add_button(name: String) -> void:

@@ -49,7 +49,7 @@ static func save_hdr(path: String, width: int, height: int, rgbe: PackedByteArra
 const REC709 := [0.64, 0.33, 0.30, 0.60, 0.15, 0.06, 0.3127, 0.3290]
 ## ACEScg (AP1) con bianco D60.
 const ACESCG := [0.713, 0.293, 0.165, 0.830, 0.128, 0.044, 0.32168, 0.33767]
-const COLORSPACES := ["Rec.709 lineare", "ACEScg"]
+const COLORSPACES := ["Rec.709 linear", "ACEScg"]
 const RIG_ATTR := "hdristudio_rig"
 const LINES_PER_CHUNK := {0: 1, 1: 1, 2: 1, 3: 16, 4: 32, 5: 16, 6: 32, 7: 32, 8: 32, 9: 256}
 
@@ -166,7 +166,7 @@ static func separate_path(base_path: String, light_name: String) -> String:
 		slug += ch if ch.is_valid_identifier() or ch.is_valid_int() else "_"
 	slug = slug.strip_edges().trim_prefix("_").trim_suffix("_")
 	if slug == "":
-		slug = "luce"
+		slug = "light"
 	var ext := base_path.get_extension().to_lower()
 	return base_path.get_basename() + "_" + slug + "." + (ext if ext in ["exr", "hdr"] else "exr")
 
@@ -200,12 +200,12 @@ static func _roll_x(img: Image, px: int) -> Image:
 ## scrive PIZ (gli altri codec sono ignorati con un avviso) e i metadati vengono iniettati dopo.
 static func save_exr(img: Image, path: String, half := true, codec := "PIZ", rig_json := "", acescg := false) -> Error:
 	if half and _peak(img) > HALF_MAX:
-		push_warning("Picco oltre il massimo dell'half: %s scritto in float32" % path.get_file())
+		push_warning("Peak above the half maximum: %s written as float32" % path.get_file())
 		half = false
 	if ExrCodec.available():
 		return ExrCodec.save(img, path, codec, half, metadata(rig_json, acescg))
 	if codec != "PIZ":
-		push_warning("HsOpenEXR non caricata: %s scritto in PIZ invece di %s" % [path.get_file(), codec])
+		push_warning("HsOpenEXR not loaded: %s written as PIZ instead of %s" % [path.get_file(), codec])
 	var out := img
 	if half:
 		out = img.duplicate() as Image
@@ -227,7 +227,7 @@ static func save_exr(img: Image, path: String, half := true, codec := "PIZ", rig
 	if err == OK:
 		var merr := inject_metadata(path, rig_json, acescg)
 		if merr != OK:
-			push_warning("Metadati EXR non scritti in %s (%s)" % [path.get_file(), error_string(merr)])
+			push_warning("EXR metadata not written in %s (%s)" % [path.get_file(), error_string(merr)])
 	return err
 
 
@@ -236,7 +236,7 @@ static func metadata(rig_json: String, acescg := false) -> Dictionary:
 	var space := "ACEScg (AP1, D60)" if acescg else "Rec.709 (D65)"
 	var attrs := {
 		"chromaticities": PackedFloat32Array(ACESCG if acescg else REC709),
-		"comments": "HDRI Studio — radianza lineare, primari " + space,
+		"comments": "HDRI Studio — linear radiance, primaries " + space,
 	}
 	if rig_json != "":
 		attrs[RIG_ATTR] = rig_json

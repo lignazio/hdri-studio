@@ -27,15 +27,15 @@ func _init() -> void:
 	var row := HBoxContainer.new()
 	add_child(row)
 	_enabled = CheckBox.new()
-	_enabled.text = "Attivo"
+	_enabled.text = "Active"
 	_enabled.toggled.connect(func(v: bool) -> void: toggled_link.emit(v))
 	row.add_child(_enabled)
 	var pick := Button.new()
-	pick.text = "File di export…"
+	pick.text = "Export file…"
 	pick.pressed.connect(func() -> void: pick_path_requested.emit())
 	row.add_child(pick)
 	var push := Button.new()
-	push.text = "Invia ora"
+	push.text = "Send now"
 	push.pressed.connect(func() -> void: push_now_requested.emit())
 	row.add_child(push)
 
@@ -49,7 +49,7 @@ func _init() -> void:
 	var rrow := HBoxContainer.new()
 	add_child(rrow)
 	var rl := Label.new()
-	rl.text = "Risoluzione live"
+	rl.text = "Live resolution"
 	rl.custom_minimum_size.x = 110
 	rrow.add_child(rl)
 	_res = OptionButton.new()
@@ -63,20 +63,20 @@ func _init() -> void:
 	spc.custom_minimum_size.y = 6
 	add_child(spc)
 	var sl := Label.new()
-	sl.text = "Luci separate"
+	sl.text = "Separate lights"
 	sl.modulate = Color(1, 1, 1, 0.6)
 	add_child(sl)
 	_sep_flip_face = CheckBox.new()
-	_sep_flip_face.text = "Inverti verso (Z)"
-	_sep_flip_face.tooltip_text = "Se le area light in C4D illuminano via dal centro, attiva."
+	_sep_flip_face.text = "Flip facing (Z)"
+	_sep_flip_face.tooltip_text = "Enable if the area lights in C4D light away from the center."
 	_sep_flip_face.button_pressed = AppSettings.get_value("separate_flip_face", false)
 	_sep_flip_face.toggled.connect(func(v: bool) -> void:
 		AppSettings.set_value("separate_flip_face", v)
 		separate_options_changed.emit())
 	add_child(_sep_flip_face)
 	_sep_flip_tex = CheckBox.new()
-	_sep_flip_tex.text = "Specchia texture"
-	_sep_flip_tex.tooltip_text = "Se la texture della luce in C4D appare specchiata rispetto all'app, attiva."
+	_sep_flip_tex.text = "Mirror texture"
+	_sep_flip_tex.tooltip_text = "Enable if the light texture in C4D looks mirrored compared to the app."
 	_sep_flip_tex.button_pressed = AppSettings.get_value("separate_flip_tex", true)
 	_sep_flip_tex.toggled.connect(func(v: bool) -> void:
 		AppSettings.set_value("separate_flip_tex", v)

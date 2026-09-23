@@ -30,12 +30,12 @@ var _btn_del: Button
 var _btn_up: Button
 var _btn_down: Button
 
-const SHAPE_LABELS := ["Rettangolo", "Ellisse", "Anello", "Gradiente", "Scrim", "Texture"]
+const SHAPE_LABELS := ["Rectangle", "Ellipse", "Ring", "Gradient", "Scrim", "Texture"]
 
 
 func _init() -> void:
 	var title := Label.new()
-	title.text = "Luci"
+	title.text = "Lights"
 	title.add_theme_font_size_override("font_size", 15)
 	add_child(title)
 	list = Tree.new()
@@ -63,33 +63,33 @@ func _init() -> void:
 	var row := HBoxContainer.new()
 	add_child(row)
 	_add_menu = MenuButton.new()
-	_add_menu.text = "+ Aggiungi"
+	_add_menu.text = "+ Add"
 	_add_menu.flat = false
 	for i in SHAPE_LABELS.size():
 		_add_menu.get_popup().add_item(SHAPE_LABELS[i], i)
 	_add_menu.get_popup().id_pressed.connect(_on_add)
 	row.add_child(_add_menu)
 	_btn_dup = Button.new()
-	_btn_dup.text = "Duplica"
+	_btn_dup.text = "Duplicate"
 	_btn_dup.pressed.connect(_on_duplicate)
 	row.add_child(_btn_dup)
 	_btn_del = Button.new()
-	_btn_del.text = "Elimina"
+	_btn_del.text = "Delete"
 	_btn_del.pressed.connect(_on_delete)
 	row.add_child(_btn_del)
 	var mir := Button.new()
 	mir.text = "⇋"
-	mir.tooltip_text = "Duplica specchiata (sinistra ↔ destra)"
+	mir.tooltip_text = "Duplicate mirrored (left ↔ right)"
 	mir.pressed.connect(_on_mirror)
 	row.add_child(mir)
 	_btn_up = Button.new()
 	_btn_up.text = "▲"
-	_btn_up.tooltip_text = "Sposta su (le luci dopo nell'elenco coprono quelle prima con la fusione Normale)"
+	_btn_up.tooltip_text = "Move up (lights later in the list cover earlier ones with Normal blending)"
 	_btn_up.pressed.connect(func() -> void: _move(-1))
 	row.add_child(_btn_up)
 	_btn_down = Button.new()
 	_btn_down.text = "▼"
-	_btn_down.tooltip_text = "Sposta giù"
+	_btn_down.tooltip_text = "Move down"
 	_btn_down.pressed.connect(func() -> void: _move(1))
 	row.add_child(_btn_down)
 
@@ -161,9 +161,9 @@ func refresh() -> void:
 		it.set_text(0, l.name + ("  ⇗" if l.separate else ""))
 		it.set_metadata(0, i)
 		it.set_custom_color(0, COL_ON if l.enabled else Color(1, 1, 1, 0.45))
-		it.add_button(0, LightIcons.eye(), BTN_ENABLED, false, "Visibile (H)")
+		it.add_button(0, LightIcons.eye(), BTN_ENABLED, false, "Visible (H)")
 		it.add_button(0, LightIcons.dot(), BTN_SOLO, false, "Solo")
-		it.add_button(0, LightIcons.lock(), BTN_LOCKED, false, "Bloccata: LightPaint, mappa e frecce non la spostano")
+		it.add_button(0, LightIcons.lock(), BTN_LOCKED, false, "Locked: LightPaint, map and arrow keys will not move it")
 		it.set_button_color(0, 0, COL_ON if l.enabled else COL_OFF)
 		it.set_button_color(0, 1, COL_ON if l.solo else COL_OFF)
 		it.set_button_color(0, 2, COL_ON if l.locked else COL_OFF)
@@ -202,7 +202,7 @@ func _on_add(shape_id: int) -> void:
 		return
 	var l := RigLight.new()
 	l.shape = shape_id as RigLight.Shape
-	l.name = "%s %d" % [SHAPE_LABELS[shape_id], rig.lights.size() + 1]
+	l.name = "%s %d" % [tr(SHAPE_LABELS[shape_id]), rig.lights.size() + 1]
 	match l.shape:
 		RigLight.Shape.SCRIM:
 			l.width = 60.0
@@ -307,7 +307,7 @@ func _on_duplicate() -> void:
 	var copies: Array = []
 	for i in sel:
 		var copy: RigLight = rig.lights[i].duplicate_light()
-		copy.name += " copia"
+		copy.name += " " + tr("copy")
 		copy.azimuth = wrapf(copy.azimuth + 10.0, -180.0, 180.0)
 		copies.append(copy)
 	var at: int = sel[sel.size() - 1] + 1

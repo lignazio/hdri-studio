@@ -45,6 +45,11 @@ Tre colonne, ridimensionabili trascinando i bordi.
 
 La barra in basso mostra az/el e il valore RGB del pixel sotto il cursore sulla mappa.
 
+**Lingua.** L'app è in inglese; in fondo alla colonna destra c'è *Language*: **Automatic (system)**
+(default) la mette in italiano se il sistema è in italiano e in inglese in tutti gli altri casi,
+**English** e **Italiano** la forzano. Il cambio è immediato e viene ricordato. Le schermate di questa
+guida e i nomi dei pannelli qui sotto sono quelli italiani.
+
 ## 3. Primi cinque minuti
 
 1. All'avvio c'è un set di prova (key scrim, fill, rim, top ring). Seleziona **Key scrim** nell'elenco
@@ -91,7 +96,7 @@ La barra in basso mostra az/el e il valore RGB del pixel sotto il cursore sulla 
 ## 6. Live link con Blender
 
 *Edit → Preferences → Add-ons → Install…* → zip della cartella `hdri_studio/plugins/blender/hdri_studio_link`
-→ attiva. Sidebar N → tab *HDRI Studio*: stato, LightPaint, Ricarica. Nell'app scegli *Godot / Blender*
+→ attiva. Sidebar N → tab *HDRI Studio*: stato, LightPaint, *Reload textures*. Nell'app scegli *Godot / Blender*
 come software di export. Il reload è automatico, le luci separate diventano piani emissivi
 (calibrazione zero: strength 1 = valore del pixel).
 

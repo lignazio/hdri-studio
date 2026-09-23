@@ -44,7 +44,7 @@ var _tex_sizes := {}    # percorso → Vector2i dell'immagine originale
 func _init(local_device := false) -> void:
 	_local = local_device
 	rd = RenderingServer.create_local_rendering_device() if local_device else RenderingServer.get_rendering_device()
-	assert(rd != null, "RenderingDevice non disponibile (headless?)")
+	assert(rd != null, "RenderingDevice not available (headless?)")
 	_compile()
 	var ss := RDSamplerState.new()
 	ss.min_filter = RenderingDevice.SAMPLER_FILTER_LINEAR
@@ -74,26 +74,26 @@ func _compile() -> void:
 	if OS.has_feature("editor") and FileAccess.file_exists(SHADER_PATH):
 		var src := FileAccess.get_file_as_string(SHADER_PATH).replace("#[compute]", "")
 		spirv = _compile_source(src)
-		how = "sorgente"
+		how = "source"
 	if spirv == null:
 		var sf := load(SHADER_PATH) as RDShaderFile
 		if sf != null:
 			spirv = sf.get_spirv()
-			how = "risorsa importata"
+			how = "imported resource"
 			if spirv != null and (spirv.compile_error_compute != "" or spirv.bytecode_compute.is_empty()):
-				push_warning("bake.glsl (risorsa importata): %s" % spirv.compile_error_compute)
+				push_warning("bake.glsl (imported resource): %s" % spirv.compile_error_compute)
 				spirv = null
 	if spirv == null:
 		spirv = _compile_source(BakeGlslSource.SOURCE)
-		how = "sorgente incorporato"
+		how = "embedded source"
 	if spirv == null or spirv.compile_error_compute != "":
-		push_error("bake.glsl non compilabile (%s): %s" % [how, spirv.compile_error_compute if spirv else "null"])
+		push_error("bake.glsl does not compile (%s): %s" % [how, spirv.compile_error_compute if spirv else "null"])
 		return
 	_shader = rd.shader_create_from_spirv(spirv)
 	_pipeline = rd.compute_pipeline_create(_shader)
 	if not _pipeline.is_valid():
-		push_error("bake.glsl: pipeline non creata (%s)" % how)
-	print("Baker: shader da %s" % how)
+		push_error("bake.glsl: pipeline not created (%s)" % how)
+	print("Baker: shader from %s" % how)
 
 
 ## Byte RGBE (4 per pixel, riga per riga) di un'immagine lineare, codificati sul GPU.
@@ -111,7 +111,7 @@ func rgbe_bytes(img: Image) -> PackedByteArray:
 		if spirv == null:
 			spirv = _compile_source(BakeGlslSource.RGBE_SOURCE)
 		if spirv == null:
-			push_error("rgbe.glsl non compilabile")
+			push_error("rgbe.glsl does not compile")
 			return PackedByteArray()
 		_rgbe_shader = rd.shader_create_from_spirv(spirv)
 		_rgbe_pipeline = rd.compute_pipeline_create(_rgbe_shader)
@@ -202,7 +202,7 @@ func _set_base_placeholder() -> void:
 func set_base_image_from_file(path: String) -> bool:
 	var img := load_linear_image(path)
 	if img == null:
-		push_warning("Impossibile caricare l'HDRI di base: " + path)
+		push_warning("Cannot load the base HDRI: " + path)
 		return false
 	set_base_image(img)
 	return true
@@ -278,7 +278,7 @@ static func load_linear_image(path: String) -> Image:
 			if img == null:
 				return null
 		elif not ExrCodec.tinyexr_can_read(path):
-			push_warning("EXR con codec che TinyEXR non legge e libreria OpenEXR non caricata: " + path)
+			push_warning("EXR with a codec TinyEXR cannot read and the OpenEXR library is not loaded: " + path)
 			return null
 		else:
 			err = img.load_exr_from_buffer(FileAccess.get_file_as_bytes(path))
@@ -301,7 +301,7 @@ func texture_layer(path: String) -> int:
 		return _tex_layers[path]
 	var img := load_linear_image(path)
 	if img == null:
-		push_warning("Immagine della luce non leggibile: " + path)
+		push_warning("Cannot read the light image: " + path)
 		return -1
 	_tex_sizes[path] = Vector2i(img.get_width(), img.get_height())
 	img.resize(TEX_LAYER_SIZE.x, TEX_LAYER_SIZE.y, Image.INTERPOLATE_LANCZOS)
@@ -546,7 +546,7 @@ func bake(rig: LightRig, calibration := false, include_separate := true, acescg 
 	var count := 0
 	for l in rig.active_lights(include_separate):
 		if count >= MAX_LIGHTS:
-			push_warning("Più di %d luci: le altre vengono ignorate" % MAX_LIGHTS)
+			push_warning("More than %d lights: the others are ignored" % MAX_LIGHTS)
 			break
 		var layer := -1
 		if l.shape == RigLight.Shape.TEXTURE:

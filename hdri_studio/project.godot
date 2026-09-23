@@ -9,14 +9,23 @@ config_version=5
 config/name="HDRI Studio"
 config/version="0.9.1"
 run/main_scene="res://scenes/main.tscn"
+config/icon="res://icon.png"
 config/features=PackedStringArray("4.7", "Forward Plus")
 boot_splash/bg_color=Color(0.0941176, 0.0941176, 0.101961, 1)
 boot_splash/image="res://splash.png"
+
+[autoload]
+
+I18n="*res://core/i18n.gd"
 
 [display]
 
 window/size/viewport_width=1600
 window/size/viewport_height=900
+
+[internationalization]
+
+locale/fallback="en"
 
 [rendering]
 

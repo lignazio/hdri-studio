@@ -99,13 +99,55 @@ func _ready() -> void:
 	# riapre l'ultimo rig salvato/aperto
 	var args := OS.get_cmdline_user_args()
 	var last: String = AppSettings.get_value("last_rig", "")
-	if last != "" and FileAccess.file_exists(last) and not ("--fresh" in args or "--screenshot" in args or "--selftest" in args):
+	if last != "" and FileAccess.file_exists(last) and not ("--fresh" in args or "--screenshot" in args or "--selftest" in args or "--export" in args):
 		load_rig_from(last)
 	_autosave_ms = Time.get_ticks_msec()
 	if "--screenshot" in OS.get_cmdline_user_args():
 		_screenshot_frames = 12
 	if "--selftest" in OS.get_cmdline_user_args():
 		_selftest.call_deferred()
+	if "--export" in args:
+		_cli_export.call_deferred(args)
+
+
+## Bake da riga di comando, senza toccare la UI (serve comunque una finestra: il baker è un compute
+## shader). Usa: `-- --rig <file.json|.exr> --export <file.exr|.hdr> [--res WxH] [--target "<preset>"]`.
+## Senza --rig esporta il rig di default. Esce con 0 se l'export è andato, 1 se è fallito, 2 sugli
+## argomenti. La stessa riga di esito va anche in user://cli.log (Windows senza console).
+func _cli_export(args: PackedStringArray) -> void:
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var out := _cli_arg(args, "--export")
+	var rig_path := _cli_arg(args, "--rig")
+	var code := 2
+	var line := ""
+	if out == "":
+		line = "[cli] missing output file: --export <file.exr|.hdr>"
+	elif rig_path != "" and not load_rig_from(rig_path):
+		line = "[cli] invalid rig: " + rig_path
+	else:
+		var opts := {"quiet": true}
+		var res := _cli_arg(args, "--res").to_lower().split("x")
+		if res.size() == 2 and int(res[0]) > 0 and int(res[1]) > 0:
+			opts["resolution"] = Vector2i(int(res[0]), int(res[1]))
+		var target := _cli_arg(args, "--target")
+		if target != "":
+			opts["target"] = target
+		var err := export_to(out, opts)
+		code = 0 if err == OK else 1
+		line = "[cli] export %s · %s · %s" % [error_string(err), rig_path if rig_path != "" else "default rig", out]
+	print(line)
+	var log := FileAccess.open("user://cli.log", FileAccess.WRITE)
+	if log != null:
+		log.store_line(line)
+		log.close()
+	get_tree().quit(code)
+
+
+## Valore che segue `key` negli argomenti utente ("" se assente).
+static func _cli_arg(args: PackedStringArray, key: String) -> String:
+	var i := args.find(key)
+	return args[i + 1] if i >= 0 and i + 1 < args.size() else ""
 
 
 ## Verifica da riga di comando (anche nell'app esportata): bake, export EXR, rilettura.
@@ -118,10 +160,10 @@ func _selftest() -> void:
 	var err2 := back.load_exr_from_buffer(FileAccess.get_file_as_bytes(path))
 	var c := back.get_pixel(back.get_width() / 2, back.get_height() / 2) if err2 == OK else Color.BLACK
 	var exr := ExrCodec.available()
-	var line := "[selftest] export %s · rilettura %s · %dx%d · pixel centro %s · OpenEXR %s · %s" % [
+	var line := "[selftest] export %s · read back %s · %dx%d · center pixel %s · OpenEXR %s · %s" % [
 		error_string(err), error_string(err2), back.get_width(), back.get_height(), c,
-		ExrCodec.version() if exr else "NON CARICATA",
-		"OK" if err == OK and err2 == OK and exr else "FALLITO"]
+		ExrCodec.version() if exr else "NOT LOADED",
+		"OK" if err == OK and err2 == OK and exr else "FAILED"]
 	print(line)
 	# anche su file: su Windows l'exe senza console wrapper non stampa nulla nel terminale
 	var log := FileAccess.open("user://selftest.log", FileAccess.WRITE)
@@ -149,7 +191,7 @@ func _build_layout() -> void:
 	tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	left.add_child(tabs)
 	var lights_tab := VBoxContainer.new()
-	lights_tab.name = "Luci"
+	lights_tab.name = "Lights"
 	lights_tab.add_theme_constant_override("separation", 8)
 	tabs.add_child(lights_tab)
 	light_list = LightListPanel.new()
@@ -160,11 +202,11 @@ func _build_layout() -> void:
 	props = LightProperties.new()
 	lights_tab.add_child(props)
 	catalog = CatalogPanel.new()
-	catalog.name = "Catalogo"
+	catalog.name = "Catalog"
 	tabs.add_child(catalog)
 	catalog.set_folder(AppSettings.get_value("catalog_folder", ""))
 	presets = PresetPanel.new()
-	presets.name = "Preset"
+	presets.name = "Presets"
 	tabs.add_child(presets)
 	presets.set_folder(AppSettings.get_value("preset_folder", ""))
 
@@ -203,6 +245,8 @@ func _build_layout() -> void:
 	right.add_child(link_panel)
 	right.add_child(_separator())
 	_build_model_panel(right)
+	right.add_child(_separator())
+	_build_language_row(right)
 
 	_file_dialog = FileDialog.new()
 	_file_dialog.access = FileDialog.ACCESS_FILESYSTEM
@@ -288,9 +332,45 @@ func _build_layout() -> void:
 	link_panel.separate_options_changed.connect(func() -> void: _live_export())
 	_update_status()
 	_update_link_status()
-	# visibile all'avvio, così un tester vede subito se la libreria EXR è caricata (Windows compreso)
-	export_panel.set_status("OpenEXR %s caricata: tutti i codec EXR" % ExrCodec.version() if ExrCodec.available()
-		else "Libreria OpenEXR non caricata: solo PIZ (TinyEXR)")
+	_update_exr_status()
+	I18n.changed.connect(_retranslate)
+
+
+## Testi composti a mano (formattati o concatenati): vanno riscritti al cambio di lingua,
+## quelli statici li ritraduce Godot da solo.
+func _retranslate() -> void:
+	_update_status()
+	_update_link_status()
+	_update_meter()
+	_update_exr_status()
+	light_list.refresh()
+
+
+## Visibile all'avvio, così un tester vede subito se la libreria EXR è caricata (Windows compreso).
+func _update_exr_status() -> void:
+	export_panel.set_status(tr("OpenEXR %s loaded: all EXR codecs") % ExrCodec.version() if ExrCodec.available()
+		else tr("OpenEXR library not loaded: PIZ only (TinyEXR)"))
+
+
+## Lingua dell'interfaccia: Automatica segue l'OS (italiano se l'OS è in italiano), le altre
+## due la forzano. La scelta è ricordata in settings.json.
+func _build_language_row(parent: Container) -> void:
+	var row := HBoxContainer.new()
+	parent.add_child(row)
+	var l := Label.new()
+	l.text = "Language"
+	l.custom_minimum_size.x = 96
+	row.add_child(l)
+	var ob := OptionButton.new()
+	ob.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ob.add_item("Automatic (system)")
+	# i nomi delle lingue restano nella lingua stessa: non finiscono nel dizionario
+	ob.add_item("English")
+	ob.add_item("Italiano")
+	var codes := [I18n.AUTO, "en", "it"]
+	ob.selected = maxi(codes.find(I18n.language()), 0)
+	ob.item_selected.connect(func(i: int) -> void: I18n.set_language(codes[i]))
+	row.add_child(ob)
 
 
 func _build_model_panel(parent: Container) -> void:
@@ -299,7 +379,7 @@ func _build_model_panel(parent: Container) -> void:
 	ptitle.add_theme_font_size_override("font_size", 15)
 	parent.add_child(ptitle)
 	parent.add_child(_spacer(2))
-	_ev_row = ParamRow.new("Esposizione EV", -8.0, 8.0, 0.1)
+	_ev_row = ParamRow.new("Exposure EV", -8.0, 8.0, 0.1)
 	_ev_row.value_changed.connect(func(v: float) -> void:
 		_preview_ev = v
 		_apply_preview_exposure())
@@ -308,12 +388,12 @@ func _build_model_panel(parent: Container) -> void:
 	fov_row.set_value_silent(35.0)
 	fov_row.value_changed.connect(func(v: float) -> void: preview.set_fov(v))
 	parent.add_child(fov_row)
-	var scale_row := ParamRow.new("Scala modello", 0.1, 5.0, 0.01, true)
+	var scale_row := ParamRow.new("Model scale", 0.1, 5.0, 0.01, true)
 	scale_row.set_value_silent(1.0)
 	scale_row.value_changed.connect(func(v: float) -> void: preview.set_model_scale(v))
 	parent.add_child(scale_row)
 	var hint := Label.new()
-	hint.text = "tasto destro sul preview: ruota il modello"
+	hint.text = "right click on the preview: rotate the model"
 	hint.add_theme_font_size_override("font_size", 11)
 	hint.modulate = Color(1, 1, 1, 0.5)
 	parent.add_child(hint)
@@ -322,17 +402,17 @@ func _build_model_panel(parent: Container) -> void:
 	parent.add_child(crow)
 	_clip_check = CheckBox.new()
 	_clip_check.text = "Clipping"
-	_clip_check.tooltip_text = "Evidenzia in magenta i pixel oltre la soglia, sulla mappa e sulla sfera cromata"
+	_clip_check.tooltip_text = "Highlights in magenta the pixels above the threshold, on the map and on the chrome sphere"
 	_clip_check.toggled.connect(func(_v: bool) -> void: _apply_clipping())
 	crow.add_child(_clip_check)
-	_clip_row = ParamRow.new("Soglia", 0.1, 10000.0, 0.1, true)
+	_clip_row = ParamRow.new("Threshold", 0.1, 10000.0, 0.1, true)
 	_clip_row.set_value_silent(1.0)
 	_clip_row.value_changed.connect(func(_v: float) -> void: _apply_clipping())
 	_clip_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	crow.add_child(_clip_row)
 	_link_camera = CheckBox.new()
-	_link_camera.text = "Camera dal live link"
-	_link_camera.tooltip_text = "Il preview segue la camera attiva del software 3D collegato (direzione, alto e FOV)"
+	_link_camera.text = "Camera from live link"
+	_link_camera.tooltip_text = "The preview follows the active camera of the connected 3D software (direction, up and FOV)"
 	_link_camera.button_pressed = AppSettings.get_value("link_camera", false)
 	_link_camera.toggled.connect(func(v: bool) -> void: AppSettings.set_value("link_camera", v))
 	parent.add_child(_link_camera)
@@ -340,13 +420,13 @@ func _build_model_panel(parent: Container) -> void:
 	# esposimetro
 	parent.add_child(_spacer(6))
 	var mtitle := Label.new()
-	mtitle.text = "Esposimetro"
+	mtitle.text = "Light meter"
 	mtitle.add_theme_font_size_override("font_size", 15)
 	parent.add_child(mtitle)
 	var meter_row := HBoxContainer.new()
 	parent.add_child(meter_row)
 	_meter_mode = OptionButton.new()
-	for it in ["Verso la camera", "Verso l'alto", "Az / El"]:
+	for it in ["Toward the camera", "Upward", "Az / El"]:
 		_meter_mode.add_item(it)
 	_meter_mode.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_meter_mode.item_selected.connect(func(_i: int) -> void: _update_meter())
@@ -364,21 +444,21 @@ func _build_model_panel(parent: Container) -> void:
 	_meter_el.value_changed.connect(func(_v: float) -> void: _update_meter())
 	meter_row.add_child(_meter_el)
 	_meter_label = Label.new()
-	_meter_label.tooltip_text = "E = ∫ L·cosθ dω su tutta l'HDRI per una superficie al centro rivolta nella direzione scelta.\nEV100 = log2(E / 2.5): con radianze in unità fotometriche coerenti è l'EV di un esposimetro a luce incidente."
+	_meter_label.tooltip_text = "E = ∫ L·cosθ dω over the whole HDRI for a surface at the center facing the chosen direction.\nEV100 = log2(E / 2.5): with radiances in consistent photometric units it is the EV of an incident-light meter."
 	parent.add_child(_meter_label)
 	parent.add_child(_spacer(6))
 	var title := Label.new()
-	title.text = "Modello nel preview"
+	title.text = "Preview model"
 	title.add_theme_font_size_override("font_size", 15)
 	parent.add_child(title)
 	var row := HBoxContainer.new()
 	parent.add_child(row)
 	var load_btn := Button.new()
-	load_btn.text = "Carica GLB…"
+	load_btn.text = "Load GLB…"
 	load_btn.pressed.connect(_pick_model)
 	row.add_child(load_btn)
 	var clear_btn := Button.new()
-	clear_btn.text = "Rimuovi"
+	clear_btn.text = "Remove"
 	clear_btn.pressed.connect(func() -> void:
 		preview.clear_model()
 		_model_label.text = "—")
@@ -386,14 +466,14 @@ func _build_model_panel(parent: Container) -> void:
 	var mrow := HBoxContainer.new()
 	parent.add_child(mrow)
 	var ml := Label.new()
-	ml.text = "Materiale"
+	ml.text = "Material"
 	ml.custom_minimum_size.x = 96
 	mrow.add_child(ml)
 	var mat := OptionButton.new()
 	mat.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	for it in Preview3D.MATERIAL_LABELS:
 		mat.add_item(it)
-	mat.tooltip_text = "Materiale del modello caricato; senza modello, della sfera centrale"
+	mat.tooltip_text = "Material of the loaded model; with no model, of the central sphere"
 	mat.item_selected.connect(func(i: int) -> void:
 		if preview.has_model():
 			preview.set_model_material(i as Preview3D.ModelMaterial)
@@ -410,11 +490,11 @@ func _build_model_panel(parent: Container) -> void:
 
 
 func _pick_model() -> void:
-	_dialog(FileDialog.FILE_MODE_OPEN_FILE, ["*.glb, *.gltf ; glTF"], "Modello per il preview", func(path: String) -> void:
+	_dialog(FileDialog.FILE_MODE_OPEN_FILE, ["*.glb, *.gltf ; glTF"], "Model for the preview", func(path: String) -> void:
 		if preview.load_model(path):
 			_model_label.text = path.get_file()
 		else:
-			_model_label.text = "Impossibile caricare " + path.get_file())
+			_model_label.text = tr("Cannot load %s") % path.get_file())
 
 
 static func _spacer(h: float) -> Control:
@@ -537,7 +617,7 @@ func _on_paint(dir: Vector3, commit: bool) -> void:
 		light_list.add_and_select(nl)
 	var l: RigLight = rig.lights[_selected]
 	if l.locked:
-		export_panel.set_status("La luce \"%s\" è bloccata (🔒): il LightPaint non la sposta" % l.name)
+		export_panel.set_status(tr("The light \"%s\" is locked (🔒): LightPaint will not move it") % l.name)
 		return
 	l.azimuth = rad_to_deg(atan2(-dir.x, dir.z))
 	l.elevation = rad_to_deg(asin(clampf(dir.y, -1.0, 1.0)))
@@ -587,7 +667,7 @@ func _process(_delta: float) -> void:
 			var shot := "res://out/app.png" if OS.has_feature("editor") else "user://app.png"
 			DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(shot.get_base_dir()))
 			img.save_png(ProjectSettings.globalize_path(shot))
-			print("Screenshot salvato: " + ProjectSettings.globalize_path(shot))
+			print("Screenshot saved: " + ProjectSettings.globalize_path(shot))
 			get_tree().quit()
 
 
@@ -642,14 +722,14 @@ func _apply_preview_exposure() -> void:
 
 
 func _update_status() -> void:
-	var name := _rig_path.get_file() if _rig_path != "" else "rig senza nome"
+	var name := _rig_path.get_file() if _rig_path != "" else tr("unnamed rig")
 	var hover := ""
 	if _hover_az != INF:
 		hover = "   |   az %.1f° el %.1f°" % [_hover_az, _hover_el]
 		var c := _map_value(_hover_az, _hover_el)
 		if c != Color.TRANSPARENT:
 			hover += " · RGB %.3f %.3f %.3f" % [c.r, c.g, c.b]
-	status.text = "  HDRI Studio %s · %s · %d luci · export %dx%d · preview %+.1f EV%s   |   click su un riflesso: seleziona · Shift+trascina: LightPaint · frecce: sposta (Shift 10°) · H: on/off · ⌘D duplica · Canc elimina · ⌘Z undo" % [
+	status.text = tr("  HDRI Studio %s · %s · %d lights · export %dx%d · preview %+.1f EV%s   |   click a reflection: select · Shift+drag: LightPaint · arrows: move (Shift 10°) · H: on/off · ⌘D duplicate · Del delete · ⌘Z undo") % [
 		app_version(), name, rig.lights.size(), rig.resolution.x, rig.resolution.y, _preview_ev, hover]
 
 
@@ -731,7 +811,7 @@ func _add_texture_light(path: String, defaults: Dictionary, az := NAN, el := NAN
 	l.azimuth = az if not is_nan(az) else 0.0
 	l.elevation = el if not is_nan(el) else 30.0
 	if baker.texture_layer(path) < 0:
-		export_panel.set_status("Immagine non leggibile: " + path.get_file())
+		export_panel.set_status(tr("Cannot read image: %s") % path.get_file())
 		return
 	if l.height <= 0.0:
 		# altezza dall'aspetto dell'immagine (come fa il catalogo con le miniature)
@@ -743,13 +823,13 @@ func _add_texture_light(path: String, defaults: Dictionary, az := NAN, el := NAN
 
 ## Scegli un EXR/HDR: new_light = true crea una luce Texture, altrimenti cambia l'immagine della selezionata.
 func _pick_texture_file(new_light: bool) -> void:
-	_dialog(FileDialog.FILE_MODE_OPEN_FILE, ["*.exr ; OpenEXR", "*.hdr ; Radiance HDR"], "Immagine della luce", func(path: String) -> void:
+	_dialog(FileDialog.FILE_MODE_OPEN_FILE, ["*.exr ; OpenEXR", "*.hdr ; Radiance HDR"], "Light image", func(path: String) -> void:
 		if new_light:
 			_add_texture_light(path, {})
 		elif _selected >= 0:
 			var l: RigLight = rig.lights[_selected]
 			if baker.texture_layer(path) < 0:
-				export_panel.set_status("Immagine non leggibile: " + path.get_file())
+				export_panel.set_status(tr("Cannot read image: %s") % path.get_file())
 				return
 			l.texture_path = path
 			props.sync_values()
@@ -772,7 +852,7 @@ func _show_hover(tex: Texture2D, name: String, anchor: Rect2) -> void:
 
 
 func _pick_preset_folder() -> void:
-	_dialog(FileDialog.FILE_MODE_OPEN_DIR, [], "Cartella dei preset", func(path: String) -> void:
+	_dialog(FileDialog.FILE_MODE_OPEN_DIR, [], "Preset folder", func(path: String) -> void:
 		AppSettings.set_value("preset_folder", path)
 		presets.set_folder(path))
 
@@ -782,7 +862,7 @@ func _save_preset(name: String) -> void:
 	var path := presets.preset_path(name)
 	var err := rig.save_json(path)
 	if err != OK:
-		presets._status.text = "Errore: " + error_string(err)
+		presets._status.text = tr("Error: %s") % error_string(err)
 		return
 	var img := baker.get_image()
 	img.resize(256, 128, Image.INTERPOLATE_BILINEAR)
@@ -812,20 +892,20 @@ func _merge_preset(path: String) -> void:
 
 
 func _pick_catalog_folder() -> void:
-	_dialog(FileDialog.FILE_MODE_OPEN_DIR, [], "Cartella del catalogo", func(path: String) -> void:
+	_dialog(FileDialog.FILE_MODE_OPEN_DIR, [], "Catalog folder", func(path: String) -> void:
 		AppSettings.set_value("catalog_folder", path)
 		catalog.set_folder(path))
 
 
 func _pick_base_hdri() -> void:
-	_dialog(FileDialog.FILE_MODE_OPEN_FILE, ["*.exr ; OpenEXR", "*.hdr ; Radiance HDR"], "HDRI di base", func(path: String) -> void:
+	_dialog(FileDialog.FILE_MODE_OPEN_FILE, ["*.exr ; OpenEXR", "*.hdr ; Radiance HDR"], "Base HDRI", func(path: String) -> void:
 		if baker.set_base_image_from_file(path):
 			rig.base_hdri_path = path
 			rig.base_enabled = true
 			bg_panel.set_rig(rig)
 			_on_light_changed(true)
 		else:
-			export_panel.set_status("Impossibile leggere " + path.get_file()))
+			export_panel.set_status(tr("Cannot read %s") % path.get_file()))
 
 
 func _export_exr() -> void:
@@ -833,7 +913,7 @@ func _export_exr() -> void:
 	if dir != "" and DirAccess.dir_exists_absolute(dir):
 		_file_dialog.current_dir = dir
 	_file_dialog.current_file = (_rig_path.get_file().get_basename() if _rig_path != "" else "hdri") + ".exr"
-	_dialog(FileDialog.FILE_MODE_SAVE_FILE, ["*.exr ; OpenEXR", "*.hdr ; Radiance HDR"], "Esporta HDRI (EXR o HDR)", export_to)
+	_dialog(FileDialog.FILE_MODE_SAVE_FILE, ["*.exr ; OpenEXR", "*.hdr ; Radiance HDR"], "Export HDRI (EXR or HDR)", export_to)
 
 
 ## Autosave di sicurezza: user://autosave/<data-ora>.json, ne tiene 10.
@@ -870,11 +950,11 @@ func _save_sidecar() -> void:
 	var path := l.texture_path.get_basename() + ".json"
 	var f := FileAccess.open(path, FileAccess.WRITE)
 	if f == null:
-		export_panel.set_status("Sidecar non scrivibile: " + path.get_file())
+		export_panel.set_status(tr("Cannot write sidecar: %s") % path.get_file())
 		return
 	f.store_string(JSON.stringify(side, "\t"))
 	f.close() # il catalogo lo rilegge subito
-	export_panel.set_status("Default salvati in " + path.get_file())
+	export_panel.set_status(tr("Defaults saved to %s") % path.get_file())
 	catalog.set_folder(catalog.folder)
 
 
@@ -915,7 +995,7 @@ func export_to(path: String, opts := {}) -> Error:
 		if lerr == OK:
 			_last_separate.append({"light": l, "path": ProjectSettings.globalize_path(lp)})
 		else:
-			push_warning("Luce separata non scritta: %s (%s)" % [lp, error_string(lerr)])
+			push_warning("Separate light not written: %s (%s)" % [lp, error_string(lerr)])
 	# torna alla risoluzione di preview e riaggancia la texture
 	baker.supersample = 1
 	baker.set_resolution(PREVIEW_RES.x, PREVIEW_RES.y)
@@ -928,11 +1008,11 @@ func export_to(path: String, opts := {}) -> Error:
 	if err == OK:
 		_last_export_path = ProjectSettings.globalize_path(path)
 		AppSettings.set_value("export_dir", _last_export_path.get_base_dir())
-		export_panel.set_status("Esportato %s (%dx%d, %s, %s, %s) in %.1f s" % [
+		export_panel.set_status(tr("Exported %s (%dx%d, %s, %s, %s) in %.1f s") % [
 			path.get_file(), res.x, res.y, "RGBE" if as_hdr else ("%s %s" % ["half" if half else "float32", codec]),
 			"ACEScg" if acescg else "Rec.709", target, (Time.get_ticks_msec() - t0) / 1000.0])
 	else:
-		export_panel.set_status("Errore export: " + error_string(err))
+		export_panel.set_status(tr("Export error: %s") % error_string(err))
 	_update_status()
 	return err
 
@@ -957,7 +1037,7 @@ func _set_link_enabled(on: bool) -> void:
 
 
 func _pick_live_path() -> void:
-	_dialog(FileDialog.FILE_MODE_SAVE_FILE, ["*.exr ; OpenEXR"], "File del live link", func(path: String) -> void:
+	_dialog(FileDialog.FILE_MODE_SAVE_FILE, ["*.exr ; OpenEXR"], "Live link file", func(path: String) -> void:
 		if path.get_extension().to_lower() != "exr":
 			path += ".exr"
 		rig.live_export_path = path
@@ -976,7 +1056,7 @@ func _schedule_live() -> void:
 ## Export alla risoluzione live sul file del link e notifica ai client collegati.
 func _live_export() -> void:
 	if rig.live_export_path == "":
-		link_panel.set_status("Scegli prima il file di export.")
+		link_panel.set_status(tr("Pick the export file first."))
 		return
 	var t0 := Time.get_ticks_msec()
 	# risoluzione adattiva: durante una sequenza di modifiche ravvicinate esporta a metà risoluzione,
@@ -994,11 +1074,11 @@ func _live_export() -> void:
 	else:
 		_live_full_pending = false
 	if err != OK:
-		link_panel.set_status("Errore export live: " + error_string(err))
+		link_panel.set_status(tr("Live export error: %s") % error_string(err))
 		return
 	link.notify_hdri(rig.live_export_path, export_panel.target())
 	link.broadcast(separate_message())
-	_update_link_status("ultimo invio %s in %d ms · %d luci separate" % [Time.get_time_string_from_system(), Time.get_ticks_msec() - t0, _last_separate.size()])
+	_update_link_status(tr("last push %s in %d ms · %d separate lights") % [Time.get_time_string_from_system(), Time.get_ticks_msec() - t0, _last_separate.size()])
 
 
 ## Messaggio per il plugin con le luci separate: direzione e basi già nelle coordinate del software
@@ -1083,12 +1163,12 @@ func _update_link_status(extra := "") -> void:
 	if link_panel == null:
 		return
 	if not link.is_listening():
-		link_panel.set_status("Spento. Attivalo e scegli il file: ogni modifica viene esportata e il plugin C4D ricarica la texture.")
+		link_panel.set_status(tr("Off. Enable it and pick the file: every change is exported and the C4D plugin reloads the texture."))
 		return
 	var hosts := []
 	for k in _link_hosts:
 		hosts.append(_link_hosts[k])
-	var txt := "In ascolto su 127.0.0.1:%d · %d client" % [link.port, link.client_count()]
+	var txt := tr("Listening on 127.0.0.1:%d · %d clients") % [link.port, link.client_count()]
 	if not hosts.is_empty():
 		txt += " (%s)" % ", ".join(hosts)
 	if extra != "":
@@ -1097,7 +1177,7 @@ func _update_link_status(extra := "") -> void:
 
 
 func _save_rig() -> void:
-	_dialog(FileDialog.FILE_MODE_SAVE_FILE, ["*.json ; Rig HDRI Studio"], "Salva rig", save_rig_to)
+	_dialog(FileDialog.FILE_MODE_SAVE_FILE, ["*.json ; Rig HDRI Studio"], "Save rig", save_rig_to)
 
 
 func save_rig_to(path: String) -> Error:
@@ -1107,15 +1187,15 @@ func save_rig_to(path: String) -> Error:
 	if err == OK:
 		_rig_path = path
 		AppSettings.set_value("last_rig", ProjectSettings.globalize_path(path))
-		export_panel.set_status("Rig salvato: " + path.get_file())
+		export_panel.set_status(tr("Rig saved: %s") % path.get_file())
 	else:
-		export_panel.set_status("Errore salvataggio: " + error_string(err))
+		export_panel.set_status(tr("Save error: %s") % error_string(err))
 	_update_status()
 	return err
 
 
 func _load_rig() -> void:
-	_dialog(FileDialog.FILE_MODE_OPEN_FILE, ["*.json ; Rig HDRI Studio", "*.exr ; EXR esportato da HDRI Studio"], "Apri rig (JSON o EXR con metadati)", load_rig_from)
+	_dialog(FileDialog.FILE_MODE_OPEN_FILE, ["*.json ; Rig HDRI Studio", "*.exr ; EXR esportato da HDRI Studio"], "Open rig (JSON or EXR with metadata)", load_rig_from)
 
 
 func load_rig_from(path: String) -> bool:
@@ -1128,7 +1208,7 @@ func load_rig_from(path: String) -> bool:
 	else:
 		r = LightRig.load_json(path)
 	if r == null:
-		export_panel.set_status("Rig non valido: " + path.get_file())
+		export_panel.set_status(tr("Invalid rig: %s") % path.get_file())
 		return false
 	rig = r
 	_rig_path = path
@@ -1137,7 +1217,7 @@ func load_rig_from(path: String) -> bool:
 	undo.reset(rig.to_dict())
 	_select(0 if rig.lights.size() > 0 else -1)
 	light_list.select(_selected)
-	export_panel.set_status("Rig aperto: " + path.get_file())
+	export_panel.set_status(tr("Rig opened: %s") % path.get_file())
 	_update_status()
 	return true
 

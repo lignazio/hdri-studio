@@ -84,19 +84,19 @@ def main():
     for node in nodes:
         for pid, path in image_params(node):
             hits += 1
-            print("[hdri-studio] %-28s tipo=%d  param=%s  ->  %s" % (node.GetName(), node.GetType(), pid, path))
+            print("[hdri-studio] %-28s type=%d  param=%s  ->  %s" % (node.GetName(), node.GetType(), pid, path))
             btns = buttons(node)
             for descid, name in btns:
                 pressed = ""
                 if "reload" in name.lower():
-                    pressed = "  -> PREMUTO, risposta=%s" % press(node, descid)
-                print("[hdri-studio]     pulsante id=%d  nome=%r%s" % (descid[0].id, name, pressed))
+                    pressed = "  -> PRESSED, answer=%s" % press(node, descid)
+                print("[hdri-studio]     button id=%d  name=%r%s" % (descid[0].id, name, pressed))
             if not btns:
-                print("[hdri-studio]     (nessun pulsante nella descrizione)")
+                print("[hdri-studio]     (no button in the description)")
             node.SetDirty(c4d.DIRTYFLAGS_DATA)
             node.Message(c4d.MSG_UPDATE)
     c4d.EventAdd(c4d.EVENT_FORCEREDRAW)
-    print("[hdri-studio] %d nodi con immagine trovati" % hits)
+    print("[hdri-studio] %d nodes with an image found" % hits)
 
 
 if __name__ == "__main__":

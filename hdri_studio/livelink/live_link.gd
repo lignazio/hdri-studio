@@ -27,7 +27,7 @@ func start(p := DEFAULT_PORT) -> Error:
 	port = p
 	var err := _server.listen(port, "127.0.0.1")
 	if err != OK:
-		push_warning("Live link: impossibile ascoltare sulla porta %d (%s)" % [port, error_string(err)])
+		push_warning("Live link: cannot listen on port %d (%s)" % [port, error_string(err)])
 	return err
 
 
@@ -99,5 +99,5 @@ func _drain(i: int) -> void:
 		if parsed is Dictionary:
 			message_received.emit(parsed, i)
 		else:
-			push_warning("Live link: riga non JSON: " + line)
+			push_warning("Live link: non-JSON line: " + line)
 	_buffers[i] = buf

@@ -81,7 +81,7 @@ func duplicate_light() -> RigLight:
 ## Copia specchiata sinistra ↔ destra rispetto al meridiano az = 0 (key ↔ fill).
 func mirrored() -> RigLight:
 	var m := duplicate_light()
-	m.name = name + " specchio"
+	m.name = name + " " + TranslationServer.translate("mirror")
 	m.azimuth = -azimuth
 	m.roll = -roll
 	m.gradient_angle = -gradient_angle

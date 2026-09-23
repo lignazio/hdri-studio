@@ -38,17 +38,17 @@ var _status: Label
 
 func _init() -> void:
 	var title := Label.new()
-	title.text = "Catalogo HDRI lights"
+	title.text = "HDRI light catalog"
 	title.add_theme_font_size_override("font_size", 15)
 	add_child(title)
 	var row := HBoxContainer.new()
 	add_child(row)
 	var pick := Button.new()
-	pick.text = "Cartella…"
+	pick.text = "Folder…"
 	pick.pressed.connect(func() -> void: folder_pick_requested.emit())
 	row.add_child(pick)
 	var rescan := Button.new()
-	rescan.text = "Aggiorna"
+	rescan.text = "Refresh"
 	rescan.pressed.connect(func() -> void: set_folder(folder))
 	row.add_child(rescan)
 	_path_label = Label.new()
@@ -63,21 +63,21 @@ func _init() -> void:
 	var frow := HBoxContainer.new()
 	add_child(frow)
 	_filter = LineEdit.new()
-	_filter.placeholder_text = "Filtra per nome o tag…"
+	_filter.placeholder_text = "Filter by name or tag…"
 	_filter.clear_button_enabled = true
 	_filter.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_filter.text_changed.connect(func(_t: String) -> void: _apply_filter())
 	frow.add_child(_filter)
 	_fav_only = CheckBox.new()
 	_fav_only.text = "★"
-	_fav_only.tooltip_text = "Solo preferiti"
+	_fav_only.tooltip_text = "Favorites only"
 	_fav_only.toggled.connect(func(_v: bool) -> void: _apply_filter())
 	frow.add_child(_fav_only)
 	_tag_filter = OptionButton.new()
 	_tag_filter.item_selected.connect(func(_i: int) -> void: _apply_filter())
 	add_child(_tag_filter)
-	var erow := ParamRow.new("Miniature EV", -4.0, 4.0, 0.5)
-	erow.tooltip_text = "Esposizione delle miniature rispetto all'automatica (rigenera le miniature)"
+	var erow := ParamRow.new("Thumbnail EV", -4.0, 4.0, 0.5)
+	erow.tooltip_text = "Thumbnail exposure relative to the automatic one (regenerates the thumbnails)"
 	ThumbnailCache.exposure_ev = float(AppSettings.get_value("thumb_ev", 0.0))
 	erow.set_value_silent(ThumbnailCache.exposure_ev)
 	erow.committed.connect(func() -> void:
@@ -86,14 +86,14 @@ func _init() -> void:
 		set_folder(folder))
 	add_child(erow)
 	_menu = PopupMenu.new()
-	_menu.add_check_item("★ Preferito", 0)
+	_menu.add_check_item("★ Favorite", 0)
 	_menu.add_item("Tag…", 1)
 	_menu.id_pressed.connect(_on_menu)
 	add_child(_menu)
 	_tag_dialog = ConfirmationDialog.new()
-	_tag_dialog.title = "Tag (separati da virgola)"
+	_tag_dialog.title = "Tags (comma separated)"
 	_tag_edit = LineEdit.new()
-	_tag_edit.placeholder_text = "softbox, caldo, grande"
+	_tag_edit.placeholder_text = "softbox, warm, large"
 	_tag_edit.text_submitted.connect(func(_t: String) -> void: _tag_dialog.hide(); _on_tags_confirmed())
 	_tag_dialog.add_child(_tag_edit)
 	_tag_dialog.confirmed.connect(_on_tags_confirmed)
@@ -132,9 +132,9 @@ func set_folder(path: String) -> void:
 	_sections.clear()
 	_items.clear()
 	_subfolder.clear()
-	_subfolder.add_item("Tutte le cartelle")
+	_subfolder.add_item("All folders")
 	if path == "" or not DirAccess.dir_exists_absolute(path):
-		_status.text = "Scegli una cartella con i tuoi EXR/HDR."
+		_status.text = "Pick a folder with your EXR/HDR files."
 		return
 	_scan(path)
 	# ordine: per sottocartella, poi per nome
@@ -145,10 +145,10 @@ func set_folder(path: String) -> void:
 	for it in _items:
 		_add_button(it)
 	for sub in _sections:
-		_subfolder.add_item(sub if sub != "" else "(radice)")
+		_subfolder.add_item(sub if sub != "" else "(root)")
 	_rebuild_tag_filter()
 	_apply_filter()
-	_status.text = "%d immagini in %d cartelle" % [_items.size(), _sections.size()]
+	_status.text = tr("%d images in %d folders") % [_items.size(), _sections.size()]
 
 
 func _scan(dir_path: String) -> void:
@@ -184,7 +184,7 @@ func _section_grid(sub: String) -> GridContainer:
 	if _sections.has(sub):
 		return _sections[sub]["grid"]
 	var header := Label.new()
-	header.text = sub if sub != "" else "(radice)"
+	header.text = sub if sub != "" else "(root)"
 	header.add_theme_font_size_override("font_size", 13)
 	header.modulate = Color(1.0, 0.8, 0.2, 0.9)
 	_list.add_child(header)
@@ -335,7 +335,7 @@ func _all_tags() -> Array:
 func _rebuild_tag_filter() -> void:
 	var cur := _tag_filter.get_item_text(_tag_filter.selected) if _tag_filter.selected > 0 else ""
 	_tag_filter.clear()
-	_tag_filter.add_item("Tutti i tag")
+	_tag_filter.add_item("All tags")
 	var i := 1
 	for tg in _all_tags():
 		_tag_filter.add_item(tg)

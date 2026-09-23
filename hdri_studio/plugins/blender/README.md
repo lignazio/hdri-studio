@@ -26,7 +26,7 @@ texture, visibilità in camera delle luci separate.
    strength 1 + l'EXR planare) nella collezione `HDRI Studio Lights`, figlio dell'empty `HDRI Studio
    Center` (spostalo sul soggetto: i piani seguono). Direzione, distanza (cm → m), dimensione fisica e
    texture sono automatiche. Verificato in Cycles: il piano illumina il centro come la stessa luce
-   nell'HDRI (rapporto 1.002). *Luci separate visibili in camera* nel pannello le nasconde alla camera
+   nell'HDRI (rapporto 1.002). *Separate lights visible to camera* nel pannello le nasconde alla camera
    lasciandole nei riflessi e nell'illuminazione.
 
 Senza app collegata, l'add-on controlla ogni secondo la data di modifica dei file EXR/HDR usati nella

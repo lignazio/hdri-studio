@@ -25,36 +25,36 @@ func _init() -> void:
 	title.add_theme_font_size_override("font_size", 15)
 	add_child(title)
 
-	_res = _option("Risoluzione", ["2k × 1k", "4k × 2k", "8k × 4k"])
+	_res = _option("Resolution", ["2k × 1k", "4k × 2k", "8k × 4k"])
 	_res.item_selected.connect(func(i: int) -> void: resolution_changed.emit(RESOLUTIONS[i]))
 	_target = _option("Software", HdriExport.TARGETS.keys())
 	_target.selected = HdriExport.TARGETS.keys().find(HdriExport.DEFAULT_TARGET)
-	_shift = ParamRow.new("Rotazione", -180.0, 180.0, 1.0)
+	_shift = ParamRow.new("Rotation", -180.0, 180.0, 1.0)
 	add_child(_shift)
 	_half = CheckBox.new()
 	_half.text = "EXR half (16 bit)"
 	_half.button_pressed = true
 	add_child(_half)
-	_colorspace = _option("Spazio colore", HdriExport.COLORSPACES)
-	_colorspace.tooltip_text = "Primari dell'EXR esportato. La preview resta Rec.709. Con ACEScg i valori sono convertiti\n(Rec.709 → AP1 con adattamento Bradford) e i metadati dichiarano i primari AP1 con bianco D60."
-	_codec = _option("Compressione", [])
+	_colorspace = _option("Color space", HdriExport.COLORSPACES)
+	_colorspace.tooltip_text = "Primaries of the exported EXR. The preview stays Rec.709. With ACEScg the values are converted\n(Rec.709 → AP1 with Bradford adaptation) and the metadata declares AP1 primaries with a D60 white point."
+	_codec = _option("Compression", [])
 	var native := ExrCodec.available()
 	for c in ExrCodec.CODECS:
 		_codec.add_item(c + ("  (lossy)" if c in ExrCodec.LOSSY else ""))
 		if not native and c != "PIZ":
 			_codec.set_item_disabled(_codec.item_count - 1, true)
-	_codec.tooltip_text = ("Scritto da OpenEXR %s. Lossless: PIZ, ZIP, ZIPS, RLE, NONE. Lossy: PXR24 (float → 24 bit), B44, B44A, DWAA, DWAB.\nIl live link usa sempre PIZ." % ExrCodec.version()) if native \
-		else "Libreria OpenEXR non caricata: Godot scrive solo PIZ."
+	_codec.tooltip_text = (tr("Written by OpenEXR %s. Lossless: PIZ, ZIP, ZIPS, RLE, NONE. Lossy: PXR24 (float → 24 bit), B44, B44A, DWAA, DWAB.\nThe live link always uses PIZ.") % ExrCodec.version()) if native \
+		else "OpenEXR library not loaded: Godot only writes PIZ."
 
 	var row := HBoxContainer.new()
 	add_child(row)
 	var b := Button.new()
-	b.text = "Esporta EXR…"
+	b.text = "Export EXR…"
 	b.pressed.connect(func() -> void: export_requested.emit())
 	row.add_child(b)
 	var of := Button.new()
-	of.text = "Apri cartella"
-	of.tooltip_text = "Apre nel Finder/Esplora la cartella dell'ultimo export"
+	of.text = "Open folder"
+	of.tooltip_text = "Opens the folder of the last export in Finder/Explorer"
 	of.pressed.connect(func() -> void: open_folder_requested.emit())
 	row.add_child(of)
 	var sep := HSeparator.new()
@@ -63,11 +63,11 @@ func _init() -> void:
 	var row2 := HBoxContainer.new()
 	add_child(row2)
 	var bs := Button.new()
-	bs.text = "Salva rig…"
+	bs.text = "Save rig…"
 	bs.pressed.connect(func() -> void: save_rig_requested.emit())
 	row2.add_child(bs)
 	var bl := Button.new()
-	bl.text = "Apri rig…"
+	bl.text = "Open rig…"
 	bl.pressed.connect(func() -> void: load_rig_requested.emit())
 	row2.add_child(bl)
 	_status = Label.new()
