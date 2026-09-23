@@ -124,7 +124,7 @@ luci seguono; togliendo il flag la luce sparisce dalla scena.
 Da tarare al primo uso (costanti in cima al `.pyp`): il verso di emissione della luce modello
 (`LIGHT_EMITS_ALONG_Z`) e, con il furnace test, il rapporto fra la Power di Octane e la radianza.
 
-## Radiance .hdr e metadati EXR (16/09)
+## Radiance .hdr e metadati EXR (16/09, il rig nel .hdr il 23/09)
 
 Nella dialog di export scegli l'estensione: `.exr` (half/float32, codec a scelta) oppure `.hdr`
 (Radiance RGBE, codificato sul GPU, non compresso: lo leggono tutti; precisione della mantissa a 8 bit).
@@ -134,6 +134,12 @@ Ogni EXR esportato porta nell'header `chromaticities` (Rec.709/D65), un `comment
 `hdristudio_rig` con il **rig completo in JSON**: *Apri rig…* accetta anche un EXR e ricostruisce il set
 da lì. Gli attributi li scrive OpenEXR insieme ai pixel (HsOpenEXR); nel fallback TinyEXR vengono
 iniettati dopo la scrittura aggiornando la tabella degli offset. Verificato con TinyEXR e con OpenEXR.
+
+Anche il `.hdr` porta il rig: l'header Radiance è testo fino alla prima riga vuota, e ci scriviamo la
+riga `#HDRISTUDIO_RIG=<json>` (una riga sola, senza a capo). È un **commento** di proposito: i lettori
+saltano i commenti in silenzio, mentre una variabile sconosciuta fa rumore (Godot stampa un warning con
+tutta la riga). *Apri rig…* rilegge il rig da `.exr` e da `.hdr` allo stesso modo
+(`HdriExport.read_rig_json`).
 
 Ogni luce ha un **🔒** (accanto a On/Solo): bloccata, non la spostano né il LightPaint né la mappa né
 le frecce.

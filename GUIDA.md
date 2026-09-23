@@ -62,7 +62,8 @@ guida e i nomi dei pannelli qui sotto sono quelli italiani.
    lineare, con tacche colorate), **Scrim** (telo con la sorgente dietro: hotspot fisico), **Texture**
    (un'immagine EXR/HDR di una luce vera).
 5. **Esporta EXR…** nel pannello Export: 4k×2k, half, preset *Cinema 4D + Octane* (o *Godot / Blender*).
-   Il file è radianza lineare, primari Rec.709, e porta dentro il rig: *Apri rig…* lo rilegge da lì.
+   Il file è radianza lineare, primari Rec.709, e porta dentro il rig: *Apri rig…* lo rilegge da lì
+   (vale anche per l'export `.hdr`, quindi il progetto si riapre da qualunque HDRI esportata).
 
 ## 4. Le cose da sapere
 

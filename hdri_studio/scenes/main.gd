@@ -1017,10 +1017,11 @@ func export_to(path: String, opts := {}) -> Error:
 	return err
 
 
-## Scrive EXR (codec e metadati: chromaticities e rig JSON) oppure Radiance .hdr.
+## Scrive EXR (codec e metadati: chromaticities e rig JSON) oppure Radiance .hdr (il rig finisce
+## nell'header come variabile: anche un .hdr riapre il progetto).
 func _write_image(img: Image, path: String, half: bool, as_hdr: bool, codec: String, rig_json: String, acescg := false) -> Error:
 	if as_hdr:
-		return HdriExport.save_hdr(path, img.get_width(), img.get_height(), baker.rgbe_bytes(img))
+		return HdriExport.save_hdr(path, img.get_width(), img.get_height(), baker.rgbe_bytes(img), rig_json)
 	return HdriExport.save_exr(img, path, half, codec, rig_json, acescg)
 
 
@@ -1195,13 +1196,13 @@ func save_rig_to(path: String) -> Error:
 
 
 func _load_rig() -> void:
-	_dialog(FileDialog.FILE_MODE_OPEN_FILE, ["*.json ; Rig HDRI Studio", "*.exr ; EXR esportato da HDRI Studio"], "Open rig (JSON or EXR with metadata)", load_rig_from)
+	_dialog(FileDialog.FILE_MODE_OPEN_FILE, ["*.json, *.exr, *.hdr ; Rig or HDRI with metadata", "*.json ; Rig HDRI Studio", "*.exr ; OpenEXR", "*.hdr ; Radiance HDR"], "Open rig (JSON, or EXR/HDR with metadata)", load_rig_from)
 
 
 func load_rig_from(path: String) -> bool:
 	var r: LightRig = null
-	if path.get_extension().to_lower() == "exr":
-		var js := HdriExport.read_string_attribute(path, HdriExport.RIG_ATTR)
+	if path.get_extension().to_lower() in ["exr", "hdr"]:
+		var js := HdriExport.read_rig_json(path)
 		var d = JSON.parse_string(js) if js != "" else null
 		if d is Dictionary:
 			r = LightRig.from_dict(d)

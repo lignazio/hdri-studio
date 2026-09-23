@@ -11,8 +11,8 @@ adesso.
   catalogo di HDRI light con tag e preferiti, libreria di preset, undo, autosave, modalità fotometrica
   validata contro Cycles, esposimetro, clipping, LightPaint.
 - **Export**: EXR (tutti i codec, via la GDExtension `HsOpenEXR` inclusa nel repo) e Radiance `.hdr`,
-  half o float32, Rec.709 o ACEScg, metadati con il rig dentro il file — un EXR esportato si riapre
-  come rig. Preset di orientamento per software, tutti misurati con l'HDRI di taratura.
+  half o float32, Rec.709 o ACEScg, metadati con il rig dentro il file — un EXR o un `.hdr` esportato
+  si riapre come rig. Preset di orientamento per software, tutti misurati con l'HDRI di taratura.
 - **Live link** (TCP 127.0.0.1:47820, JSON-lines): plugin per **Cinema 4D + Octane**, **Blender** e
   **Houdini**. Ricarica dell'HDRI a ogni modifica, luci separate ricreate come luci vere nel software
   3D, LightPaint dal viewport (C4D e Blender).

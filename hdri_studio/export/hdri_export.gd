@@ -24,8 +24,15 @@ const TARGETS := {
 const DEFAULT_TARGET := "Cinema 4D + Octane"
 
 
+## Riga dell'header Radiance che porta il rig, come RIG_ATTR per l'EXR. L'header .hdr è testo (una
+## riga per variabile, fino alla prima riga vuota) e il JSON ci sta su una riga sola, così anche un
+## .hdr riapre il progetto. La scriviamo come commento (`#`): i lettori saltano i commenti in
+## silenzio, mentre una variabile sconosciuta fa rumore (Godot stampa un warning con tutta la riga).
+const RIG_HDR_KEY := "HDRISTUDIO_RIG"
+
+
 ## Radiance .hdr (RGBE, non compresso: lo leggono tutti). rgbe: 4 byte per pixel dal baker.
-static func save_hdr(path: String, width: int, height: int, rgbe: PackedByteArray) -> Error:
+static func save_hdr(path: String, width: int, height: int, rgbe: PackedByteArray, rig_json := "") -> Error:
 	if rgbe.size() != width * height * 4:
 		return ERR_INVALID_DATA
 	var dest := ProjectSettings.globalize_path(path)
@@ -33,7 +40,12 @@ static func save_hdr(path: String, width: int, height: int, rgbe: PackedByteArra
 	var f := FileAccess.open(tmp, FileAccess.WRITE)
 	if f == null:
 		return FileAccess.get_open_error()
-	f.store_string("#?RADIANCE\nFORMAT=32-bit_rle_rgbe\nSOFTWARE=HDRI Studio\n\n-Y %d +X %d\n" % [height, width])
+	var head := "#?RADIANCE\nFORMAT=32-bit_rle_rgbe\nSOFTWARE=HDRI Studio\n"
+	if rig_json != "":
+		# JSON.stringify non produce a capo veri, ma una stringa arrivata da altrove potrebbe: un a
+		# capo qui chiuderebbe l'header a metà del rig.
+		head += "#" + RIG_HDR_KEY + "=" + rig_json.replace("\n", " ").replace("\r", " ") + "\n"
+	f.store_string(head + "\n-Y %d +X %d\n" % [height, width])
 	f.store_buffer(rgbe)
 	f.close()
 	if FileAccess.file_exists(dest):
@@ -158,6 +170,32 @@ static func read_string_attribute(path: String, attr: String) -> String:
 			return head.slice(value_at, value_at + size).get_string_from_utf8()
 		i = value_at + size
 	return ""
+
+
+## Legge una variabile dall'header di un Radiance .hdr ("" se assente). L'header finisce alla prima
+## riga vuota, prima della riga di risoluzione.
+static func read_hdr_variable(path: String, key: String) -> String:
+	var f := FileAccess.open(ProjectSettings.globalize_path(path), FileAccess.READ)
+	if f == null:
+		return ""
+	if not f.get_line().begins_with("#?"):
+		return ""
+	var prefix := key + "="
+	while not f.eof_reached():
+		var line := f.get_line()
+		if line == "":
+			break # riga vuota: l'header finisce qui
+		line = line.trim_prefix("#")
+		if line.begins_with(prefix):
+			return line.substr(prefix.length())
+	return ""
+
+
+## Rig salvato dentro l'immagine, qualunque sia il formato ("" se il file non ne ha).
+static func read_rig_json(path: String) -> String:
+	if path.get_extension().to_lower() == "hdr":
+		return read_hdr_variable(path, RIG_HDR_KEY)
+	return read_string_attribute(path, RIG_ATTR)
 
 
 ## Percorso dell'EXR singolo di una luce separata, accanto all'HDRI principale: <base>_<nome>.exr

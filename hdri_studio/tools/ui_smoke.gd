@@ -524,6 +524,12 @@ func _run(main: Node) -> void:
 	var herr := hdr.load(ProjectSettings.globalize_path("res://out/smoke_meta.hdr"))
 	var hc := hdr.get_pixel(hdr.get_width() / 2, hdr.get_height() / 2) if herr == OK else Color.BLACK
 	_check(herr == OK and hdr.get_width() == 2048 and absf(hc.r - 7.5) < 0.08, ".hdr riletto da Godot: %dx%d, centro %.3f (RGBE)" % [hdr.get_width(), hdr.get_height(), hc.r])
+	# il rig nell'header del .hdr: prima la variabile grezza, poi il giro completo (la rilettura dei
+	# pixel qui sopra è anche la prova che la riga in più non disturba chi legge l'immagine)
+	var hjs := HdriExport.read_hdr_variable("res://out/smoke_meta.hdr", HdriExport.RIG_HDR_KEY)
+	_check(hjs != "" and (JSON.parse_string(hjs) as Dictionary).get("lights", []).size() == 1, "variabile HDRISTUDIO_RIG letta dall'.hdr")
+	main.rig.lights.clear()
+	_check(main.load_rig_from(ProjectSettings.globalize_path("res://out/smoke_meta.hdr")) and main.rig.lights.size() == 1 and main.rig.lights[0].name == "hdr test", "rig riaperto dall'.hdr")
 	_check(main.export_to("res://out/smoke_meta.exr") == OK, "export EXR con metadati")
 	await process_frame
 	var js := HdriExport.read_string_attribute("res://out/smoke_meta.exr", HdriExport.RIG_ATTR)

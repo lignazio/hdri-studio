@@ -608,6 +608,26 @@ L'ultimo buco del piano iniziale. Niente LightPaint: HDRI + luci separate.
 
 Resta fuori: LightPaint dal viewport di Houdini e una prova su una scena vera (finora solo headless).
 
+### Rig dentro il `.hdr` — fatto il 23/09/2026
+
+L'EXR portava il progetto dentro di sé dal 16/09, il `.hdr` no: `save_hdr` scriveva solo `SOFTWARE=` e
+ignorava il rig. Ora i due formati si comportano allo stesso modo.
+
+1. [x] **Scrittura**: l'header Radiance è testo fino alla prima riga vuota, quindi `save_hdr` ci
+   aggiunge `#HDRISTUDIO_RIG=<json>` (il JSON di `rig.to_dict()`, su una riga sola; eventuali a capo
+   sono sostituiti da spazi perché un a capo chiuderebbe l'header a metà del rig). Scritta come
+   **commento**: i lettori saltano i commenti in silenzio, mentre per una variabile sconosciuta Godot
+   stampa un warning con tutta la riga — provate entrambe le forme, tenuta quella zitta.
+2. [x] **Lettura**: `HdriExport.read_hdr_variable` scorre l'header, e `read_rig_json` sceglie da sé
+   fra attributo EXR e riga del `.hdr`. *Apri rig…* accetta `.json`, `.exr` e `.hdr`.
+3. [x] **Test**: in `ui_smoke.gd`, accanto all'export `.hdr` che già c'era — la riga riletta, il rig
+   riaperto dal file (una luce, nome e parametri), e la rilettura dei pixel da parte di Godot come
+   prova che la riga in più non disturba chi legge l'immagine. Controllato anche con un parser RGBE
+   scritto a parte: header chiuso bene, riga di risoluzione intatta, payload esattamente W×H×4 byte,
+   centro 7,48 contro i 7,5 attesi. Su questo Mac non ci sono né OpenImageIO né ImageMagick, quindi la
+   prova con un lettore di terze parti compilato resta da fare (stb_image, che è quello che usano in
+   tanti, tronca le righe lunghe senza rompersi — letto nel sorgente, non provato).
+
 ### 5.4 Fase 4 — test in C4D
 
 > [!todo] Da fare sul PC
@@ -686,7 +706,7 @@ Confronto con la v0.3 (il piano approvato prima di scrivere codice) e con le voc
 |---|---|---|
 | Radiance `.hdr` in export | Fase 1/2 | Fatto (16/09): RGBE codificato sul GPU, flat, verificato in rilettura |
 | Codec EXR (ZIP, DWAA, DWAB…) | richiesta 15/09 | Fatto (17/09, Fase 7): OpenEXR dentro l'app con la GDExtension HsOpenEXR, scrittura e lettura di tutti i codec; Blender non serve più |
-| Metadati nell'EXR (chromaticities Rec.709, JSON del rig dentro il file) | §4.5 | Fatto (16/09): scritti da OpenEXR insieme ai pixel (dal 17/09); nel fallback TinyEXR iniettati nell'header dopo la scrittura; il rig si riapre dall'EXR |
+| Metadati nell'EXR (chromaticities Rec.709, JSON del rig dentro il file) | §4.5 | Fatto (16/09): scritti da OpenEXR insieme ai pixel (dal 17/09); nel fallback TinyEXR iniettati nell'header dopo la scrittura; il rig si riapre dall'EXR e, dal 23/09, anche dal `.hdr` |
 | ACEScg come spazio di output | §2, Fase 3 | Fatto (16/09): conversione Rec.709 → AP1 (Bradford) nel bake dell'export, chromaticities AP1/D60 nei metadati, anche per le luci separate |
 | Libreria di preset di studio | Fase 3 | Fatta: tab Preset, cartella di JSON + miniature, carica/aggiungi/elimina |
 | Preset di orientamento **Houdini** e plugin Houdini | §3, Fase 3 | Fatto (23/09): preset misurato con Karma (nessun flip, nessuno shift), plugin con reload e luci separate (niente LightPaint) |
@@ -758,3 +778,8 @@ luci Texture e catalogo, luci separate, app standalone.
   background. Statico, senza dipendenze di sistema, cross-compilata per Windows dal Mac con mingw.
   Il fallback TinyEXR resta nel codice (via `ClassDB.class_call_static`) per non rompere l'app se
   il binario manca, ma non è più la strada normale.
+- 23/09/2026 — Il rig dentro il `.hdr` si scrive come **commento** dell'header Radiance
+  (`#HDRISTUDIO_RIG=…`) e non come variabile: i lettori ignorano i commenti in silenzio, mentre una
+  variabile che non conoscono la segnalano (Godot stampa un warning con tutto il JSON a ogni
+  apertura dell'immagine). Il formato resta leggibile a occhio, senza base64.
+
