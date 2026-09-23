@@ -21,7 +21,7 @@ var folder := ""
 var thumbs := ThumbnailCache.new()
 var _items: Array[Dictionary] = []
 var _buttons := {}
-var _sections := {}      # sottocartella relativa → {"header": Label, "grid": GridContainer}
+var _sections := {}      # sottocartella relativa → {"header": Label, "grid": GridContainer, "gap": Control}
 var _list: VBoxContainer
 var _subfolder: OptionButton
 var _filter: LineEdit
@@ -37,10 +37,7 @@ var _status: Label
 
 
 func _init() -> void:
-	var title := Label.new()
-	title.text = "HDRI light catalog"
-	title.add_theme_font_size_override("font_size", 15)
-	add_child(title)
+	# niente titolo: è già il nome della scheda
 	var row := HBoxContainer.new()
 	add_child(row)
 	var pick := Button.new()
@@ -51,11 +48,7 @@ func _init() -> void:
 	rescan.text = "Refresh"
 	rescan.pressed.connect(func() -> void: set_folder(folder))
 	row.add_child(rescan)
-	_path_label = Label.new()
-	_path_label.text = "—"
-	_path_label.clip_text = true
-	_path_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	_path_label.modulate = Color(1, 1, 1, 0.7)
+	_path_label = UiStyle.dim("No folder")
 	add_child(_path_label)
 	_subfolder = OptionButton.new()
 	_subfolder.item_selected.connect(func(_i: int) -> void: _apply_filter())
@@ -106,9 +99,7 @@ func _init() -> void:
 	_list = VBoxContainer.new()
 	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(_list)
-	_status = Label.new()
-	_status.modulate = Color(1, 1, 1, 0.7)
-	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_status = UiStyle.status()
 	add_child(_status)
 	thumbs.ready.connect(_on_thumb)
 	set_process(true)
@@ -124,7 +115,7 @@ func _exit_tree() -> void:
 
 func set_folder(path: String) -> void:
 	folder = path
-	_path_label.text = path if path != "" else "—"
+	_path_label.text = path if path != "" else "No folder"
 	_path_label.tooltip_text = path
 	for c in _list.get_children():
 		c.queue_free()
@@ -148,7 +139,13 @@ func set_folder(path: String) -> void:
 		_subfolder.add_item(sub if sub != "" else "(root)")
 	_rebuild_tag_filter()
 	_apply_filter()
-	_status.text = tr("%d images in %d folders") % [_items.size(), _sections.size()]
+	retranslate()
+
+
+## Il contatore è composto a mano: main lo richiama al cambio di lingua (senza riscandire la cartella).
+func retranslate() -> void:
+	if not _items.is_empty() or not _sections.is_empty():
+		_status.text = tr("%d images in %d folders") % [_items.size(), _sections.size()]
 
 
 func _scan(dir_path: String) -> void:
@@ -183,16 +180,17 @@ static func _sidecar(path: String) -> Dictionary:
 func _section_grid(sub: String) -> GridContainer:
 	if _sections.has(sub):
 		return _sections[sub]["grid"]
-	var header := Label.new()
-	header.text = sub if sub != "" else "(root)"
-	header.add_theme_font_size_override("font_size", 13)
-	header.modulate = Color(1.0, 0.8, 0.2, 0.9)
+	# come i sottotitoli di sezione: l'ambra è riservata alla selezione
+	var header := UiStyle.section(sub if sub != "" else "(root)")
+	# aria sopra ogni cartella tranne la prima (i figli vecchi sono solo in coda di liberazione)
+	var gap := UiStyle.spacer(0.0 if _sections.is_empty() else float(UiStyle.SPACE_GROUP - UiStyle.SPACE_ROW))
+	_list.add_child(gap)
 	_list.add_child(header)
 	var grid := GridContainer.new()
 	grid.columns = COLUMNS
 	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_list.add_child(grid)
-	_sections[sub] = {"header": header, "grid": grid}
+	_sections[sub] = {"header": header, "grid": grid, "gap": gap}
 	return grid
 
 
@@ -282,6 +280,7 @@ func _apply_filter() -> void:
 	for sub in _sections:
 		var show: bool = visible_per_section.has(sub)
 		_sections[sub]["header"].visible = show
+		_sections[sub]["gap"].visible = show
 		_sections[sub]["grid"].visible = show
 
 

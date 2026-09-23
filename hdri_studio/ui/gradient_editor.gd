@@ -34,15 +34,13 @@ func _init() -> void:
 	_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_bar.mouse_filter = Control.MOUSE_FILTER_STOP
 	_bar.focus_mode = Control.FOCUS_CLICK
+	_bar.tooltip_text = "click the bar: new stop · drag: move · right click / Del: delete"
 	_bar.draw.connect(_draw_bar)
 	_bar.gui_input.connect(_bar_input)
 	add_child(_bar)
 	var row := HBoxContainer.new()
 	add_child(row)
-	var l := Label.new()
-	l.text = "Stop"
-	l.custom_minimum_size.x = 96
-	row.add_child(l)
+	row.add_child(UiStyle.field_label("Stop"))
 	_color = ColorPickerButton.new()
 	_color.edit_alpha = false
 	_color.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -65,9 +63,7 @@ func _init() -> void:
 	add_child(_value_row)
 	var prow := HBoxContainer.new()
 	add_child(prow)
-	var pl := Label.new()
-	pl.custom_minimum_size.x = 96
-	prow.add_child(pl)
+	prow.add_child(UiStyle.field_label(""))
 	var presets := MenuButton.new()
 	presets.text = "Presets"
 	presets.flat = false
@@ -94,11 +90,8 @@ func _init() -> void:
 			_bar.queue_redraw()
 			changed.emit(true))
 	prow.add_child(paste)
-	var hint := Label.new()
-	hint.text = "click the bar: new stop · drag: move · right click / Del: delete"
-	hint.add_theme_font_size_override("font_size", 11)
-	hint.modulate = Color(1, 1, 1, 0.5)
-	add_child(hint)
+	# la versione lunga sta nel tooltip della barra: in italiano, su una riga, allargava la colonna
+	add_child(UiStyle.hint("Click: add · Right click: delete"))
 
 
 func set_light(l: RigLight) -> void:

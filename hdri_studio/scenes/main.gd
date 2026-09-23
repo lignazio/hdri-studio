@@ -26,7 +26,11 @@ var presets: PresetPanel
 var _hover: PanelContainer
 var _hover_tex: TextureRect
 var _hover_label: Label
+## Barra di stato: a sinistra lo stato del rig, a destra la lettura sotto il cursore della mappa.
 var status: Label
+var _status_cursor: Label
+var _status_bar: MarginContainer
+var _vsplit: VSplitContainer
 
 var _dirty := true
 var _preview_ev := 0.0
@@ -72,6 +76,14 @@ const VERSION_FALLBACK := "dev"
 const WINDOW_FILL := 0.92
 ## Sotto questa dimensione una geometria salvata si considera rotta e si riparte dal default.
 const WINDOW_MIN := Vector2i(960, 600)
+## Altezze minime (pixel logici) di preview e mappa nella colonna centrale.
+const PREVIEW_MIN_H := 200.0
+const MAP_MIN_H := 220.0
+## Moltiplicatori della scala dell'interfaccia offerti all'utente (sopra quella dello schermo).
+const UI_SIZES := [0.9, 1.0, 1.1, 1.25]
+## Le scorciatoie: stanno nel tooltip della barra di stato, dove prima allungavano una riga sempre
+## troncata.
+const SHORTCUTS := "click a reflection: select · Shift+drag: LightPaint · arrows: move (Shift 10°) · H: on/off · ⌘D duplicate · Del delete · ⌘Z undo · Q/E: preview exposure"
 
 
 static func app_version() -> String:
@@ -97,6 +109,8 @@ func _ready() -> void:
 		_update_link_status())
 
 	rig = _default_rig()
+	get_window().theme = UiStyle.theme()
+	_apply_ui_scale()
 	_build_layout()
 	_bind_rig()
 	undo.reset(rig.to_dict())
@@ -104,6 +118,9 @@ func _ready() -> void:
 	# dopo che l'interfaccia esiste: ridimensionare la finestra fa girare un giro di ciclo di eventi,
 	# e _process troverebbe il baker non ancora creato
 	_setup_window()
+	# la finestra ripristinata può stare su un altro schermo, con un'altra densità
+	_apply_ui_scale()
+	get_window().dpi_changed.connect(_apply_ui_scale)
 
 	# riapre l'ultimo rig salvato/aperto
 	var args := OS.get_cmdline_user_args()
@@ -201,13 +218,13 @@ func _build_layout() -> void:
 	left.add_child(tabs)
 	var lights_tab := VBoxContainer.new()
 	lights_tab.name = "Lights"
-	lights_tab.add_theme_constant_override("separation", 8)
+	lights_tab.add_theme_constant_override("separation", 0)
 	tabs.add_child(lights_tab)
 	light_list = LightListPanel.new()
 	light_list.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	light_list.custom_minimum_size.y = 220
 	lights_tab.add_child(light_list)
-	lights_tab.add_child(_separator())
+	lights_tab.add_child(UiStyle.separator())
 	props = LightProperties.new()
 	lights_tab.add_child(props)
 	catalog = CatalogPanel.new()
@@ -224,38 +241,36 @@ func _build_layout() -> void:
 	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	center.add_theme_constant_override("separation", 0)
 	rest.add_child(center)
-	var vsplit := VSplitContainer.new()
-	vsplit.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	center.add_child(vsplit)
+	_vsplit = VSplitContainer.new()
+	_vsplit.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	center.add_child(_vsplit)
 	preview = Preview3D.new()
 	preview.setup(tex_rd)
-	preview.custom_minimum_size.y = 200
-	vsplit.add_child(preview)
+	preview.custom_minimum_size.y = PREVIEW_MIN_H
+	_vsplit.add_child(preview)
 	map_view = MapView.new()
-	map_view.custom_minimum_size.y = 220
+	map_view.custom_minimum_size.y = MAP_MIN_H
 	map_view.set_texture(tex_rd)
-	vsplit.add_child(map_view)
-	status = Label.new()
-	status.add_theme_font_size_override("font_size", 12)
-	status.modulate = Color(1, 1, 1, 0.7)
-	status.clip_text = true
-	status.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	center.add_child(status)
+	_vsplit.add_child(map_view)
+	_vsplit.resized.connect(_fit_map_split)
+	_vsplit.drag_ended.connect(_remember_map_split)
+	center.add_child(_build_status_bar())
 
-	# colonna destra
+	# colonna destra: pannelli separati da una sola linea ciascuno
 	var right := _column(rest, 300, true)
+	right.add_theme_constant_override("separation", 0)
 	bg_panel = BackgroundPanel.new()
 	right.add_child(bg_panel)
-	right.add_child(_separator())
+	right.add_child(UiStyle.separator())
 	export_panel = ExportPanel.new()
 	right.add_child(export_panel)
-	right.add_child(_separator())
+	right.add_child(UiStyle.separator())
 	link_panel = LiveLinkPanel.new()
 	right.add_child(link_panel)
-	right.add_child(_separator())
-	_build_model_panel(right)
-	right.add_child(_separator())
-	_build_language_row(right)
+	right.add_child(UiStyle.separator())
+	right.add_child(_build_model_panel())
+	right.add_child(UiStyle.separator())
+	right.add_child(_build_interface_panel())
 
 	_file_dialog = FileDialog.new()
 	_file_dialog.access = FileDialog.ACCESS_FILESYSTEM
@@ -335,6 +350,8 @@ func _build_layout() -> void:
 	export_panel.save_rig_requested.connect(_save_rig)
 	export_panel.load_rig_requested.connect(_load_rig)
 	export_panel.resolution_changed.connect(func(r: Vector2i) -> void: rig.resolution = r)
+	export_panel.target_changed.connect(link_panel.set_target)
+	link_panel.set_target(export_panel.target())
 	link_panel.toggled_link.connect(_set_link_enabled)
 	link_panel.pick_path_requested.connect(_pick_live_path)
 	link_panel.push_now_requested.connect(func() -> void: _live_export())
@@ -353,6 +370,9 @@ func _retranslate() -> void:
 	_update_meter()
 	_update_exr_status()
 	light_list.refresh()
+	presets.refresh()
+	catalog.retranslate()
+	link_panel.set_target(export_panel.target())
 
 
 ## Visibile all'avvio, così un tester vede subito se la libreria EXR è caricata (Windows compreso).
@@ -361,17 +381,14 @@ func _update_exr_status() -> void:
 		else tr("OpenEXR library not loaded: PIZ only (TinyEXR)"))
 
 
-## Lingua dell'interfaccia: Automatica segue l'OS (italiano se l'OS è in italiano), le altre
-## due la forzano. La scelta è ricordata in settings.json.
-func _build_language_row(parent: Container) -> void:
-	var row := HBoxContainer.new()
-	parent.add_child(row)
-	var l := Label.new()
-	l.text = "Language"
-	l.custom_minimum_size.x = 96
-	row.add_child(l)
+## Interfaccia: lingua e dimensione.
+## Lingua: Automatica segue l'OS (italiano se l'OS è in italiano), le altre due la forzano.
+## Dimensione: un moltiplicatore sopra la scala dello schermo, per chi la vuole più grande o più fitta.
+## Entrambe le scelte sono ricordate in settings.json.
+func _build_interface_panel() -> VBoxContainer:
+	var box := VBoxContainer.new()
+	box.add_child(UiStyle.title("Interface"))
 	var ob := OptionButton.new()
-	ob.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	ob.add_item("Automatic (system)")
 	# i nomi delle lingue restano nella lingua stessa: non finiscono nel dizionario
 	ob.add_item("English")
@@ -379,15 +396,45 @@ func _build_language_row(parent: Container) -> void:
 	var codes := [I18n.AUTO, "en", "it"]
 	ob.selected = maxi(codes.find(I18n.language()), 0)
 	ob.item_selected.connect(func(i: int) -> void: I18n.set_language(codes[i]))
-	row.add_child(ob)
+	box.add_child(UiStyle.field_row("Language", ob))
+	var size_ob := OptionButton.new()
+	for f in UI_SIZES:
+		size_ob.add_item("%d%%" % roundi(f * 100.0))
+	var size_i := UI_SIZES.find(float(AppSettings.get_value("ui_size", 1.0)))
+	size_ob.selected = size_i if size_i >= 0 else UI_SIZES.find(1.0)
+	size_ob.tooltip_text = "On top of the display scale (Retina, Windows scaling)"
+	size_ob.item_selected.connect(func(i: int) -> void:
+		AppSettings.set_value("ui_size", UI_SIZES[i])
+		_apply_ui_scale())
+	box.add_child(UiStyle.field_row("Text size", size_ob))
+	return box
 
 
-func _build_model_panel(parent: Container) -> void:
-	var ptitle := Label.new()
-	ptitle.text = "Preview"
-	ptitle.add_theme_font_size_override("font_size", 15)
-	parent.add_child(ptitle)
-	parent.add_child(_spacer(2))
+## Scala dell'interfaccia: pixel fisici per pixel logico. Tutto il codice ragiona in pixel logici
+## (UiStyle): senza questa scala, su un Retina il testo a 13 px usciva a 6,5 punti.
+## macOS dice la densità con screen_get_scale(); Windows no (vale 1) e la si ricava dal DPI.
+## Nei modi non interattivi resta 1: test e screenshot misurano la stessa cosa su Mac e PC.
+func _ui_scale() -> float:
+	if _unattended():
+		return 1.0
+	var screen := DisplayServer.window_get_current_screen(get_window().get_window_id())
+	var s := DisplayServer.screen_get_scale(screen)
+	if OS.get_name() == "Windows":
+		s = DisplayServer.screen_get_dpi(screen) / 96.0
+	s *= float(AppSettings.get_value("ui_size", 1.0))
+	return maxf(snappedf(s, 0.05), 0.75)
+
+
+func _apply_ui_scale() -> void:
+	var s := _ui_scale()
+	if not is_equal_approx(get_window().content_scale_factor, s):
+		get_window().content_scale_factor = s
+
+
+## Pannello Preview, con Esposimetro e Modello come sue sottosezioni.
+func _build_model_panel() -> VBoxContainer:
+	var parent := VBoxContainer.new()
+	parent.add_child(UiStyle.title("Preview"))
 	_ev_row = ParamRow.new("Exposure EV", -8.0, 8.0, 0.1)
 	_ev_row.value_changed.connect(func(v: float) -> void:
 		_preview_ev = v
@@ -401,24 +448,21 @@ func _build_model_panel(parent: Container) -> void:
 	scale_row.set_value_silent(1.0)
 	scale_row.value_changed.connect(func(v: float) -> void: preview.set_model_scale(v))
 	parent.add_child(scale_row)
-	var hint := Label.new()
-	hint.text = "right click on the preview: rotate the model"
-	hint.add_theme_font_size_override("font_size", 11)
-	hint.modulate = Color(1, 1, 1, 0.5)
-	parent.add_child(hint)
-	# clipping: falsi colori sopra una soglia (mappa e sfera cromata)
-	var crow := HBoxContainer.new()
-	parent.add_child(crow)
+	parent.add_child(UiStyle.hint("right click on the preview: rotate the model"))
+	# clipping: falsi colori sopra una soglia (mappa e sfera cromata); la soglia su una riga sua,
+	# larga come le altre, e visibile solo quando serve
 	_clip_check = CheckBox.new()
 	_clip_check.text = "Clipping"
 	_clip_check.tooltip_text = "Highlights in magenta the pixels above the threshold, on the map and on the chrome sphere"
-	_clip_check.toggled.connect(func(_v: bool) -> void: _apply_clipping())
-	crow.add_child(_clip_check)
+	_clip_check.toggled.connect(func(v: bool) -> void:
+		_clip_row.visible = v
+		_apply_clipping())
+	parent.add_child(_clip_check)
 	_clip_row = ParamRow.new("Threshold", 0.1, 10000.0, 0.1, true)
 	_clip_row.set_value_silent(1.0)
 	_clip_row.value_changed.connect(func(_v: float) -> void: _apply_clipping())
-	_clip_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	crow.add_child(_clip_row)
+	_clip_row.visible = false
+	parent.add_child(_clip_row)
 	_link_camera = CheckBox.new()
 	_link_camera.text = "Camera from live link"
 	_link_camera.tooltip_text = "The preview follows the active camera of the connected 3D software (direction, up and FOV)"
@@ -427,11 +471,8 @@ func _build_model_panel(parent: Container) -> void:
 	parent.add_child(_link_camera)
 
 	# esposimetro
-	parent.add_child(_spacer(6))
-	var mtitle := Label.new()
-	mtitle.text = "Light meter"
-	mtitle.add_theme_font_size_override("font_size", 15)
-	parent.add_child(mtitle)
+	parent.add_child(UiStyle.spacer(UiStyle.SPACE_GROUP - UiStyle.SPACE_ROW))
+	parent.add_child(UiStyle.section("Light meter"))
 	var meter_row := HBoxContainer.new()
 	parent.add_child(meter_row)
 	_meter_mode = OptionButton.new()
@@ -454,12 +495,10 @@ func _build_model_panel(parent: Container) -> void:
 	meter_row.add_child(_meter_el)
 	_meter_label = Label.new()
 	_meter_label.tooltip_text = "E = ∫ L·cosθ dω over the whole HDRI for a surface at the center facing the chosen direction.\nEV100 = log2(E / 2.5): with radiances in consistent photometric units it is the EV of an incident-light meter."
+	_meter_label.mouse_filter = Control.MOUSE_FILTER_PASS
 	parent.add_child(_meter_label)
-	parent.add_child(_spacer(6))
-	var title := Label.new()
-	title.text = "Preview model"
-	title.add_theme_font_size_override("font_size", 15)
-	parent.add_child(title)
+	parent.add_child(UiStyle.spacer(UiStyle.SPACE_GROUP - UiStyle.SPACE_ROW))
+	parent.add_child(UiStyle.section("Preview model"))
 	var row := HBoxContainer.new()
 	parent.add_child(row)
 	var load_btn := Button.new()
@@ -470,16 +509,9 @@ func _build_model_panel(parent: Container) -> void:
 	clear_btn.text = "Remove"
 	clear_btn.pressed.connect(func() -> void:
 		preview.clear_model()
-		_model_label.text = "—")
+		_model_label.text = "No file")
 	row.add_child(clear_btn)
-	var mrow := HBoxContainer.new()
-	parent.add_child(mrow)
-	var ml := Label.new()
-	ml.text = "Material"
-	ml.custom_minimum_size.x = 96
-	mrow.add_child(ml)
 	var mat := OptionButton.new()
-	mat.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	for it in Preview3D.MATERIAL_LABELS:
 		mat.add_item(it)
 	mat.tooltip_text = "Material of the loaded model; with no model, of the central sphere"
@@ -489,13 +521,10 @@ func _build_model_panel(parent: Container) -> void:
 		else:
 			# senza modello vale per la sfera centrale; Originale = il suo glossy di partenza
 			preview.set_center_sphere_material(i as Preview3D.ModelMaterial))
-	mrow.add_child(mat)
-	_model_label = Label.new()
-	_model_label.text = "—"
-	_model_label.clip_text = true
-	_model_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	_model_label.modulate = Color(1, 1, 1, 0.7)
+	parent.add_child(UiStyle.field_row("Material", mat))
+	_model_label = UiStyle.dim("No file")
 	parent.add_child(_model_label)
+	return parent
 
 
 func _pick_model() -> void:
@@ -506,17 +535,51 @@ func _pick_model() -> void:
 			_model_label.text = tr("Cannot load %s") % path.get_file())
 
 
-static func _spacer(h: float) -> Control:
-	var c := Control.new()
-	c.custom_minimum_size.y = h
-	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	return c
+## Barra di stato in due parti: a sinistra lo stato del rig, a destra (larghezza fissa, cifre che
+## non spostano il resto) la lettura sotto il cursore. Una riga sola non ci stava mai.
+func _build_status_bar() -> MarginContainer:
+	_status_bar = MarginContainer.new()
+	for side in ["left", "right"]:
+		_status_bar.add_theme_constant_override("margin_" + side, UiStyle.MARGIN)
+	for side in ["top", "bottom"]:
+		_status_bar.add_theme_constant_override("margin_" + side, UiStyle.SPACE_ROW)
+	_status_bar.mouse_filter = Control.MOUSE_FILTER_PASS
+	_status_bar.tooltip_text = SHORTCUTS
+	var row := HBoxContainer.new()
+	_status_bar.add_child(row)
+	status = Label.new()
+	status.theme_type_variation = "HintLabel"
+	status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	status.clip_text = true
+	status.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	row.add_child(status)
+	_status_cursor = Label.new()
+	_status_cursor.theme_type_variation = "HintLabel"
+	_status_cursor.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_status_cursor.custom_minimum_size.x = 300
+	row.add_child(_status_cursor)
+	return _status_bar
 
 
-func _separator() -> HSeparator:
-	var s := HSeparator.new()
-	s.add_theme_constant_override("separation", 16)
-	return s
+## Altezza della mappa: di default tutta la larghezza della colonna (la mappa è 2:1, prima restava
+## 440×220 in mezzo a due bande vuote) senza prendere più di metà altezza; se l'utente ha trascinato
+## il divisore, quella che ha scelto lui. Con la mappa come secondo figlio non espandibile,
+## split_offset in Godot 4.7 è l'altezza della mappa col segno meno.
+func _fit_map_split() -> void:
+	var h := _vsplit.size.y
+	if h <= 0.0:
+		return
+	var sep := float(_vsplit.get_theme_constant("separation"))
+	var want := -1.0 if _unattended() else float(AppSettings.get_value("map_height", -1.0))
+	if want <= 0.0:
+		want = minf(_vsplit.size.x * 0.5 + 16.0, (h - sep) * 0.5)
+	want = clampf(want, MAP_MIN_H, maxf(MAP_MIN_H, h - sep - PREVIEW_MIN_H))
+	_vsplit.split_offset = -roundi(want)
+
+
+func _remember_map_split() -> void:
+	if not _unattended():
+		AppSettings.set_value("map_height", map_view.size.y)
 
 
 func _column(parent: Container, width: float, scroll := false) -> VBoxContainer:
@@ -525,10 +588,10 @@ func _column(parent: Container, width: float, scroll := false) -> VBoxContainer:
 	parent.add_child(panel)
 	var margin := MarginContainer.new()
 	for side in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_" + side, 10)
+		margin.add_theme_constant_override("margin_" + side, UiStyle.MARGIN)
 	panel.add_child(margin)
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 8)
+	box.add_theme_constant_override("separation", UiStyle.SPACE_INLINE)
 	if scroll:
 		var sc := ScrollContainer.new()
 		sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -734,12 +797,15 @@ func _update_status() -> void:
 	var name := _rig_path.get_file() if _rig_path != "" else tr("unnamed rig")
 	var hover := ""
 	if _hover_az != INF:
-		hover = "   |   az %.1f° el %.1f°" % [_hover_az, _hover_el]
+		hover = "az %.1f° el %.1f°" % [_hover_az, _hover_el]
 		var c := _map_value(_hover_az, _hover_el)
 		if c != Color.TRANSPARENT:
 			hover += " · RGB %.3f %.3f %.3f" % [c.r, c.g, c.b]
-	status.text = tr("  HDRI Studio %s · %s · %d lights · export %dx%d · preview %+.1f EV%s   |   click a reflection: select · Shift+drag: LightPaint · arrows: move (Shift 10°) · H: on/off · ⌘D duplicate · Del delete · ⌘Z undo") % [
-		app_version(), name, rig.lights.size(), rig.resolution.x, rig.resolution.y, _preview_ev, hover]
+	status.text = tr("%s · %d lights · export %dx%d · preview %+.1f EV") % [
+		name, rig.lights.size(), rig.resolution.x, rig.resolution.y, _preview_ev]
+	_status_cursor.text = hover
+	# fuori dalla mappa lo spazio della lettura torna allo stato
+	_status_cursor.visible = hover != ""
 
 
 func _apply_clipping() -> void:
@@ -922,7 +988,19 @@ func _export_exr() -> void:
 	if dir != "" and DirAccess.dir_exists_absolute(dir):
 		_file_dialog.current_dir = dir
 	_file_dialog.current_file = (_rig_path.get_file().get_basename() if _rig_path != "" else "hdri") + ".exr"
-	_dialog(FileDialog.FILE_MODE_SAVE_FILE, ["*.exr ; OpenEXR", "*.hdr ; Radiance HDR"], "Export HDRI (EXR or HDR)", export_to)
+	_dialog(FileDialog.FILE_MODE_SAVE_FILE, ["*.exr ; OpenEXR", "*.hdr ; Radiance HDR"], "Export HDRI (EXR or HDR)", _export_interactive)
+
+
+## Export dal pulsante: bake e scrittura sono sincroni e bloccano la finestra (8k ≈ 8 s), quindi il
+## messaggio deve arrivare a schermo prima, e il pulsante non si deve poter ripremere.
+func _export_interactive(path: String) -> void:
+	var res := export_panel.resolution()
+	export_panel.set_busy(true)
+	export_panel.set_status(tr("Exporting %s (%dx%d)…") % [path.get_file(), res.x, res.y])
+	await get_tree().process_frame
+	await get_tree().process_frame
+	export_to(path)
+	export_panel.set_busy(false)
 
 
 ## Autosave di sicurezza: user://autosave/<data-ora>.json, ne tiene 10.
@@ -1173,12 +1251,14 @@ func _update_link_status(extra := "") -> void:
 	if link_panel == null:
 		return
 	if not link.is_listening():
-		link_panel.set_status(tr("Off. Enable it and pick the file: every change is exported and the C4D plugin reloads the texture."))
+		link_panel.set_status(tr("Off. Pick the file, then enable it: every change is exported and the plugin in C4D, Blender or Houdini reloads it."))
 		return
 	var hosts := []
 	for k in _link_hosts:
 		hosts.append(_link_hosts[k])
-	var txt := tr("Listening on 127.0.0.1:%d · %d clients") % [link.port, link.client_count()]
+	var n := link.client_count()
+	var txt := tr("Listening on 127.0.0.1:%d · 1 client") % link.port if n == 1 \
+		else tr("Listening on 127.0.0.1:%d · %d clients") % [link.port, n]
 	if not hosts.is_empty():
 		txt += " (%s)" % ", ".join(hosts)
 	if extra != "":
@@ -1218,7 +1298,11 @@ func load_rig_from(path: String) -> bool:
 	else:
 		r = LightRig.load_json(path)
 	if r == null:
-		export_panel.set_status(tr("Invalid rig: %s") % path.get_file())
+		# un EXR/HDR qualunque (Poly Haven…) non ha il rig: dire dove va caricato
+		if path.get_extension().to_lower() in ["exr", "hdr"]:
+			export_panel.set_status(tr("%s has no HDRI Studio rig. To use it as a background, load it in Background → Base HDRI.") % path.get_file())
+		else:
+			export_panel.set_status(tr("Invalid rig: %s") % path.get_file())
 		return false
 	rig = r
 	_rig_path = path

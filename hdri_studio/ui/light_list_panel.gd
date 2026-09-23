@@ -8,7 +8,8 @@ const BTN_ENABLED := 0
 const BTN_SOLO := 1
 const BTN_LOCKED := 2
 const COL_ON := Color(1, 1, 1, 0.95)
-const COL_OFF := Color(1, 1, 1, 0.28)
+## Spento: 0,4 (a 0,28 il contrasto era 2,5:1) e, per l'occhio, anche una forma diversa.
+const COL_OFF := Color(1, 1, 1, 0.4)
 
 signal selection_changed(index: int)
 ## Tutte le luci selezionate (la primaria è quella passata a selection_changed).
@@ -34,10 +35,7 @@ const SHAPE_LABELS := ["Rectangle", "Ellipse", "Ring", "Gradient", "Scrim", "Tex
 
 
 func _init() -> void:
-	var title := Label.new()
-	title.text = "Lights"
-	title.add_theme_font_size_override("font_size", 15)
-	add_child(title)
+	# niente titolo "Luci": è già il nome della scheda
 	list = Tree.new()
 	list.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	list.custom_minimum_size.y = 160
@@ -161,7 +159,7 @@ func refresh() -> void:
 		it.set_text(0, l.name + ("  ⇗" if l.separate else ""))
 		it.set_metadata(0, i)
 		it.set_custom_color(0, COL_ON if l.enabled else Color(1, 1, 1, 0.45))
-		it.add_button(0, LightIcons.eye(), BTN_ENABLED, false, "Visible (H)")
+		it.add_button(0, LightIcons.eye() if l.enabled else LightIcons.eye_off(), BTN_ENABLED, false, "Visible (H)")
 		it.add_button(0, LightIcons.dot(), BTN_SOLO, false, "Solo")
 		it.add_button(0, LightIcons.lock(), BTN_LOCKED, false, "Locked: LightPaint, map and arrow keys will not move it")
 		it.set_button_color(0, 0, COL_ON if l.enabled else COL_OFF)

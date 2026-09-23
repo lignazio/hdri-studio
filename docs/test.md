@@ -20,6 +20,7 @@ I comandi qui sotto vanno lanciati **dalla radice del repository**, con `$env:GO
 ```powershell
 & $env:GODOT --path hdri_studio -s res://tools/ui_smoke.gd -- --fresh
 & $env:GODOT --path hdri_studio -s res://tools/i18n_smoke.gd
+& $env:GODOT --path hdri_studio -s res://tools/sky_smoke.gd -- --fresh
 & $env:GODOT --headless --path hdri_studio -s res://tools/exr_smoke.gd
 ```
 
@@ -73,3 +74,7 @@ Export da riga di comando, senza toccare l'interfaccia:
   `python3 hdri_studio/tools/embed_shader.py`.
 - Se un test si lamenta di una classe che non esiste, manca l'`--headless --import` dopo il pull.
 - `exr_smoke` stampa errori attesi di TinyEXR sui codec che Godot non sa leggere: conta l'ultima riga.
+  Anche `ui_smoke` ne stampa tre (`Unknown compression type`…) nella parte dei codec: sono attesi.
+- Senza `--fresh` (o `--screenshot`) l'app applica la scala dello schermo: su un Retina gli screenshot
+  sono al doppio dei pixel e le coordinate dei controlli sono in pixel logici. I test che leggono pixel
+  vanno lanciati con `--fresh`, o devono moltiplicare per `content_scale_factor` come `sky_smoke`.

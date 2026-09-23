@@ -12,11 +12,7 @@ var _syncing := false
 
 
 func _init(label_text: String, min_v: float, max_v: float, step: float, exp_edit := false) -> void:
-	var label := Label.new()
-	label.text = label_text
-	label.custom_minimum_size.x = 96
-	label.clip_text = true
-	add_child(label)
+	add_child(UiStyle.field_label(label_text))
 	slider = HSlider.new()
 	slider.min_value = min_v
 	slider.max_value = max_v
@@ -24,6 +20,9 @@ func _init(label_text: String, min_v: float, max_v: float, step: float, exp_edit
 	slider.exp_edit = exp_edit
 	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	# la rotella serve a scorrere il pannello: sopra uno slider cambiava il valore senza volerlo, e
+	# senza snapshot di undo (passava da value_changed, non da committed)
+	slider.scrollable = false
 	add_child(slider)
 	spin = SpinBox.new()
 	spin.min_value = min_v

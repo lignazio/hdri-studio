@@ -28,10 +28,7 @@ var _rename_edit: LineEdit
 
 
 func _init() -> void:
-	var title := Label.new()
-	title.text = "Studio presets"
-	title.add_theme_font_size_override("font_size", 15)
-	add_child(title)
+	# niente titolo: è già il nome della scheda
 	var row := HBoxContainer.new()
 	add_child(row)
 	var save := Button.new()
@@ -45,10 +42,7 @@ func _init() -> void:
 	pick.text = "Folder…"
 	pick.pressed.connect(func() -> void: folder_pick_requested.emit())
 	row.add_child(pick)
-	_path_label = Label.new()
-	_path_label.clip_text = true
-	_path_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	_path_label.modulate = Color(1, 1, 1, 0.7)
+	_path_label = UiStyle.dim("")
 	add_child(_path_label)
 	var row2 := HBoxContainer.new()
 	add_child(row2)
@@ -82,8 +76,7 @@ func _init() -> void:
 	_list = VBoxContainer.new()
 	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(_list)
-	_status = Label.new()
-	_status.modulate = Color(1, 1, 1, 0.7)
+	_status = UiStyle.status()
 	add_child(_status)
 
 	_name_dialog = ConfirmationDialog.new()
@@ -111,7 +104,9 @@ func _init() -> void:
 func set_folder(path: String) -> void:
 	folder = path if path != "" else ProjectSettings.globalize_path(DEFAULT_FOLDER)
 	DirAccess.make_dir_recursive_absolute(folder)
-	_path_label.text = folder
+	# la cartella di default è un percorso lungo dentro Application Support: basta dire che è quella
+	var is_default := folder == ProjectSettings.globalize_path(DEFAULT_FOLDER)
+	_path_label.text = "Default folder" if is_default else folder
 	_path_label.tooltip_text = folder
 	refresh()
 

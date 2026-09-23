@@ -651,6 +651,38 @@ Da sapere per dopo: su Retina Godot lavora in pixel fisici e non scala l'interfa
 sullo schermo, `content_scale_factor` 1.0), quindi testo e pannelli restano della stessa dimensione
 fisica di prima e la finestra più grande dà solo più spazio a preview e mappa. Se un giorno si vuole
 l'interfaccia più grande sul Mac, la leva è `content_scale_factor`, non la dimensione della finestra.
+*(Fatto lo stesso giorno: vedi la sezione seguente.)*
+
+### Revisione UX e sistema visivo — fatto il 23/09/2026
+
+Una revisione indipendente (subagent `ux-reviewer`, definito in `.claude/agents/ux-reviewer.md`) ha
+guardato l'app a schermo in inglese e italiano, a 1600×900 e 1280×800. Il punto più grave era la
+leggibilità: su Retina tutto il testo usciva a metà grandezza, e la gerarchia era rovesciata (titoli a
+15 px, testo a 16). Fatte le dieci correzioni prioritarie e quasi tutte quelle a basso costo:
+
+1. [x] **Scala dello schermo**: `content_scale_factor` = densità dello schermo (macOS
+   `screen_get_scale()`, Windows DPI/96) × *Text size* (90/100/110/125%, nuovo pannello *Interface*
+   con la lingua), ricalcolata su `dpi_changed`; 1 nei modi non interattivi.
+2. [x] **Tema unico** in `ui/ui_style.gd`: testo 15/13/11, etichette 0,78 e valori 0,96, sottotitoli di
+   sezione piccoli e maiuscoli, caselle di spunta disegnate (quella vuota di default aveva contrasto
+   1,16:1), campioni colore con bordo, pulsante *Export EXR…* d'accento, cornice scura come lo splash.
+3. [x] **Spazi** 4/8/16/24 e un'unica linea fra i pannelli; **colonna etichette** unica a 104 px con i
+   puntini (sette etichette erano troncate o spingevano il controllo).
+4. [x] **Rotella** sugli slider disattivata: scorrendo il pannello cambiava i valori, senza undo.
+5. [x] **Preview**: non più `SubViewportContainer` (a scala 2 rendeva il 3D a metà risoluzione), camera
+   che inquadra sempre le tre sfere; **mappa** larga quanto la colonna, altezza ricordata.
+6. [x] Suggerimenti che vanno a capo (il gradiente in italiano allargava la colonna di 68 px), barra di
+   stato in due parti con le scorciatoie nel tooltip, messaggio prima dell'export, gradi e nomi della
+   mappa leggibili, "Nessun file" al posto dei trattini, *Rotazione extra* con tooltip, live link nell'
+   ordine d'uso con la destinazione, soglia del clipping su una riga sua, lucchetto monocromo, occhio
+   barrato per le luci spente, Kelvin 1670–12000 sullo slider, titoli doppi delle schede tolti,
+   contatori di preset e catalogo ritradotti, messaggio utile aprendo un EXR senza rig.
+7. [x] **Provato**: ui_smoke, i18n_smoke, sky_smoke passano; catture a scala 1 (1600×900 e 1280×800,
+   EN e IT) e a scala 2 sul Retina (3178×1858 fisici = 1589×929 logici): testo, icone e sfere nitidi.
+
+Non fatti, elencati in `docs/stato.md`: colonna destra richiudibile, pannello proprietà riordinato,
+unità come suffisso, area messaggi unica, pallino del live link, stato vuoto del catalogo, ⌘S/⌘O/⌘E,
+export in thread, e il click sul vuoto della mappa (scelta di comportamento).
 
 ### 5.4 Fase 4 — test in C4D
 
@@ -809,4 +841,11 @@ luci Texture e catalogo, luci separate, app standalone.
 - 23/09/2026 — La finestra si apre al **92% dello schermo** al primo avvio e poi **ricorda**
   com'è stata lasciata, invece di essere massimizzata a forza ogni volta: massimizzare è una scelta
   dell'utente, non del programma, e una finestra rimpicciolita apposta deve restare rimpicciolita.
+- 23/09/2026 — L'interfaccia si scala con **`content_scale_factor`** e non moltiplicando ogni misura
+  del codice per un fattore (come fa l'editor di Godot): un solo punto, e tutto il codice resta in
+  pixel logici. Il prezzo sono le icone del tema di default, ingrandite e un po' morbide sul Retina;
+  quelle che contano (caselle di spunta, icone della lista) le disegniamo noi a 2×.
+- 23/09/2026 — Valori di design in **`UiStyle`** e nessun numero di font, colore o spazio sparso nei
+  pannelli: la revisione ne aveva contati sei di font e nove di separazione, cresciuti pannello per
+  pannello.
 

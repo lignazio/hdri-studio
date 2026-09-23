@@ -20,6 +20,8 @@ var _tex_rect: TextureRect
 var _overlay: Control
 var _dragging := -1
 var _map_mat: ShaderMaterial
+## Fondo dei nomi delle luci: senza, un nome bianco sopra una luce bianca spariva.
+var _pill: StyleBoxFlat
 
 
 func _init() -> void:
@@ -39,6 +41,9 @@ func _init() -> void:
 	_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_overlay.draw.connect(_draw_overlay)
 	add_child(_overlay)
+	_pill = StyleBoxFlat.new()
+	_pill.bg_color = Color(0, 0, 0, 0.62)
+	_pill.set_corner_radius_all(4)
 
 
 func set_texture(tex: Texture2D) -> void:
@@ -124,25 +129,25 @@ func _draw_overlay() -> void:
 		var x := r.position.x + r.size.x * k / 12.0
 		var strong := k == 6
 		_overlay.draw_line(Vector2(x, r.position.y), Vector2(x, r.end.y), Color(1, 1, 1, 0.18 if strong else 0.07))
-		_overlay.draw_string(font, Vector2(x + 2, r.end.y - 3), "%d°" % (k * 30 - 180), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1, 1, 1, 0.35))
+		_grid_label(font, Vector2(x + 3, r.end.y - 4), "%d°" % (k * 30 - 180))
 	for k in range(1, 6):
 		var y := r.position.y + r.size.y * k / 6.0
 		var strong := k == 3
 		_overlay.draw_line(Vector2(r.position.x, y), Vector2(r.end.x, y), Color(1, 1, 1, 0.18 if strong else 0.07))
-		_overlay.draw_string(font, Vector2(r.position.x + 2, y - 2), "%d°" % (90 - k * 30), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1, 1, 1, 0.35))
+		_grid_label(font, Vector2(r.position.x + 3, y - 3), "%d°" % (90 - k * 30))
 	# contorni: tutte le luci in trasparenza, le selezionate in evidenza
 	for i in rig.lights.size():
 		var l: RigLight = rig.lights[i]
 		if not l.enabled:
 			continue
 		var sel := i in selection
-		var lc := Color(1.0, 0.8, 0.2, 0.9) if sel else Color(1, 1, 1, 0.2)
+		var lc := Color(UiStyle.C_ACCENT, 0.9) if sel else Color(1, 1, 1, 0.2)
 		for loop in l.outline():
 			_draw_loop(loop, lc, 1.5 if sel else 1.0)
 	for i in rig.lights.size():
 		var l: RigLight = rig.lights[i]
 		var p := _uv_to_pos(light_uv(l))
-		var col := Color(1.0, 0.8, 0.2) if i in selection else Color(1, 1, 1, 0.85)
+		var col := UiStyle.C_ACCENT if i in selection else Color(1, 1, 1, 0.9)
 		if not l.enabled:
 			col.a = 0.35
 		_overlay.draw_circle(p, HANDLE_R + 1.5, Color(0, 0, 0, 0.6))
@@ -154,8 +159,31 @@ func _draw_overlay() -> void:
 			_overlay.draw_arc(p, HANDLE_R, 0.0, TAU, 24, col, 2.0)
 		if i == selected:
 			_overlay.draw_circle(p, 2.5, col)
-		_overlay.draw_string_outline(font, p + Vector2(HANDLE_R + 4, 4), l.name, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, 3, Color(0, 0, 0, 0.8))
-		_overlay.draw_string(font, p + Vector2(HANDLE_R + 4, 4), l.name, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, col)
+		_name_label(font, p, r, l.name, col)
+
+
+## Gradi della griglia: prima a 10 px e 0,35 (contrasto sotto 3:1), ora col contorno come i nomi.
+func _grid_label(font: Font, pos: Vector2, text: String) -> void:
+	var fs := UiStyle.FONT_SMALL
+	_overlay.draw_string_outline(font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 2, Color(0, 0, 0, 0.6))
+	_overlay.draw_string(font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1, 1, 1, 0.6))
+
+
+## Nome della luce su una pillola scura, a destra della maniglia; a sinistra se uscirebbe dal bordo
+## destro, e mai sopra o sotto il rettangolo della mappa (una luce a el 88 lo faceva uscire).
+func _name_label(font: Font, p: Vector2, r: Rect2, text: String, col: Color) -> void:
+	var fs := UiStyle.FONT_BODY
+	var tw := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+	var asc := font.get_ascent(fs)
+	var desc := font.get_descent(fs)
+	var pad := 4.0
+	var tx := p.x + HANDLE_R + 6.0
+	if tx + tw + pad > r.end.x:
+		tx = p.x - HANDLE_R - 6.0 - tw
+	tx = maxf(tx, r.position.x + pad)
+	var base_y := clampf(p.y + (asc - desc) * 0.5, r.position.y + asc + 3.0, r.end.y - desc - 3.0)
+	_overlay.draw_style_box(_pill, Rect2(tx - pad, base_y - asc - 2.0, tw + pad * 2.0, asc + desc + 4.0))
+	_overlay.draw_string(font, Vector2(tx, base_y), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, col)
 
 
 func _pick(p: Vector2) -> int:

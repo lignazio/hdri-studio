@@ -44,16 +44,24 @@ Tre colonne, ridimensionabili trascinando i bordi.
 
 | Sinistra | Centro | Destra |
 |---|---|---|
-| **Luci**: elenco con le icone di stato per riga (occhio = visibile, pallino = solo, lucchetto = bloccata; bianca = attiva, grigia = off), aggiungi / duplica / elimina / ⇋ specchia / ▲▼ o drag & drop per riordinare, pannello proprietà della luce selezionata | **Preview 3D**: tre sfere (o il tuo modello GLB) illuminate dall'HDRI · sotto, la **mappa** equirettangolare con le maniglie delle luci | **Set** (ruota tutto) · **Sfondo** · **Export** · **Live link** · **Preview** (esposizione, clipping, esposimetro) · **Modello nel preview** |
+| **Luci**: elenco con le icone di stato per riga (occhio = visibile, pallino = solo, lucchetto = bloccata; bianca = attiva, grigia = off), aggiungi / duplica / elimina / ⇋ specchia / ▲▼ o drag & drop per riordinare, pannello proprietà della luce selezionata | **Preview 3D**: tre sfere (o il tuo modello GLB) illuminate dall'HDRI · sotto, la **mappa** equirettangolare con le maniglie delle luci | **Set** (ruota tutto) · **Sfondo** · **Export** · **Live link** · **Preview** (esposizione, clipping, esposimetro, modello nel preview) · **Interfaccia** (lingua, dimensione del testo) |
 | **Catalogo**: la tua cartella di HDRI light con miniature, tag, preferiti | | |
 | **Preset**: rig salvati come libreria | | |
 
-La barra in basso mostra az/el e il valore RGB del pixel sotto il cursore sulla mappa.
+La barra in basso mostra a sinistra il rig (nome, luci, risoluzione di export, esposizione del
+preview) e, quando il cursore è sulla mappa, a destra az/el e il valore RGB del pixel sotto il cursore.
+**Le scorciatoie da tastiera** sono nel suggerimento che compare fermando il mouse sulla barra.
 
-**Lingua.** L'app è in inglese; in fondo alla colonna destra c'è *Language*: **Automatic (system)**
-(default) la mette in italiano se il sistema è in italiano e in inglese in tutti gli altri casi,
-**English** e **Italiano** la forzano. Il cambio è immediato e viene ricordato. Le schermate di questa
-guida e i nomi dei pannelli qui sotto sono quelli italiani.
+Il divisore fra preview e mappa si trascina; l'app ricorda l'altezza della mappa. Di default la mappa è
+larga quanto la colonna centrale. La rotella del mouse sopra gli slider scorre il pannello e non cambia
+più i valori: per cambiare un valore trascina lo slider o scrivi nel campo numerico.
+
+**Lingua e dimensione del testo.** L'app è in inglese; in fondo alla colonna destra, nel pannello
+*Interface*, c'è *Language*: **Automatic (system)** (default) la mette in italiano se il sistema è in
+italiano e in inglese in tutti gli altri casi, **English** e **Italiano** la forzano. L'interfaccia segue
+la densità dello schermo (Retina, ridimensionamento di Windows); *Text size* (90–125%) la ingrandisce o
+la infittisce sopra quella. Entrambe le scelte sono immediate e ricordate. Le schermate di questa guida
+e i nomi dei pannelli qui sotto sono quelli italiani.
 
 ## 3. Primi cinque minuti
 
@@ -66,9 +74,12 @@ guida e i nomi dei pannelli qui sotto sono quelli italiani.
 4. *+ Aggiungi* → scegli una forma: **Rettangolo**, **Ellisse**, **Anello**, **Gradiente** (radiale o
    lineare, con tacche colorate), **Scrim** (telo con la sorgente dietro: hotspot fisico), **Texture**
    (un'immagine EXR/HDR di una luce vera).
-5. **Esporta EXR…** nel pannello Export: 4k×2k, half, preset *Cinema 4D + Octane* (o *Godot / Blender*).
-   Il file è radianza lineare, primari Rec.709, e porta dentro il rig: *Apri rig…* lo rilegge da lì
-   (vale anche per l'export `.hdr`, quindi il progetto si riapre da qualunque HDRI esportata).
+5. **Esporta EXR…** (il pulsante giallo nel pannello Export): 4k×2k, half, preset *Cinema 4D + Octane*
+   (o *Godot / Blender*); *Rotazione extra* si somma al preset. Durante l'export la finestra resta
+   ferma qualche secondo (un 8k circa 8 s): il pannello lo dice prima di partire. Il file è radianza
+   lineare, primari Rec.709, e porta dentro il rig: *Apri rig…* lo rilegge da lì (vale anche per
+   l'export `.hdr`, quindi il progetto si riapre da qualunque HDRI esportata). Un EXR qualunque, senza
+   rig, va caricato come sfondo da *Sfondo → HDRI di base*: *Apri rig…* te lo ricorda.
 
 ## 4. Le cose da sapere
 
@@ -93,7 +104,8 @@ guida e i nomi dei pannelli qui sotto sono quelli italiani.
 1. C4D → *Edit → Preferences → Plugins → Add Folder…* → `hdri_studio/plugins/c4d` → riavvia. In
    console: `[hdri-studio] plugin … caricato`.
 2. Nell'app: pannello **Live link** → *File di export…* (un `.exr` nella cartella `tex/` del progetto) →
-   *Attivo*. Lo stato deve dire "1 client (c4d …)".
+   *Attivo*. Lo stato deve dire "1 client (c4d …)". La riga *Destinazione* in cima al pannello dice
+   quale preset di orientamento usa il link: è il *Software* scelto nel pannello Export.
 3. In C4D carica quello stesso file nell'ImageTexture dell'Octane Environment. Da qui ogni modifica
    nell'app aggiorna il Live Viewer da sola (il plugin preme *Reload* per te).
 4. **LightPaint da C4D**: tool *HDRI Studio LightPaint* (menu Extensions, o Shift+C) → click o trascina

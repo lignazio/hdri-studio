@@ -1,8 +1,12 @@
 class_name Preview3D
-extends SubViewportContainer
+extends Control
 ## Viewport 3D: sky dalla texture baked, sfera cromata esatta, glossy, diffusa.
 ## Trascina = orbita · rotella = zoom · Shift + trascina su una sfera = LightPaint:
 ## la luce selezionata si sposta dove serve per riflettersi sotto il cursore.
+##
+## Non è un SubViewportContainer: quello dimensiona il viewport in pixel logici, e con la scala dello
+## schermo (Retina = 2) il 3D veniva reso a metà risoluzione e ingrandito. Qui il viewport ha la
+## dimensione in pixel fisici e il Control lo disegna nel suo rettangolo logico.
 
 signal paint(direction: Vector3, commit: bool)
 ## Una voce del catalogo è stata lasciata sul preview: direction è il riflesso nel punto colpito,
@@ -15,6 +19,10 @@ const SPHERE_R := 1.0
 const SPHERE_POS := [Vector3(-2.6, 0, 0), Vector3(0, 0, 0), Vector3(2.6, 0, 0)]
 ## Raggio della sfera in cui viene inscritto il modello caricato.
 const MODEL_R := 1.3
+## Metà larghezza e metà altezza da tenere in quadro: le sfere laterali arrivano a ±3,6, più margine.
+const FIT_HALF := Vector2(3.9, 1.4)
+## Distanza minima della camera (quella storica): su un preview largo le sfere non si ingrandiscono.
+const DIST_MIN := 7.0
 
 enum ModelMaterial { ORIGINAL, CHROME, GLOSSY, DIFFUSE, GOLD, WHITE_GOLD, SILVER, PLATINUM, COPPER, BRUSHED, GLASS }
 const MATERIAL_LABELS := ["Original", "Chrome", "Glossy", "Diffuse", "Yellow gold", "White gold", "Silver", "Platinum", "Copper", "Brushed", "Glass"]
@@ -45,7 +53,10 @@ var _model_meshes: Array[MeshInstance3D] = []
 var _model_material := ModelMaterial.ORIGINAL
 var _yaw := 0.35
 var _pitch := 0.18
-var _dist := 7.0
+## Zoom dell'utente (rotella) rispetto alla distanza che inquadra le sfere.
+var _zoom := 1.0
+## Alto della camera: quello del software 3D quando la vista viene dal live link.
+var _up := Vector3.UP
 var _orbiting := false
 var _painting := false
 var _tumbling := false
@@ -57,12 +68,12 @@ var _model_scale := 1.0
 
 
 func _init() -> void:
-	stretch = true
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	size_flags_vertical = Control.SIZE_EXPAND_FILL
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	viewport = SubViewport.new()
 	viewport.handle_input_locally = false
+	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	viewport.msaa_3d = Viewport.MSAA_4X
 	viewport.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA
 	add_child(viewport)
@@ -145,6 +156,38 @@ func setup(tex: Texture2D) -> void:
 	_update_camera()
 
 
+func _draw() -> void:
+	draw_texture_rect(viewport.get_texture(), Rect2(Vector2.ZERO, size), false)
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_RESIZED and camera != null:
+		_update_camera()
+
+
+## Il viewport segue la dimensione fisica del rettangolo: cambia col ridimensionamento e con la scala
+## dello schermo (spostando la finestra fra un Retina e un monitor normale).
+func _process(_delta: float) -> void:
+	var k := get_window().content_scale_factor if is_inside_tree() else 1.0
+	var want := Vector2i((size * k).round()).max(Vector2i.ONE)
+	if viewport.size != want:
+		viewport.size = want
+
+
+## Da coordinate del Control a pixel del viewport (diversi quando la scala dello schermo non è 1).
+func _to_viewport(pos: Vector2) -> Vector2:
+	return pos * Vector2(viewport.size) / size.max(Vector2.ONE)
+
+
+## Distanza che fa stare le tre sfere in quadro col FOV e le proporzioni correnti (a 1280×800 le
+## sfere laterali erano tagliate), per lo zoom dell'utente.
+func _camera_dist() -> float:
+	var t := tan(deg_to_rad(camera.fov) * 0.5)
+	var aspect := size.x / maxf(size.y, 1.0) if size.y > 0.0 else 16.0 / 9.0
+	var fit := maxf(FIT_HALF.y / t, FIT_HALF.x / (t * aspect))
+	return maxf(DIST_MIN, fit) * _zoom
+
+
 func set_texture(tex: Texture2D) -> void:
 	for m in _sky_mats:
 		m.panorama = tex
@@ -166,6 +209,7 @@ func set_exposure(k: float) -> void:
 
 func set_fov(deg: float) -> void:
 	camera.fov = deg
+	_update_camera()
 
 
 ## Punto di vista dal software 3D: direzione di vista e alto (coordinate interne), FOV orizzontale.
@@ -174,15 +218,17 @@ func set_view_from_host(forward: Vector3, up: Vector3, fov_h_deg: float) -> void
 	if forward.length() < 1e-6:
 		return
 	var f := forward.normalized()
-	var pos := -f * _dist
-	camera.look_at_from_position(pos, Vector3.ZERO, up.normalized() if up.length() > 1e-6 else Vector3.UP)
 	# Godot usa il FOV verticale: converto dall'orizzontale con l'aspetto del viewport
 	var aspect := float(viewport.size.x) / maxf(float(viewport.size.y), 1.0)
 	var fov_v := rad_to_deg(2.0 * atan(tan(deg_to_rad(fov_h_deg) * 0.5) / aspect))
 	camera.fov = clampf(fov_v, 5.0, 150.0)
-	# tiene coerenti yaw/pitch dell'orbita con la nuova posizione
+	_up = up.normalized() if up.length() > 1e-6 else Vector3.UP
+	# yaw/pitch dell'orbita coerenti con la direzione, poi la camera si piazza da _update_camera
+	var pos := -f
 	_yaw = atan2(pos.x, pos.z)
-	_pitch = -asin(clampf(pos.y / _dist, -1.0, 1.0))
+	# (0, 0, 1) ruotato di -pitch attorno a X ha y = sin(pitch)
+	_pitch = asin(clampf(pos.y, -1.0, 1.0))
+	_update_camera()
 
 
 func set_clipping(on: bool, threshold: float) -> void:
@@ -298,8 +344,8 @@ func _collect_meshes(n: Node) -> void:
 
 
 func _update_camera() -> void:
-	var p := Vector3(0, 0, _dist).rotated(Vector3.RIGHT, -_pitch).rotated(Vector3.UP, _yaw)
-	camera.look_at_from_position(p, Vector3.ZERO, Vector3.UP)
+	var p := Vector3(0, 0, _camera_dist()).rotated(Vector3.RIGHT, -_pitch).rotated(Vector3.UP, _yaw)
+	camera.look_at_from_position(p, Vector3.ZERO, _up)
 
 
 func _gui_input(event: InputEvent) -> void:
@@ -327,11 +373,11 @@ func _gui_input(event: InputEvent) -> void:
 				_tumbling = event.pressed and has_model()
 				accept_event()
 			MOUSE_BUTTON_WHEEL_UP:
-				_dist = maxf(2.5, _dist * 0.9)
+				_zoom = maxf(0.35, _zoom * 0.9)
 				_update_camera()
 				accept_event()
 			MOUSE_BUTTON_WHEEL_DOWN:
-				_dist = minf(30.0, _dist / 0.9)
+				_zoom = minf(4.0, _zoom / 0.9)
 				_update_camera()
 				accept_event()
 	elif event is InputEventMouseMotion:
@@ -341,6 +387,7 @@ func _gui_input(event: InputEvent) -> void:
 			_try_paint(event.position, false)
 			accept_event()
 		elif _orbiting and _moved:
+			_up = Vector3.UP # orbitando a mano si torna all'orizzonte dritto
 			_yaw -= event.relative.x * 0.005
 			_pitch = clampf(_pitch + event.relative.y * 0.005, -1.4, 1.4)
 			_update_camera()
@@ -377,8 +424,9 @@ func _try_paint(pos: Vector2, commit: bool) -> bool:
 
 
 func _hit_reflection(pos: Vector2) -> Vector3:
-	var o := camera.project_ray_origin(pos)
-	var d := camera.project_ray_normal(pos)
+	var vp := _to_viewport(pos)
+	var o := camera.project_ray_origin(vp)
+	var d := camera.project_ray_normal(vp)
 	var best_t := INF
 	var best_n := Vector3.ZERO
 	if has_model():

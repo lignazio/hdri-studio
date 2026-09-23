@@ -21,6 +21,10 @@ adesso.
   1600×900 del progetto, così le verifiche misurano sempre la stessa finestra.
 - **Interfaccia bilingue**: inglese di base, italiano automatico se il sistema è in italiano,
   selettore *Language* in fondo alla colonna destra.
+- **Sistema visivo** (`ui/ui_style.gd`, dalla revisione UX del 23/09): un tema unico con tre livelli di
+  testo e quattro di spazio, interfaccia scalata sulla densità dello schermo (sul Retina prima il testo
+  usciva a 8 punti) più un moltiplicatore *Text size*, preview 3D a risoluzione fisica, sfere sempre
+  intere, mappa larga quanto la colonna.
 - **Icona e boot splash** generati da script (`tools/make_icon.py`, `tools/make_splash.py`).
 
 ## Aperto
@@ -34,6 +38,8 @@ adesso.
 | Houdini: **LightPaint** | Mac o PC | Escluso di proposito dal primo plugin: il picking nel viewport di Houdini è più indiretto che in Blender e C4D. |
 | **Redshift** | macchina con Redshift installato | Vedi sotto. |
 | Rendere il plugin Houdini installabile senza editare a mano il JSON | ovunque | Oggi `HDRIStudio.json` va aperto e corretto col percorso della cartella. |
+| **Scala dell'interfaccia su Windows** | PC | Sul Mac verificata a scala 2 (Retina). Su Windows la scala viene dal DPI (`screen_get_dpi()/96`): da guardare a 100% e 150%, con un monitor esterno. |
+| Revisione UX: cose rimaste | ovunque | Dal report del 23/09 non sono state fatte le voci più grandi: colonna destra a sezioni richiudibili, pannello proprietà riordinato (intensità prima della posizione) con divisore lista/proprietà, unità come suffisso degli spinbox, area messaggi unica nella barra di stato, pallino di stato del live link, stato vuoto del catalogo, ⌘S/⌘O/⌘E e titolo con modifiche non salvate, export in un thread. Il click sul vuoto della mappa sposta ancora la luce selezionata: cambiarlo è una scelta di comportamento, da decidere. |
 
 ### Redshift, in dettaglio
 

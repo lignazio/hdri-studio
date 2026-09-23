@@ -44,13 +44,9 @@ func _init() -> void:
 	size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_box = VBoxContainer.new()
 	_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_box.add_theme_constant_override("separation", 6)
 	add_child(_box)
 
-	var title := Label.new()
-	title.text = "Properties"
-	title.add_theme_font_size_override("font_size", 15)
-	_box.add_child(title)
+	_box.add_child(UiStyle.title("Properties"))
 
 	var top := HBoxContainer.new()
 	_box.add_child(top)
@@ -69,7 +65,8 @@ func _init() -> void:
 	_solo.toggled.connect(func(v: bool) -> void: _set_prop("solo", v, true, true))
 	top.add_child(_solo)
 	_locked = CheckBox.new()
-	_locked.text = "🔒"
+	# la stessa icona monocroma della lista luci, non l'emoji a colori
+	_locked.icon = LightIcons.lock()
 	_locked.tooltip_text = "Lock the position: LightPaint, map and arrow keys will not move it"
 	_locked.toggled.connect(func(v: bool) -> void: _set_prop("locked", v, true, true))
 	top.add_child(_locked)
@@ -109,15 +106,8 @@ func _init() -> void:
 
 	_texture_row = HBoxContainer.new()
 	_box.add_child(_texture_row)
-	var tl0 := Label.new()
-	tl0.text = "Image"
-	tl0.custom_minimum_size.x = 96
-	_texture_row.add_child(tl0)
-	_texture_label = Label.new()
-	_texture_label.text = "—"
-	_texture_label.clip_text = true
-	_texture_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	_texture_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_texture_row.add_child(UiStyle.field_label("Image"))
+	_texture_label = UiStyle.dim("No file")
 	_texture_row.add_child(_texture_label)
 	var tb := Button.new()
 	tb.text = "Change…"
@@ -125,9 +115,7 @@ func _init() -> void:
 	_texture_row.add_child(tb)
 	_texture_tools = HBoxContainer.new()
 	_box.add_child(_texture_tools)
-	var ttl := Label.new()
-	ttl.custom_minimum_size.x = 96
-	_texture_tools.add_child(ttl)
+	_texture_tools.add_child(UiStyle.field_label(""))
 	var fh := Button.new()
 	fh.text = "↔ Mirror"
 	fh.pressed.connect(func() -> void: _set_prop("texture_flip_h", not light.texture_flip_h, true))
@@ -162,17 +150,17 @@ func _init() -> void:
 	_box.add_child(_photometric)
 	_row("intensity", "Intensity", 0.01, 1000.0, 0.01, true)
 	_row("illuminance", "Illuminance", 0.01, 100000.0, 0.01, true)
-	_k_label = Label.new()
-	_k_label.modulate = Color(1, 1, 1, 0.6)
-	_k_label.add_theme_font_size_override("font_size", 12)
+	_k_label = UiStyle.hint("")
 	_box.add_child(_k_label)
 	_row("ev", "EV", -10.0, 10.0, 0.1)
-	_row("kelvin", "Kelvin", 1000.0, 25000.0, 10.0)
+	# lo slider copre la pratica da studio (5600 K verso metà corsa); valori oltre si scrivono nello
+	# spinbox. Il minimo del modello di colore è 1667 K (core/color_temp.gd), ma Range arrotonda il
+	# passo a partire dal minimo: con 1670 i multipli di 10 restano esatti (1667 dava 5597 al posto di 5600)
+	var krow_slider := _row("kelvin", "Kelvin", 1670.0, 12000.0, 10.0)
+	krow_slider.spin.max_value = 25000.0
 	var krow := HBoxContainer.new()
 	_box.add_child(krow)
-	var kl := Label.new()
-	kl.custom_minimum_size.x = 96
-	krow.add_child(kl)
+	krow.add_child(UiStyle.field_label(""))
 	for k in [3200, 4300, 5600, 6500]:
 		var kb := Button.new()
 		kb.text = str(k)
@@ -183,10 +171,7 @@ func _init() -> void:
 		krow.add_child(kb)
 	var tint_row := HBoxContainer.new()
 	_box.add_child(tint_row)
-	var tl := Label.new()
-	tl.text = "Tint"
-	tl.custom_minimum_size.x = 96
-	tint_row.add_child(tl)
+	tint_row.add_child(UiStyle.field_label("Tint"))
 	_tint = ColorPickerButton.new()
 	_tint.edit_alpha = false
 	_tint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -223,16 +208,12 @@ func _init() -> void:
 	set_light(null)
 
 
-## Sottotitolo di sezione con un po' d'aria sopra. Restituisce [spaziatore, etichetta] per poterli
-## nascondere insieme alle righe della sezione.
+## Sottotitolo di sezione con aria sopra (16 contro i 4 fra le righe: i gruppi si contano senza
+## leggere). Restituisce [spaziatore, etichetta] per poterli nascondere con le righe della sezione.
 func _section(text: String) -> Array:
-	var sp := Control.new()
-	sp.custom_minimum_size.y = 8
-	sp.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sp := UiStyle.spacer(UiStyle.SPACE_GROUP - UiStyle.SPACE_ROW)
 	_box.add_child(sp)
-	var l := Label.new()
-	l.text = text
-	l.modulate = Color(1, 1, 1, 0.6)
+	var l := UiStyle.section(text)
 	_box.add_child(l)
 	return [sp, l]
 
@@ -249,10 +230,7 @@ func _row(prop: String, label: String, min_v: float, max_v: float, step: float, 
 func _option(label: String, items: Array, on_select: Callable) -> OptionButton:
 	var row := HBoxContainer.new()
 	_box.add_child(row)
-	var l := Label.new()
-	l.text = label
-	l.custom_minimum_size.x = 96
-	row.add_child(l)
+	row.add_child(UiStyle.field_label(label))
 	var ob := OptionButton.new()
 	ob.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	for it in items:
@@ -316,7 +294,7 @@ func set_light(l: RigLight) -> void:
 	_separate.button_pressed = l.separate
 	_separate_visible.button_pressed = l.separate_visible
 	_k_label.text = tr("K = %.4f sr · resulting radiance %.3f") % [l.measured_k, l.radiance()] if l.photometric else ""
-	_texture_label.text = l.texture_path.get_file() if l.texture_path != "" else "—"
+	_texture_label.text = l.texture_path.get_file() if l.texture_path != "" else "No file"
 	_texture_label.tooltip_text = l.texture_path
 	_syncing = false
 	_update_visibility()

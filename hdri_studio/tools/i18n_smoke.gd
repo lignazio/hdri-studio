@@ -36,7 +36,8 @@ func _run(main: Node) -> void:
 	await process_frame
 	_check(main.tr("Export EXR…") == "Esporta EXR…", "italiano: pulsante tradotto")
 	_check(main.tr("Rectangle") == "Rettangolo", "italiano: forma tradotta")
-	_check(main.status.text.contains("luci") and main.status.text.contains("duplica"), "barra di stato ritradotta")
+	_check(main.status.text.contains("luci"), "barra di stato ritradotta")
+	_check(main.tr(main._status_bar.tooltip_text).contains("duplica"), "scorciatoie (tooltip della barra) tradotte")
 	_check(main.tr("Rig saved: %s") % "a.json" == "Rig salvato: a.json", "formato con %s tradotto")
 
 	# ogni chiave del dizionario deve esistere ed essere diversa dall'inglese

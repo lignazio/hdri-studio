@@ -7,6 +7,8 @@ signal open_folder_requested()
 signal save_rig_requested()
 signal load_rig_requested()
 signal resolution_changed(res: Vector2i)
+## Il software di destinazione è cambiato (lo usa anche il live link).
+signal target_changed(target: String)
 
 const RESOLUTIONS := [Vector2i(2048, 1024), Vector2i(4096, 2048), Vector2i(8192, 4096)]
 
@@ -17,19 +19,20 @@ var _shift: ParamRow
 var _status: Label
 var _codec: OptionButton
 var _colorspace: OptionButton
+var _export_btn: Button
 
 
 func _init() -> void:
-	var title := Label.new()
-	title.text = "Export"
-	title.add_theme_font_size_override("font_size", 15)
-	add_child(title)
+	add_child(UiStyle.title("Export"))
 
 	_res = _option("Resolution", ["2k × 1k", "4k × 2k", "8k × 4k"])
 	_res.item_selected.connect(func(i: int) -> void: resolution_changed.emit(RESOLUTIONS[i]))
 	_target = _option("Software", HdriExport.TARGETS.keys())
 	_target.selected = HdriExport.TARGETS.keys().find(HdriExport.DEFAULT_TARGET)
-	_shift = ParamRow.new("Rotation", -180.0, 180.0, 1.0)
+	_target.item_selected.connect(func(_i: int) -> void: target_changed.emit(target()))
+	# "Rotazione" c'era già due volte nella colonna (Ruota tutto, HDRI di base): questa è un'altra cosa
+	_shift = ParamRow.new("Extra rotation", -180.0, 180.0, 1.0)
+	_shift.tooltip_text = "Added to the orientation preset of the chosen software"
 	add_child(_shift)
 	_half = CheckBox.new()
 	_half.text = "EXR half (16 bit)"
@@ -46,20 +49,23 @@ func _init() -> void:
 	_codec.tooltip_text = (tr("Written by OpenEXR %s. Lossless: PIZ, ZIP, ZIPS, RLE, NONE. Lossy: PXR24 (float → 24 bit), B44, B44A, DWAA, DWAB.\nThe live link always uses PIZ.") % ExrCodec.version()) if native \
 		else "OpenEXR library not loaded: Godot only writes PIZ."
 
+	add_child(UiStyle.spacer(UiStyle.SPACE_INLINE - UiStyle.SPACE_ROW))
 	var row := HBoxContainer.new()
 	add_child(row)
-	var b := Button.new()
-	b.text = "Export EXR…"
-	b.pressed.connect(func() -> void: export_requested.emit())
-	row.add_child(b)
+	# l'azione per cui esiste l'app: l'unico pulsante d'accento, largo quanto la colonna
+	_export_btn = Button.new()
+	_export_btn.text = "Export EXR…"
+	_export_btn.theme_type_variation = "AccentButton"
+	_export_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_export_btn.pressed.connect(func() -> void: export_requested.emit())
+	row.add_child(_export_btn)
 	var of := Button.new()
 	of.text = "Open folder"
+	of.flat = true
 	of.tooltip_text = "Opens the folder of the last export in Finder/Explorer"
 	of.pressed.connect(func() -> void: open_folder_requested.emit())
 	row.add_child(of)
-	var sep := HSeparator.new()
-	sep.add_theme_constant_override("separation", 12)
-	add_child(sep)
+	add_child(UiStyle.spacer(UiStyle.SPACE_GROUP - UiStyle.SPACE_ROW))
 	var row2 := HBoxContainer.new()
 	add_child(row2)
 	var bs := Button.new()
@@ -70,24 +76,15 @@ func _init() -> void:
 	bl.text = "Open rig…"
 	bl.pressed.connect(func() -> void: load_rig_requested.emit())
 	row2.add_child(bl)
-	_status = Label.new()
-	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_status.modulate = Color(1, 1, 1, 0.7)
+	_status = UiStyle.status()
 	add_child(_status)
 
 
 func _option(label: String, items: Array) -> OptionButton:
-	var row := HBoxContainer.new()
-	add_child(row)
-	var l := Label.new()
-	l.text = label
-	l.custom_minimum_size.x = 96
-	row.add_child(l)
 	var ob := OptionButton.new()
-	ob.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	for it in items:
 		ob.add_item(it)
-	row.add_child(ob)
+	add_child(UiStyle.field_row(label, ob))
 	return ob
 
 
@@ -114,6 +111,11 @@ func extra_shift() -> float:
 
 func set_status(text: String) -> void:
 	_status.text = text
+
+
+## Durante un export il pulsante non si può ripremere (il bake blocca la finestra per qualche secondo).
+func set_busy(busy: bool) -> void:
+	_export_btn.disabled = busy
 
 
 func codec() -> String:

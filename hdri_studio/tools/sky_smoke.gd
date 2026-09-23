@@ -11,7 +11,8 @@ func _initialize() -> void:
 func _mean(main: Node) -> float:
 	var img := root.get_texture().get_image()
 	var r: Rect2 = main.preview.get_global_rect()
-	var c := Vector2(r.position.x + r.size.x * 0.78, r.position.y + r.size.y * 0.45)
+	# l'immagine è in pixel fisici, il rettangolo in pixel logici (senza --fresh su un Retina la scala è 2)
+	var c := Vector2(r.position.x + r.size.x * 0.78, r.position.y + r.size.y * 0.45) * root.content_scale_factor
 	var sum := 0.0
 	var n := 0
 	for dx in range(-12, 13, 4):

@@ -22,10 +22,7 @@ var _base_flip: CheckBox
 
 
 func _init() -> void:
-	var stitle := Label.new()
-	stitle.text = "Set"
-	stitle.add_theme_font_size_override("font_size", 15)
-	add_child(stitle)
+	add_child(UiStyle.title("Set"))
 	var rot := ParamRow.new("Rotate all", -180.0, 180.0, 1.0)
 	rot.tooltip_text = "Rotates every light around the vertical axis; returns to 0 when you release the slider"
 	var last := [0.0]
@@ -38,38 +35,22 @@ func _init() -> void:
 		rot.set_value_silent(0.0))
 	add_child(rot)
 
-	var sep0 := HSeparator.new()
-	sep0.add_theme_constant_override("separation", 14)
-	add_child(sep0)
-	var title := Label.new()
-	title.text = "Background"
-	title.add_theme_font_size_override("font_size", 15)
-	add_child(title)
+	# Set e Sfondo sono due pannelli: fra loro l'unica linea, dentro solo spazio
+	add_child(UiStyle.separator())
+	add_child(UiStyle.title("Background"))
 
-	var mrow := HBoxContainer.new()
-	add_child(mrow)
-	var ml := Label.new()
-	ml.text = "Type"
-	ml.custom_minimum_size.x = 96
-	mrow.add_child(ml)
 	_mode = OptionButton.new()
-	_mode.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	for it in ["Black", "Solid color", "Gradient"]:
 		_mode.add_item(it)
 	_mode.item_selected.connect(func(i: int) -> void: _apply(func() -> void: rig.background = i as LightRig.Background, true))
-	mrow.add_child(_mode)
+	add_child(UiStyle.field_row("Type", _mode))
 
 	_zenith = _color_row("Zenith", func(c: Color) -> void: rig.bg_zenith = c)
 	_horizon = _color_row("Horizon", func(c: Color) -> void: rig.bg_horizon = c)
 	_nadir = _color_row("Nadir", func(c: Color) -> void: rig.bg_nadir = c)
 
-	var sep := HSeparator.new()
-	sep.add_theme_constant_override("separation", 14)
-	add_child(sep)
-	var t2 := Label.new()
-	t2.text = "Base HDRI"
-	t2.modulate = Color(1, 1, 1, 0.6)
-	add_child(t2)
+	add_child(UiStyle.spacer(UiStyle.SPACE_GROUP - UiStyle.SPACE_ROW))
+	add_child(UiStyle.section("Base HDRI"))
 	var brow := HBoxContainer.new()
 	add_child(brow)
 	var btn := Button.new()
@@ -84,10 +65,7 @@ func _init() -> void:
 	_base_flip.text = "Mirror"
 	_base_flip.toggled.connect(func(v: bool) -> void: _apply(func() -> void: rig.base_flip = v, true))
 	brow.add_child(_base_flip)
-	_base_label = Label.new()
-	_base_label.text = "—"
-	_base_label.clip_text = true
-	_base_label.modulate = Color(1, 1, 1, 0.7)
+	_base_label = UiStyle.dim("No file")
 	add_child(_base_label)
 	_base_rot = ParamRow.new("Rotation", -180.0, 180.0, 0.1)
 	_base_rot.value_changed.connect(func(v: float) -> void: _apply(func() -> void: rig.base_rotation = v, false))
@@ -105,18 +83,13 @@ func _init() -> void:
 
 
 func _color_row(label: String, setter: Callable) -> ColorPickerButton:
-	var row := HBoxContainer.new()
-	add_child(row)
-	var l := Label.new()
-	l.text = label
-	l.custom_minimum_size.x = 96
-	row.add_child(l)
 	var b := ColorPickerButton.new()
 	b.edit_alpha = false
-	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# alta come le altre righe: prima le righe colore avevano un passo di 27 px contro 35
+	b.custom_minimum_size.y = 28
 	b.color_changed.connect(func(c: Color) -> void: _apply(func() -> void: setter.call(c), false))
 	b.popup_closed.connect(func() -> void: changed.emit(true))
-	row.add_child(b)
+	add_child(UiStyle.field_row(label, b))
 	return b
 
 
@@ -136,7 +109,8 @@ func set_rig(r: LightRig) -> void:
 	_nadir.color = r.bg_nadir
 	_base_enabled.button_pressed = r.base_enabled
 	_base_flip.button_pressed = r.base_flip
-	_base_label.text = r.base_hdri_path.get_file() if r.base_hdri_path != "" else "—"
+	_base_label.text = r.base_hdri_path.get_file() if r.base_hdri_path != "" else "No file"
+	_base_label.tooltip_text = r.base_hdri_path
 	_base_rot.set_value_silent(r.base_rotation)
 	_base_ev.set_value_silent(r.base_ev)
 	_base_blur.set_value_silent(r.base_blur)

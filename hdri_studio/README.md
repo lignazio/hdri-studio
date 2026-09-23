@@ -135,6 +135,24 @@ restano i 1600×900 del progetto, perché i test misurino sempre la stessa fines
 fondo a `_ready()`: ridimensionare la finestra fa girare un giro di ciclo di eventi, e `_process`
 troverebbe il baker non ancora creato.
 
+## Sistema visivo e scala dello schermo (23/09)
+
+`ui/ui_style.gd` (`UiStyle`) tiene in un posto solo il tema dell'app e le sue scale, in pixel logici:
+testo 15 (titoli) / 13 / 11 (sottotitoli di sezione in maiuscolo, suggerimenti), spazi 4 fra righe,
+8 fra controlli affiancati, 16 sopra un sottotitolo, 24 fra pannelli (l'unica linea orizzontale),
+colonna etichette 104 px con i puntini se una traduzione non ci sta. Le etichette sono un gradino più
+spente dei valori; l'ambra è riservata alla selezione e al pulsante di export. I pannelli costruiscono
+titoli, sezioni e righe con gli helper di `UiStyle` invece di impostare font e colori a mano.
+
+`Main._apply_ui_scale()` mette in `content_scale_factor` la densità dello schermo
+(`screen_get_scale()` su macOS, DPI/96 su Windows) per il moltiplicatore *Text size* dell'utente, e la
+ricalcola su `dpi_changed`. Nei modi non interattivi resta 1, come la finestra. Le icone di
+`LightIcons` sono rese a 2× con size override 16×16; `Preview3D` non è più un `SubViewportContainer`
+(che dimensiona il viewport in pixel logici, quindi 3D a metà risoluzione sul Retina): è un `Control`
+che tiene il `SubViewport` alla dimensione fisica e lo disegna nel proprio rettangolo. La camera del
+preview si allontana quanto serve a inquadrare le tre sfere con il FOV e le proporzioni correnti (mai
+sotto la distanza storica di 7), e la rotella agisce come zoom relativo.
+
 ## Radiance .hdr e metadati EXR (16/09, il rig nel .hdr il 23/09)
 
 Nella dialog di export scegli l'estensione: `.exr` (half/float32, codec a scelta) oppure `.hdr`
