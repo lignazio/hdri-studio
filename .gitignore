@@ -5,3 +5,4 @@ hdri_studio/out/*
 !hdri_studio/out/.gdignore
 !hdri_studio/out/calibration.exr
 dist/
+__pycache__/

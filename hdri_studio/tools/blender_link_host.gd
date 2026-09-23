@@ -1,7 +1,8 @@
 extends SceneTree
-## Lato app del test del live link con Blender: avvia l'app con il link attivo, una luce separata
-## (az 0, el 0, 150 cm) e stampa dove finisce la luce selezionata a ogni lightpaint ricevuto.
-## Uso:  Godot --path hdri_studio -s res://tools/blender_link_host.gd   (poi il test Blender)
+## Lato app dei test del live link (Blender e Houdini): avvia l'app con il link attivo, una luce
+## separata (az 0, el 0, 150 cm) e stampa dove finisce la luce selezionata a ogni lightpaint ricevuto.
+## Uso:  Godot --path hdri_studio -s res://tools/blender_link_host.gd [-- --target <preset>]
+##       (poi il test Blender o Houdini; il preset di default è "Godot / Blender")
 
 func _initialize() -> void:
 	var main := (load("res://scenes/main.tscn") as PackedScene).instantiate()
@@ -14,7 +15,10 @@ func _run(main: Node) -> void:
 	await process_frame
 	main.rig.live_export_path = ProjectSettings.globalize_path("res://out/live.exr")
 	main.link_panel.set_path(main.rig.live_export_path)
-	main.export_panel._target.selected = HdriExport.TARGETS.keys().find("Godot / Blender")
+	var args := OS.get_cmdline_user_args()
+	var ti := args.find("--target")
+	var target := args[ti + 1] if ti >= 0 and ti + 1 < args.size() else "Godot / Blender"
+	main.export_panel._target.selected = maxi(HdriExport.TARGETS.keys().find(target), 0)
 	var l0: RigLight = main.rig.lights[0]
 	l0.separate = true
 	l0.distance = 150.0

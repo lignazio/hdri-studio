@@ -1,0 +1,7 @@
+{
+    "//": "Copia questo file in $HOUDINI_USER_PREF_DIR/packages/ e metti in HDRI_STUDIO_LINK il percorso di questa cartella (plugins/houdini).",
+    "env": [
+        {"HDRI_STUDIO_LINK": "/percorso/di/HDRI Studio/plugins/houdini"}
+    ],
+    "path": "$HDRI_STUDIO_LINK"
+}

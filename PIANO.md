@@ -10,7 +10,7 @@ area: progetto
 > [!success] Stato: v2.1 — 17 settembre 2026 — OpenEXR dentro l'app: Fase 7 fatta
 > GDExtension HsOpenEXR (C++, OpenEXR 3.4.9 statico, macOS universal + Windows x86_64 cross-compilata
 > dal Mac): tutti i codec in scrittura e lettura, metadati scritti insieme ai pixel, niente più Blender
-> per gli EXR. Restano Houdini (preset e plugin) e la calibrazione della Power in Octane.
+> per gli EXR. Resta la calibrazione della Power in Octane (Houdini: preset misurato e plugin fatti il 23/09).
 > Verificata sul PC il 17/09: la DLL Windows si carica e l'EXR esce corretto. Release 0.9.1.
 
 > [!success] Stato precedente: v2.0 — 16 settembre 2026 — export ACEScg: chiusi tutti i sospesi del piano tranne Houdini
@@ -69,7 +69,7 @@ area: progetto
 > validata contro Cycles, fusione Normale, undo, export con preset per software, modello GLB nel
 > preview. Da qui in poi: rifiniture d'uso e le voci aperte in [[#Fase 3 — LightPaint e maturità]].
 > Progetto in `hdri_studio/`, repository privato: https://github.com/lignazio/hdri-studio. Ambiente rilevato sulla macchina: macOS 15.7 su M1 Pro,
-> Godot 4.7.1, Blender 5.1.1, Cinema 4D 2025/2026, Houdini 20.0 e 21.0.
+> Godot 4.7.1, Blender 5.1.1, Cinema 4D 2025/2026, Houdini 20.0 e 22.0 (il link provato su 22.0.429).
 
 ## 1. Cosa stiamo costruendo
 
@@ -582,6 +582,32 @@ Obiettivo: l'app in inglese per default, l'italiano quando ha senso, senza doppi
 
 Resta in italiano: `GUIDA.md`, i README dei plugin, questo piano e i commenti/docstring del codice.
 
+### Houdini — preset misurato e live link — fatto il 23/09/2026
+
+L'ultimo buco del piano iniziale. Niente LightPaint: HDRI + luci separate.
+
+1. [x] **Orientamento misurato** (`tools/houdini_calibrate.py`, hython + Karma CPU): l'HDRI di
+   taratura in un envlight, sei render stretti lungo gli assi del mondo e uno largo sul centro.
+   Risultato: centro dell'immagine su **−Z**, +X interno su **−X**, +Y su +Y — una rotazione di 180°
+   attorno a Y, la stessa di Godot/Blender; punto bianco (az +25, el +12) a destra e in alto come nel
+   preview → nessuno specchio. Il preset `Houdini` (flip false, shift 0, mirror_x false) era giusto,
+   ora è verificato e non più indovinato. Da sapere: `light_contribprimary` dell'envlight è 0 di
+   default, cioè il dome illumina ma non si vede dalla camera.
+2. [x] **Plugin** in `plugins/houdini/` (package JSON + `scripts/python/hdri_studio_link/`, startup
+   123.py/456.py, shelf con Reload textures / Create HDRI environment / Live link on-off). Polling su
+   `hou.ui.addEventLoopCallback`, `texcache -c` + riassegnazione dei parametri file per il reload,
+   fallback sulla data di modifica. Luci separate = area light *grid* dentro `/obj/HDRI_Studio_Lights`,
+   figlie del null `HDRI_Studio_Center`, con `light_texture`, dimensione fisica, intensità 1 e
+   `normalizearea` spento (radianza del pixel, come il piano emissivo in Blender). Le grid light
+   emettono lungo il proprio −Z: base (−R, U, F), destrorsa.
+3. [x] **Test**: `tools/houdini_link_test.py` end-to-end con `blender_link_host.gd` (ora accetta
+   `-- --target <preset>`) e `tools/houdini_separate_verify.py` in Karma — la stessa luce nell'HDRI e
+   come area light illuminano un piano diffuso con rapporto **0,984** (1,6% di scarto, contro 1,002 del
+   piano emissivo in Cycles), e un quadrante di prova sulla texture esce in alto a sinistra come nella
+   mappa dell'app, quindi niente specchio.
+
+Resta fuori: LightPaint dal viewport di Houdini e una prova su una scena vera (finora solo headless).
+
 ### 5.4 Fase 4 — test in C4D
 
 > [!todo] Da fare sul PC
@@ -663,7 +689,7 @@ Confronto con la v0.3 (il piano approvato prima di scrivere codice) e con le voc
 | Metadati nell'EXR (chromaticities Rec.709, JSON del rig dentro il file) | §4.5 | Fatto (16/09): scritti da OpenEXR insieme ai pixel (dal 17/09); nel fallback TinyEXR iniettati nell'header dopo la scrittura; il rig si riapre dall'EXR |
 | ACEScg come spazio di output | §2, Fase 3 | Fatto (16/09): conversione Rec.709 → AP1 (Bradford) nel bake dell'export, chromaticities AP1/D60 nei metadati, anche per le luci separate |
 | Libreria di preset di studio | Fase 3 | Fatta: tab Preset, cartella di JSON + miniature, carica/aggiungi/elimina |
-| Preset di orientamento **Houdini** e plugin Houdini | §3, Fase 3 | Non misurato, non fatto |
+| Preset di orientamento **Houdini** e plugin Houdini | §3, Fase 3 | Fatto (23/09): preset misurato con Karma (nessun flip, nessuno shift), plugin con reload e luci separate (niente LightPaint) |
 | Test 3 di §6 (diff pixel per pixel con un piano emissivo in Cycles) | §6 | Fatto in forma equivalente: furnace, singola luce, e ora piano emissivo vs HDRI (1.002) |
 | Catalogo: anteprima al passaggio del mouse, tag/preferiti | aggiunta Fase 3 | Fatto: metadati in `user://catalog_meta.json`, filtri per preferiti e tag, anteprima 384×192 |
 | Modalità fotometrica | Fase 3 | Fatta e validata |
@@ -702,6 +728,9 @@ luci Texture e catalogo, luci separate, app standalone.
 - 23/09/2026 — Lingua: **inglese di base, italiano come traduzione**. Il default è `auto` (segue la
   lingua del sistema: italiano solo su un OS in italiano), la scelta esplicita nel selettore vince e
   viene ricordata. Le stringhe nel codice sono in inglese perché un testo non tradotto resti leggibile.
+- 23/09/2026 — Houdini: **niente LightPaint** nel primo plugin. Reload dell'HDRI e luci separate
+  coprono il grosso del valore; il picking nel viewport di Houdini è più indiretto che in Blender/C4D
+  e si può aggiungere dopo senza toccare il resto.
 - 23/09/2026 — Icona dell'app: la sfera del preview con il riflesso del softbox su tessera scura, stessa
   tavolozza dello splash. `tools/make_icon.py` (Pillow + numpy, riflesso calcolato come nell'app) genera
   `icon.png` per Godot, `icon.icns` per macOS e `icon.ico` per Windows; gli export puntano lì.

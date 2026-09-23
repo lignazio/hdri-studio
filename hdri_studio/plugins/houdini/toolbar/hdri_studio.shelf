@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<shelfDocument>
+  <toolshelf name="hdri_studio" label="HDRI Studio">
+    <memberTool name="hs_reload"/>
+    <memberTool name="hs_env"/>
+    <memberTool name="hs_link"/>
+  </toolshelf>
+
+  <tool name="hs_reload" label="Reload textures" icon="BUTTONS_reload">
+    <helpText>Reloads every EXR/HDR file parameter in the scene.</helpText>
+    <script scriptType="python"><![CDATA[
+import hdri_studio_link
+hdri_studio_link.reload_all()
+]]></script>
+  </tool>
+
+  <tool name="hs_env" label="Create HDRI environment" icon="OBJ_environment">
+    <helpText>Environment Light with the live link EXR, visible to the camera.</helpText>
+    <script scriptType="python"><![CDATA[
+import hdri_studio_link
+hdri_studio_link.create_environment()
+]]></script>
+  </tool>
+
+  <tool name="hs_link" label="Live link on/off" icon="BUTTONS_network">
+    <helpText>Connects to (or disconnects from) HDRI Studio on 127.0.0.1:47820.</helpText>
+    <script scriptType="python"><![CDATA[
+import hdri_studio_link
+print("[hdri-studio] live link %s" % ("on" if hdri_studio_link.toggle() else "off"))
+]]></script>
+  </tool>
+</shelfDocument>

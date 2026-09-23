@@ -10,7 +10,8 @@ const HALF_MAX := 65504.0
 ##  - Blender: rotazione pura, nessun flip.
 ##  - Cinema 4D + Octane: punto bianco a destra → come il preview, nessun flip.
 ##  - Cinema 4D nativo (Standard/Physical): punto bianco a sinistra → specchio.
-##  - Houdini: da misurare, per ora come Blender.
+##  - Houdini: punto bianco a destra, centro immagine su −Z → come Blender (misurato il 23/09
+##    con tools/houdini_calibrate.py, Karma).
 ## mirror_x: le basi delle luci separate vanno specchiate sull'asse X (Cinema 4D è left-handed; con il
 ## preset "nativo" è l'immagine a essere specchiata, non gli assi). Verso e specchio della texture delle
 ## luci separate sono opzioni del pannello Live link.

@@ -100,7 +100,15 @@ guida e i nomi dei pannelli qui sotto sono quelli italiani.
 come software di export. Il reload è automatico, le luci separate diventano piani emissivi
 (calibrazione zero: strength 1 = valore del pixel).
 
-## 7. Tastiera
+## 7. Live link con Houdini
+
+Copia `plugins/houdini/HDRIStudio.json` in `$HOUDINI_USER_PREF_DIR/packages/`, dentro metti il percorso
+di `plugins/houdini` e riavvia: compare la shelf *HDRI Studio*. Nell'app scegli **Houdini** come
+software di export, attiva il live link, poi in Houdini premi *Create HDRI environment*. Da lì ogni
+modifica ricarica l'HDRI da sola e le luci separate diventano area light dentro
+`/obj/HDRI_Studio_Lights`. Non c'è il LightPaint. Dettagli in `plugins/houdini/README.md`.
+
+## 8. Tastiera
 
 | Tasto | Azione |
 |---|---|
@@ -113,7 +121,7 @@ come software di export. Il reload è automatico, le luci separate diventano pia
 | Tasto destro (3D) | ruota il modello caricato |
 | Rotella (3D) | zoom |
 
-## 8. Cosa ci interessa sapere da te
+## 9. Cosa ci interessa sapere da te
 
 Segnala per favore, anche in due righe ciascuna:
 
@@ -126,12 +134,11 @@ Segnala per favore, anche in due righe ciascuna:
 6. **Cosa manca** per usarla su un lavoro vero, e cosa faresti diversamente rispetto a HDR Light Studio.
 
 Per ogni problema: sistema operativo, cosa stavi facendo, cosa ti aspettavi, e se possibile il rig
-(*Salva rig…*) o l'EXR esportato (contiene il rig). Le righe della console di C4D o di Blender che
+(*Salva rig…*) o l'EXR esportato (contiene il rig). Le righe della console di C4D, Blender o Houdini che
 iniziano con `[hdri-studio]` sono d'oro.
 
-## 9. Limiti noti
+## 10. Limiti noti
 
-- Il preset di orientamento **Houdini** non è ancora misurato.
 - In C4D la Power delle luci separate va tarata una volta nella luce modello (*Surface brightness* on,
   furnace test); in Blender no.
 - L'output è Rec.709 lineare; nel pannello Export puoi scegliere ACEScg (con i metadati AP1/D60).
