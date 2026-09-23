@@ -9,8 +9,8 @@ Zippa la cartella `hdri_studio_link/` (o usa lo zip in una release), poi **Edit 
 → Install…** → scegli lo zip → attiva *HDRI Studio Link*. In alternativa copia la cartella in
 `scripts/addons/` di Blender. Nella console di sistema compare `[hdri-studio] add-on … caricato`.
 
-Nel viewport 3D, sidebar (N) → tab **HDRI Studio**: stato del collegamento, LightPaint, Ricarica
-texture, visibilità in camera delle luci separate.
+Nel viewport 3D, sidebar (N) → tab **HDRI Studio**: stato del collegamento, LightPaint, *Reload
+textures*, visibilità in camera delle luci separate.
 
 ## Uso
 
