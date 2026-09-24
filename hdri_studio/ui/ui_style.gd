@@ -19,8 +19,9 @@ const SPACE_ROW := 4
 const SPACE_INLINE := 8
 const SPACE_GROUP := 16
 const SPACE_PANEL := 24
-## Margine interno delle colonne.
-const MARGIN := 12
+## Margine fra il bordo di un pannello laterale (o la sua barra di scorrimento) e tutto quello che
+## contiene: a 12 px i testi sembravano attaccati al bordo.
+const MARGIN := 16
 
 ## Colonna delle etichette dei parametri: a 13 px la più lunga, "Risoluzione live", misura ~98 px.
 const LABEL_W := 104
@@ -82,6 +83,9 @@ static func theme() -> Theme:
 	t.set_icon("checked", "CheckBox", LightIcons.check_on())
 	t.set_icon("unchecked_disabled", "CheckBox", LightIcons.check_off())
 	t.set_icon("checked_disabled", "CheckBox", LightIcons.check_on())
+
+	# schede della colonna sinistra allineate al margine del contenuto
+	t.set_constant("side_margin", "TabContainer", MARGIN)
 
 	# lista luci: più aria fra occhio, solo e lucchetto (bersagli da almeno 24 px)
 	t.set_constant("button_margin", "Tree", 6)
@@ -195,6 +199,18 @@ static func field_row(text: String, control: Control) -> HBoxContainer:
 	control.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(control)
 	return row
+
+
+## Avvolge un controllo nei margini del pannello (di default MARGIN su tutti i lati).
+static func pad(content: Control, left := MARGIN, top := MARGIN, right := MARGIN, bottom := MARGIN) -> MarginContainer:
+	var m := MarginContainer.new()
+	m.add_theme_constant_override("margin_left", left)
+	m.add_theme_constant_override("margin_top", top)
+	m.add_theme_constant_override("margin_right", right)
+	m.add_theme_constant_override("margin_bottom", bottom)
+	m.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	m.add_child(content)
+	return m
 
 
 static func spacer(h: float) -> Control:

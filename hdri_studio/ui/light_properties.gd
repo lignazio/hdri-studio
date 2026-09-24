@@ -44,7 +44,9 @@ func _init() -> void:
 	size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_box = VBoxContainer.new()
 	_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	add_child(_box)
+	# il pannello occupa tutta la larghezza della colonna, così la barra di scorrimento sta sul bordo;
+	# il margine è dentro, e il testo resta a 16 px dal bordo o dalla barra
+	add_child(UiStyle.pad(_box, UiStyle.MARGIN, 0, UiStyle.MARGIN, UiStyle.MARGIN))
 
 	_box.add_child(UiStyle.title("Properties"))
 

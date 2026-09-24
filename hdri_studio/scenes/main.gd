@@ -22,6 +22,8 @@ var export_panel: ExportPanel
 var link_panel: LiveLinkPanel
 var link: LiveLink
 var catalog: CatalogPanel
+## Schede della colonna sinistra: Luci / Catalogo / Preset.
+var tabs: TabContainer
 var presets: PresetPanel
 var _hover: PanelContainer
 var _hover_tex: TextureRect
@@ -209,31 +211,39 @@ func _build_layout() -> void:
 	var rest := HSplitContainer.new()
 	rest.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
-	# colonna sinistra: tab Luci / Catalogo
-	var left := _column(root, 300)
+	# colonna sinistra: tab Luci / Catalogo / Preset. Le schede prendono tutta la larghezza del
+	# pannello e ogni scheda mette i suoi margini, così le barre di scorrimento stanno sul bordo
+	var left := _panel(root, 300)
 	root.add_child(rest)
 	root.split_offset = 360  # larghezza iniziale della colonna sinistra (assoluta: solo il secondo figlio espande)
-	var tabs := TabContainer.new()
+	tabs = TabContainer.new()
 	tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	left.add_child(tabs)
+	left.add_child(UiStyle.pad(tabs, 0, UiStyle.MARGIN, 0, 0))
 	var lights_tab := VBoxContainer.new()
 	lights_tab.name = "Lights"
 	lights_tab.add_theme_constant_override("separation", 0)
 	tabs.add_child(lights_tab)
+	var list_box := VBoxContainer.new()
+	list_box.add_theme_constant_override("separation", 0)
+	lights_tab.add_child(UiStyle.pad(list_box, UiStyle.MARGIN, UiStyle.MARGIN, UiStyle.MARGIN, 0))
 	light_list = LightListPanel.new()
 	light_list.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	light_list.custom_minimum_size.y = 220
-	lights_tab.add_child(light_list)
-	lights_tab.add_child(UiStyle.separator())
+	list_box.add_child(light_list)
+	list_box.add_child(UiStyle.separator())
 	props = LightProperties.new()
 	lights_tab.add_child(props)
 	catalog = CatalogPanel.new()
-	catalog.name = "Catalog"
-	tabs.add_child(catalog)
+	catalog.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var catalog_tab := UiStyle.pad(catalog)
+	catalog_tab.name = "Catalog"
+	tabs.add_child(catalog_tab)
 	catalog.set_folder(AppSettings.get_value("catalog_folder", ""))
 	presets = PresetPanel.new()
-	presets.name = "Presets"
-	tabs.add_child(presets)
+	presets.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var presets_tab := UiStyle.pad(presets)
+	presets_tab.name = "Presets"
+	tabs.add_child(presets_tab)
 	presets.set_folder(AppSettings.get_value("preset_folder", ""))
 
 	# centro
@@ -257,7 +267,7 @@ func _build_layout() -> void:
 	center.add_child(_build_status_bar())
 
 	# colonna destra: pannelli separati da una sola linea ciascuno
-	var right := _column(rest, 300, true)
+	var right := _column(rest, 300)
 	right.add_theme_constant_override("separation", 0)
 	bg_panel = BackgroundPanel.new()
 	right.add_child(bg_panel)
@@ -282,6 +292,11 @@ func _build_layout() -> void:
 	hover_layer.layer = 10
 	add_child(hover_layer)
 	_hover = PanelContainer.new()
+	var hover_style := StyleBoxFlat.new()
+	hover_style.bg_color = UiStyle.C_PANEL
+	hover_style.set_content_margin_all(UiStyle.SPACE_INLINE)
+	hover_style.set_corner_radius_all(4)
+	_hover.add_theme_stylebox_override("panel", hover_style)
 	_hover.visible = false
 	_hover.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var hv := VBoxContainer.new()
@@ -582,24 +597,23 @@ func _remember_map_split() -> void:
 		AppSettings.set_value("map_height", map_view.size.y)
 
 
-func _column(parent: Container, width: float, scroll := false) -> VBoxContainer:
+## Fondo di una colonna laterale, senza margini: li mette il contenuto.
+func _panel(parent: Container, width: float) -> PanelContainer:
 	var panel := PanelContainer.new()
 	panel.custom_minimum_size.x = width * 0.8
 	parent.add_child(panel)
-	var margin := MarginContainer.new()
-	for side in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_" + side, UiStyle.MARGIN)
-	panel.add_child(margin)
+	return panel
+
+
+## Colonna laterale che scorre: la barra di scorrimento sta sul bordo del pannello e il margine è dentro
+## l'area che scorre, così il testo resta a 16 px dal bordo, o dalla barra quando compare.
+func _column(parent: Container, width: float) -> VBoxContainer:
+	var sc := ScrollContainer.new()
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_panel(parent, width).add_child(sc)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", UiStyle.SPACE_INLINE)
-	if scroll:
-		var sc := ScrollContainer.new()
-		sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-		margin.add_child(sc)
-		box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		sc.add_child(box)
-	else:
-		margin.add_child(box)
+	sc.add_child(UiStyle.pad(box))
 	return box
 
 

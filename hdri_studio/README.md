@@ -144,6 +144,11 @@ colonna etichette 104 px con i puntini se una traduzione non ci sta. Le etichett
 spente dei valori; l'ambra è riservata alla selezione e al pulsante di export. I pannelli costruiscono
 titoli, sezioni e righe con gli helper di `UiStyle` invece di impostare font e colori a mano.
 
+Nei pannelli laterali tutto sta a 16 px (`UiStyle.MARGIN`) dal bordo. Le aree che scorrono (colonna
+destra, proprietà della luce) occupano il pannello per intero e hanno il margine *dentro*
+(`UiStyle.pad()`), così la barra di scorrimento sta sul bordo e il testo resta a 16 px da lei; le
+schede Catalogo e Preset sono avvolte nello stesso margine (`Main.tabs` è la `TabContainer`).
+
 `Main._apply_ui_scale()` mette in `content_scale_factor` la densità dello schermo
 (`screen_get_scale()` su macOS, DPI/96 su Windows) per il moltiplicatore *Text size* dell'utente, e la
 ricalcola su `dpi_changed`. Nei modi non interattivi resta 1, come la finestra. Le icone di

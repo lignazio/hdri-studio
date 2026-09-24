@@ -30,7 +30,7 @@ func _run(main: Node) -> void:
 	await process_frame
 	await process_frame
 	main.catalog.set_folder(ProjectSettings.globalize_path("res://out"))
-	(main.catalog.get_parent() as TabContainer).current_tab = 1
+	main.tabs.current_tab = 1
 	await create_timer(1.0).timeout
 	var btn: Button = null
 	for path in main.catalog._buttons:

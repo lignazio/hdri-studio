@@ -680,6 +680,10 @@ leggibilità: su Retina tutto il testo usciva a metà grandezza, e la gerarchia 
 7. [x] **Provato**: ui_smoke, i18n_smoke, sky_smoke passano; catture a scala 1 (1600×900 e 1280×800,
    EN e IT) e a scala 2 sul Retina (3178×1858 fisici = 1589×929 logici): testo, icone e sfere nitidi.
 
+Il 24/09, su richiesta: **margine di 16 px** fra il bordo dei pannelli laterali e tutto il contenuto
+(prima 12, e sul lato destro il testo toccava la barra di scorrimento). Le barre di scorrimento ora
+stanno sul bordo del pannello e il margine è dentro l'area che scorre.
+
 Non fatti, elencati in `docs/stato.md`: colonna destra richiudibile, pannello proprietà riordinato,
 unità come suffisso, area messaggi unica, pallino del live link, stato vuoto del catalogo, ⌘S/⌘O/⌘E,
 export in thread, e il click sul vuoto della mappa (scelta di comportamento).
