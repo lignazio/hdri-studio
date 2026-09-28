@@ -169,10 +169,14 @@ Ogni EXR esportato porta nell'header `chromaticities` (Rec.709/D65), un `comment
 da lì. Gli attributi li scrive OpenEXR insieme ai pixel (HsOpenEXR); nel fallback TinyEXR vengono
 iniettati dopo la scrittura aggiornando la tabella degli offset. Verificato con TinyEXR e con OpenEXR.
 
-Anche il `.hdr` porta il rig: l'header Radiance è testo fino alla prima riga vuota, e ci scriviamo la
-riga `#HDRISTUDIO_RIG=<json>` (una riga sola, senza a capo). È un **commento** di proposito: i lettori
-saltano i commenti in silenzio, mentre una variabile sconosciuta fa rumore (Godot stampa un warning con
-tutta la riga). *Apri rig…* rilegge il rig da `.exr` e da `.hdr` allo stesso modo
+Anche il `.hdr` porta il rig: l'header Radiance è testo fino alla prima riga vuota, e ci scriviamo il
+JSON compresso (deflate) e in base64, spezzato su righe corte: `#HDRISTUDIO_RIG_DEFLATE=<byte>` e poi
+`#HDRISTUDIO_RIG_B64=<pezzo>`, al massimo 117 byte per riga. Le righe corte servono perché molti lettori
+hanno un buffer fisso per riga (Three.js 1024 caratteri, `rgbe.c` 128 byte) e con una riga più lunga
+perdono la risoluzione dell'immagine. Sono **commenti** di proposito: i lettori saltano i commenti in
+silenzio, mentre una variabile sconosciuta fa rumore (Godot stampa un warning con tutta la riga). Si
+leggono ancora i `.hdr` di prima del 28/09, con il JSON su una riga `#HDRISTUDIO_RIG=`. *Apri rig…*
+rilegge il rig da `.exr` e da `.hdr` allo stesso modo
 (`HdriExport.read_rig_json`).
 
 Ogni luce ha un **🔒** (accanto a On/Solo): bloccata, non la spostano né il LightPaint né la mappa né

@@ -24,11 +24,23 @@ const TARGETS := {
 const DEFAULT_TARGET := "Cinema 4D + Octane"
 
 
-## Riga dell'header Radiance che porta il rig, come RIG_ATTR per l'EXR. L'header .hdr è testo (una
-## riga per variabile, fino alla prima riga vuota) e il JSON ci sta su una riga sola, così anche un
-## .hdr riapre il progetto. La scriviamo come commento (`#`): i lettori saltano i commenti in
-## silenzio, mentre una variabile sconosciuta fa rumore (Godot stampa un warning con tutta la riga).
+## Il rig nell'header Radiance, come RIG_ATTR per l'EXR. L'header .hdr è testo (una riga per
+## variabile, fino alla prima riga vuota), ma molti lettori hanno un buffer fisso per riga: Three.js
+## (RGBELoader) si ferma a 1024 caratteri e perde la riga di risoluzione ("missing image size
+## specifier"), il classico rgbe.c e i suoi derivati leggono a pezzi di 128 byte. Il rig quindi va
+## compresso (deflate), codificato in base64 e spezzato su righe corte: RIG_HDR_SIZE_KEY porta la
+## lunghezza del JSON, poi una riga RIG_HDR_DATA_KEY per pezzo, in ordine. Sono commenti (`#`): i
+## lettori li saltano in silenzio, mentre una variabile sconosciuta fa rumore (Godot stampa un
+## warning con tutta la riga).
+const RIG_HDR_SIZE_KEY := "HDRISTUDIO_RIG_DEFLATE"
+const RIG_HDR_DATA_KEY := "HDRISTUDIO_RIG_B64"
+## Formato dei .hdr esportati fino al 28/09: il JSON intero su una riga sola. Si legge ancora.
 const RIG_HDR_KEY := "HDRISTUDIO_RIG"
+## Lunghezza massima di una riga dell'header, a capo compreso: sotto i 128 byte del buffer di rgbe.c.
+const HDR_HEADER_LINE_MAX := 120
+const _RIG_HDR_CHUNK := 96
+## Tetto alla lunghezza dichiarata del rig: un header rovinato non deve far allocare gigabyte.
+const _RIG_HDR_SIZE_MAX := 64 * 1024 * 1024
 
 
 ## Radiance .hdr (RGBE, non compresso: lo leggono tutti). rgbe: 4 byte per pixel dal baker.
@@ -42,15 +54,25 @@ static func save_hdr(path: String, width: int, height: int, rgbe: PackedByteArra
 		return FileAccess.get_open_error()
 	var head := "#?RADIANCE\nFORMAT=32-bit_rle_rgbe\nSOFTWARE=HDRI Studio\n"
 	if rig_json != "":
-		# JSON.stringify non produce a capo veri, ma una stringa arrivata da altrove potrebbe: un a
-		# capo qui chiuderebbe l'header a metà del rig.
-		head += "#" + RIG_HDR_KEY + "=" + rig_json.replace("\n", " ").replace("\r", " ") + "\n"
+		head += _rig_hdr_lines(rig_json)
 	f.store_string(head + "\n-Y %d +X %d\n" % [height, width])
 	f.store_buffer(rgbe)
 	f.close()
 	if FileAccess.file_exists(dest):
 		DirAccess.remove_absolute(dest)
 	return DirAccess.rename_absolute(tmp, dest)
+
+
+## Le righe di commento che portano il rig nell'header .hdr (vedi RIG_HDR_SIZE_KEY). Il base64 non
+## contiene a capo né caratteri fuori dall'ASCII, quindi ogni riga resta sotto HDR_HEADER_LINE_MAX byte
+## qualunque cosa ci sia nel JSON.
+static func _rig_hdr_lines(rig_json: String) -> String:
+	var raw := rig_json.to_utf8_buffer()
+	var b64 := Marshalls.raw_to_base64(raw.compress(FileAccess.COMPRESSION_DEFLATE))
+	var out := "#%s=%d\n" % [RIG_HDR_SIZE_KEY, raw.size()]
+	for i in range(0, b64.length(), _RIG_HDR_CHUNK):
+		out += "#%s=%s\n" % [RIG_HDR_DATA_KEY, b64.substr(i, _RIG_HDR_CHUNK)]
+	return out
 
 
 # --- metadati EXR --------------------------------------------------------------------------------
@@ -172,29 +194,52 @@ static func read_string_attribute(path: String, attr: String) -> String:
 	return ""
 
 
-## Legge una variabile dall'header di un Radiance .hdr ("" se assente). L'header finisce alla prima
-## riga vuota, prima della riga di risoluzione.
-static func read_hdr_variable(path: String, key: String) -> String:
+## Le righe dell'header di un Radiance .hdr, senza la prima (`#?RADIANCE`) e senza il `#` dei
+## commenti. L'header finisce alla prima riga vuota, prima della riga di risoluzione.
+static func read_hdr_header(path: String) -> PackedStringArray:
+	var lines := PackedStringArray()
 	var f := FileAccess.open(ProjectSettings.globalize_path(path), FileAccess.READ)
-	if f == null:
-		return ""
-	if not f.get_line().begins_with("#?"):
-		return ""
-	var prefix := key + "="
+	if f == null or not f.get_line().begins_with("#?"):
+		return lines
 	while not f.eof_reached():
 		var line := f.get_line()
 		if line == "":
-			break # riga vuota: l'header finisce qui
-		line = line.trim_prefix("#")
+			break
+		lines.append(line.trim_prefix("#"))
+	return lines
+
+
+## Legge una variabile dall'header di un Radiance .hdr ("" se assente).
+static func read_hdr_variable(path: String, key: String) -> String:
+	var prefix := key + "="
+	for line in read_hdr_header(path):
 		if line.begins_with(prefix):
 			return line.substr(prefix.length())
 	return ""
 
 
+## Il rig scritto da save_hdr: righe base64 compresse, oppure la riga unica dei file più vecchi.
+static func read_hdr_rig(path: String) -> String:
+	var size := -1
+	var b64 := ""
+	var legacy := ""
+	for line in read_hdr_header(path):
+		if line.begins_with(RIG_HDR_SIZE_KEY + "="):
+			size = line.substr(RIG_HDR_SIZE_KEY.length() + 1).to_int()
+		elif line.begins_with(RIG_HDR_DATA_KEY + "="):
+			b64 += line.substr(RIG_HDR_DATA_KEY.length() + 1)
+		elif line.begins_with(RIG_HDR_KEY + "="):
+			legacy = line.substr(RIG_HDR_KEY.length() + 1)
+	if size <= 0 or size > _RIG_HDR_SIZE_MAX or b64 == "":
+		return legacy
+	var raw := Marshalls.base64_to_raw(b64).decompress(size, FileAccess.COMPRESSION_DEFLATE)
+	return raw.get_string_from_utf8() if raw.size() == size else legacy
+
+
 ## Rig salvato dentro l'immagine, qualunque sia il formato ("" se il file non ne ha).
 static func read_rig_json(path: String) -> String:
 	if path.get_extension().to_lower() == "hdr":
-		return read_hdr_variable(path, RIG_HDR_KEY)
+		return read_hdr_rig(path)
 	return read_string_attribute(path, RIG_ATTR)
 
 

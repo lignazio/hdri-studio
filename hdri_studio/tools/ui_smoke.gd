@@ -526,8 +526,10 @@ func _run(main: Node) -> void:
 	_check(herr == OK and hdr.get_width() == 2048 and absf(hc.r - 7.5) < 0.08, ".hdr riletto da Godot: %dx%d, centro %.3f (RGBE)" % [hdr.get_width(), hdr.get_height(), hc.r])
 	# il rig nell'header del .hdr: prima la variabile grezza, poi il giro completo (la rilettura dei
 	# pixel qui sopra è anche la prova che la riga in più non disturba chi legge l'immagine)
-	var hjs := HdriExport.read_hdr_variable("res://out/smoke_meta.hdr", HdriExport.RIG_HDR_KEY)
-	_check(hjs != "" and (JSON.parse_string(hjs) as Dictionary).get("lights", []).size() == 1, "variabile HDRISTUDIO_RIG letta dall'.hdr")
+	var hjs := HdriExport.read_hdr_rig("res://out/smoke_meta.hdr")
+	_check(hjs != "" and (JSON.parse_string(hjs) as Dictionary).get("lights", []).size() == 1, "rig letto dall'header .hdr")
+	_check_hdr_header_lines("res://out/smoke_meta.hdr", "export dell'app")
+	_check_hdr_big_rig()
 	main.rig.lights.clear()
 	_check(main.load_rig_from(ProjectSettings.globalize_path("res://out/smoke_meta.hdr")) and main.rig.lights.size() == 1 and main.rig.lights[0].name == "hdr test", "rig riaperto dall'.hdr")
 	_check(main.export_to("res://out/smoke_meta.exr") == OK, "export EXR con metadati")
@@ -589,6 +591,49 @@ func _run(main: Node) -> void:
 var _all_ok := true
 
 ## Ogni controllo viene sempre eseguito (niente cortocircuito): un fallimento non nasconde i successivi.
+
+## Nessuna riga dell'header .hdr oltre HDR_HEADER_LINE_MAX byte: Three.js si ferma a 1024, rgbe.c
+## legge a pezzi di 128 (il 28/09 due .hdr con il rig su una riga sola non si aprivano sul web).
+func _check_hdr_header_lines(path: String, what: String) -> void:
+	var data := FileAccess.get_file_as_bytes(path)
+	var longest := 0
+	var start := 0
+	var closed := false
+	while start < data.size():
+		var nl := data.find(10, start)
+		if nl < 0:
+			break
+		longest = maxi(longest, nl - start + 1)
+		if nl == start:
+			closed = true # riga vuota: da qui in poi risoluzione e pixel
+			break
+		start = nl + 1
+	_check(closed and longest <= HdriExport.HDR_HEADER_LINE_MAX, "header .hdr a righe corte (%s): la più lunga %d byte" % [what, longest])
+
+
+## Rig grande e con caratteri non ASCII: torna identico, le righe restano corte, i pixel si leggono. Più
+## la compatibilità con i .hdr scritti prima del 28/09 (JSON su una riga sola).
+func _check_hdr_big_rig() -> void:
+	var lights := []
+	for i in 300:
+		lights.append({"name": "luce è ñ ✓ %d" % i, "intensity": i * 0.5})
+	var big := JSON.stringify({"lights": lights})
+	var path := "res://out/smoke_bigrig.hdr"
+	var px := PackedByteArray()
+	px.resize(8 * 4 * 4)
+	px.fill(128)
+	_check(HdriExport.save_hdr(path, 8, 4, px, big) == OK, "export .hdr con rig di %d caratteri" % big.length())
+	_check(HdriExport.read_rig_json(path) == big, "rig grande riletto identico dall'.hdr")
+	_check_hdr_header_lines(path, "rig grande")
+	var img := Image.new()
+	_check(img.load(ProjectSettings.globalize_path(path)) == OK and img.get_width() == 8, ".hdr con rig grande riletto da Godot")
+	var legacy := "res://out/smoke_legacy.hdr"
+	var f := FileAccess.open(legacy, FileAccess.WRITE)
+	f.store_string("#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n#%s=%s\n\n-Y 4 +X 8\n" % [HdriExport.RIG_HDR_KEY, big])
+	f.store_buffer(px)
+	f.close()
+	_check(HdriExport.read_rig_json(legacy) == big, "rig riletto da un .hdr del vecchio formato (riga unica)")
+
 func _check(cond: bool, label: String) -> bool:
 	print("[smoke] %s %s" % ["✓" if cond else "✗", label])
 	if not cond:

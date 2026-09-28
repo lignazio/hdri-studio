@@ -628,6 +628,32 @@ ignorava il rig. Ora i due formati si comportano allo stesso modo.
    prova con un lettore di terze parti compilato resta da fare (stb_image, che è quello che usano in
    tanti, tronca le righe lunghe senza rompersi — letto nel sorgente, non provato).
 
+### Rig nel `.hdr` su righe corte — fatto il 28/09/2026
+
+Due `.hdr` esportati con un rig grande (`gem-studio-v5-dragon`, `gold-studio-v8-dragon`) non si aprivano
+nel visualizzatore web: `THREE.RGBELoader: Bad File Format: missing image size specifier`. La causa era
+la riga `#HDRISTUDIO_RIG=<json>`, lunga 8023 e 18709 caratteri. Il formato Radiance ammette righe
+libere nell'header, ma molti lettori hanno un buffer fisso per riga: `RGBELoader` di Three.js
+(`three-stdlib`) smette di leggere l'header oltre i 1024 caratteri, e così non arriva mai a
+`-Y … +X …`; il classico `rgbe.c`, da cui derivano anche le versioni vecchie di OpenImageIO, legge a
+pezzi di 128 byte. Godot e stb_image reggono, per questo il 23/09 non era saltato fuori.
+
+1. [x] **Scrittura**: il JSON del rig viene compresso (deflate), codificato in base64 e spezzato su
+   righe di commento da 117 byte al massimo: `#HDRISTUDIO_RIG_DEFLATE=<byte del JSON>`, poi
+   `#HDRISTUDIO_RIG_B64=<pezzo>` in ordine. Il base64 non ha a capo né caratteri fuori dall'ASCII,
+   quindi il limite regge qualunque cosa ci sia nei nomi delle luci. Il rig da 18 KB diventa qualche
+   decina di righe.
+2. [x] **Lettura**: `HdriExport.read_hdr_rig` ricompone le righe; se non le trova usa ancora la riga
+   unica dei file vecchi, che quindi si riaprono come prima.
+3. [x] **Test** in `ui_smoke.gd`: nessuna riga dell'header oltre `HDR_HEADER_LINE_MAX` (120 byte, sotto i
+   128 di `rgbe.c`) sia nell'export dell'app sia con un rig da 12,9 K caratteri non ASCII, il rig grande
+   riletto identico, i pixel riletti da Godot, e un `.hdr` nel vecchio formato ancora letto. Controllato
+   anche fuori da Godot: `RGBELoader` di `three-stdlib` 0.184 (quello del visualizzatore) legge i nuovi
+   file e rifiuta i due vecchi con lo stesso errore; una simulazione di `rgbe.c` con buffer da 128 byte
+   legge i nuovi.
+
+I due `.hdr` del visualizzatore vanno riesportati: *Apri rig…* li riapre dal vecchio formato.
+
 ### Finestra grande all'avvio — fatto il 23/09/2026
 
 I 1600×900 del progetto sono una finestrella su un monitor grande (su questo Mac lo schermo è
@@ -842,6 +868,7 @@ luci Texture e catalogo, luci separate, app standalone.
   (`#HDRISTUDIO_RIG=…`) e non come variabile: i lettori ignorano i commenti in silenzio, mentre una
   variabile che non conoscono la segnalano (Godot stampa un warning con tutto il JSON a ogni
   apertura dell'immagine). Il formato resta leggibile a occhio, senza base64.
+  **Superata il 28/09** per la parte "una riga sola, senza base64": vedi sotto.
 - 23/09/2026 — La finestra si apre al **92% dello schermo** al primo avvio e poi **ricorda**
   com'è stata lasciata, invece di essere massimizzata a forza ogni volta: massimizzare è una scelta
   dell'utente, non del programma, e una finestra rimpicciolita apposta deve restare rimpicciolita.
@@ -852,4 +879,8 @@ luci Texture e catalogo, luci separate, app standalone.
 - 23/09/2026 — Valori di design in **`UiStyle`** e nessun numero di font, colore o spazio sparso nei
   pannelli: la revisione ne aveva contati sei di font e nove di separazione, cresciuti pannello per
   pannello.
-
+- 28/09/2026 — Il rig nel `.hdr` si scrive **compresso e in base64, su righe da 117 byte al massimo**, e
+  non più come JSON leggibile su una riga sola: `RGBELoader` di Three.js e `rgbe.c` hanno un limite per
+  riga (1024 caratteri e 128 byte) e con un rig grande perdevano la riga di risoluzione. Leggibilità a
+  occhio persa, ma nessun lettore conosciuto ha limiti sotto i 128 byte. Restano commenti (`#`) e la
+  lettura accetta ancora il formato vecchio.
