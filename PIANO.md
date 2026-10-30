@@ -7,7 +7,13 @@ area: progetto
 
 # HDRI Studio — Piano
 
-> [!success] Stato: v2.1 — 17 settembre 2026 — OpenEXR dentro l'app: Fase 7 fatta
+> [!success] Release 0.10.0 — 30 ottobre 2026
+> Pubblicata https://github.com/lignazio/hdri-studio/releases/tag/v0.10.0 con `tools/release.sh`:
+> plugin Houdini, interfaccia bilingue, revisione UX (UiStyle, scala dello schermo), finestra che si
+> ricorda, rig nel `.hdr` leggibile da Three.js. Smoke test e self-test del build macOS OK; il build
+> Windows non è stato aperto su un PC.
+
+> [!success] Stato precedente: v2.1 — 17 settembre 2026 — OpenEXR dentro l'app: Fase 7 fatta
 > GDExtension HsOpenEXR (C++, OpenEXR 3.4.9 statico, macOS universal + Windows x86_64 cross-compilata
 > dal Mac): tutti i codec in scrittura e lettura, metadati scritti insieme ai pixel, niente più Blender
 > per gli EXR. Resta la calibrazione della Power in Octane (Houdini: preset misurato e plugin fatti il 23/09).
@@ -884,3 +890,5 @@ luci Texture e catalogo, luci separate, app standalone.
   riga (1024 caratteri e 128 byte) e con un rig grande perdevano la riga di risoluzione. Leggibilità a
   occhio persa, ma nessun lettore conosciuto ha limiti sotto i 128 byte. Restano commenti (`#`) e la
   lettura accetta ancora il formato vecchio.
+- 30/10/2026 — Release **0.10.0** e non 0.9.2: dopo la 0.9.1 sono entrate funzioni nuove (plugin
+  Houdini, interfaccia bilingue, revisione UX), non solo correzioni.

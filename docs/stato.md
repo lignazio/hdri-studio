@@ -1,8 +1,9 @@
 # Stato del progetto
 
-Aggiornato il **28 settembre 2026**, versione app **0.9.1**. La storia completa, con le misure e le
-decisioni datate, è in [`PIANO.md`](../PIANO.md); qui c'è solo quello che serve per decidere cosa fare
-adesso.
+Aggiornato il **30 ottobre 2026**, versione app **0.10.0** (release
+[v0.10.0](https://github.com/lignazio/hdri-studio/releases/tag/v0.10.0), la più recente su GitHub).
+La storia completa, con le misure e le decisioni datate, è in [`PIANO.md`](../PIANO.md); qui c'è solo
+quello che serve per decidere cosa fare adesso.
 
 ## Cosa c'è e funziona
 
