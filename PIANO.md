@@ -894,3 +894,6 @@ luci Texture e catalogo, luci separate, app standalone.
   Houdini, interfaccia bilingue, revisione UX), non solo correzioni.
 - 30/10/2026 — Il repository diventa **pubblico** (licenza MIT), dopo la release 0.10.0. Prima
   controllata la storia: nessuna chiave, token, `.env` o percorso personale nei 60 commit.
+- 30/10/2026 — **README.md in inglese** nella radice, con uno screenshot in `docs/images/`: senza,
+  GitHub mostrava `docs/README.md`, che è il passaggio di consegne interno in italiano. È l'unico
+  documento in inglese; il resto della documentazione resta in italiano.

@@ -12,7 +12,8 @@ Claude) riprende il progetto senza aver seguito le sessioni precedenti.
 | [convenzioni.md](convenzioni.md) | Lingua, stile, i18n, commit, cosa aggiornare quando |
 | [trappole.md](trappole.md) | Le cose che fanno perdere un'ora, imparate a caro prezzo |
 
-Fuori da qui: [`PIANO.md`](../PIANO.md) è il diario del progetto (storia, misure, decisioni datate),
+Fuori da qui: [`README.md`](../README.md) nella radice è la presentazione pubblica del progetto, in
+inglese (è la pagina che GitHub mostra); [`PIANO.md`](../PIANO.md) è il diario del progetto (storia, misure, decisioni datate),
 [`GUIDA.md`](../GUIDA.md) è la guida per chi prova l'app, `hdri_studio/README.md` descrive l'uso
 dell'app funzione per funzione, e ogni plugin ha il suo README in `hdri_studio/plugins/*/`.
 
