@@ -58,7 +58,7 @@ if [[ $PUBLISH -eq 1 ]]; then
   git push -q
   NOTES="HDRI Studio $VERSION — build di test.
 
-Archivi per macOS (universal) e Windows (x86_64), con dentro l'app, la cartella \`plugins/\` (Cinema 4D e Blender) e \`GUIDA.md\`.
+Archivi per macOS (universal) e Windows (x86_64), con dentro l'app, la cartella \`plugins/\` (Cinema 4D, Blender e Houdini) e \`GUIDA.md\`.
 
 - macOS: l'app non è firmata → tasto destro → Apri, oppure \`xattr -dr com.apple.quarantine \"HDRI Studio.app\"\`.
 - Windows: SmartScreen → Ulteriori informazioni → Esegui comunque.
