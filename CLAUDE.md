@@ -2,7 +2,7 @@
 
 App desktop in **Godot 4.7.1** che costruisce HDRI da studio: luci parametriche su una sfera a 360°,
 bake su GPU (compute shader), export EXR/HDR lineare fisicamente corretto e **live link** verso Cinema
-4D (Octane), Blender e Houdini. Repo privato `lignazio/hdri-studio`, ramo `main`, sincronizzato fra un
+4D (Octane), Blender e Houdini. Repo pubblico `lignazio/hdri-studio`, ramo `main`, sincronizzato fra un
 Mac e un PC Windows.
 
 ## Leggi in quest'ordine, prima di toccare il codice

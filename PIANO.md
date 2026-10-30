@@ -892,3 +892,5 @@ luci Texture e catalogo, luci separate, app standalone.
   lettura accetta ancora il formato vecchio.
 - 30/10/2026 — Release **0.10.0** e non 0.9.2: dopo la 0.9.1 sono entrate funzioni nuove (plugin
   Houdini, interfaccia bilingue, revisione UX), non solo correzioni.
+- 30/10/2026 — Il repository diventa **pubblico** (licenza MIT), dopo la release 0.10.0. Prima
+  controllata la storia: nessuna chiave, token, `.env` o percorso personale nei 60 commit.
